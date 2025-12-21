@@ -6,22 +6,20 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import com.kipia.management.mobile.presentation.navigation.AppNavigation
-import com.kipia.management.mobile.ui.theme.KipiaManagementTheme
-import dagger.hilt.android.AndroidEntryPoint
+import com.kipia.management.mobile.ui.theme.KIPiATheme // Импортируем свою тему
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            KipiaManagementTheme {
+            KIPiATheme { // Используем свою тему
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation()
+                    Text("KIPiA Management System")
                 }
             }
         }

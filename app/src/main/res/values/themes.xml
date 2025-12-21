@@ -1,9 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.KIPiA_Management_Mobile" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!-- Наша основная тема. Наследуем от базовой Material 3 без ActionBar. -->
+    <style name="Theme.Material3.DayNight.NoActionBar" parent="android:Theme.Black">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <!-- Ваша кастомная цветовая схема для Material 3 будет в Compose -->
     </style>
-
-    <style name="Theme.KIPiA_Management_Mobile" parent="Base.Theme.KIPiA_Management_Mobile" />
 </resources>
