@@ -2,7 +2,6 @@ package com.kipia.management.mobile.di
 
 import android.content.Context
 import com.kipia.management.mobile.data.database.AppDatabase
-import com.kipia.management.mobile.data.repository.DeviceRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,16 +11,20 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object AppModule {
-    @Singleton
+object DatabaseModule {
+
     @Provides
+    @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return AppDatabase.getDatabase(context)
     }
 
-    @Singleton
     @Provides
-    fun provideDeviceRepository(database: AppDatabase): DeviceRepository {
-        return DeviceRepository(database.deviceDao())
-    }
+    fun provideDeviceDao(database: AppDatabase) = database.deviceDao()
+
+    @Provides
+    fun provideSchemeDao(database: AppDatabase) = database.schemeDao()
+
+    @Provides
+    fun provideDeviceLocationDao(database: AppDatabase) = database.deviceLocationDao()
 }

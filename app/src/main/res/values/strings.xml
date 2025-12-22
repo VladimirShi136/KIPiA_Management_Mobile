@@ -1,3 +1,64 @@
 <resources>
     <string name="app_name">KIPiA_Management_Mobile</string>
+
+    <!-- Навигация -->
+    <string name="title_devices">Приборы</string>
+    <string name="title_schemes">Схемы</string>
+    <string name="title_reports">Отчеты</string>
+    <string name="title_edit_device">Редактирование прибора</string>
+    <string name="title_device_details">Детали прибора</string>
+
+    <!-- Кнопки -->
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+    <string name="delete">Удалить</string>
+    <string name="add_device">Добавить прибор</string>
+    <string name="edit_device">Редактировать прибор</string>
+
+    <!-- Поля прибора -->
+    <string name="inventory_number">Инвентарный номер</string>
+    <string name="device_type">Тип прибора</string>
+    <string name="device_name">Наименование</string>
+    <string name="manufacturer">Производитель</string>
+    <string name="year">Год выпуска</string>
+    <string name="location">Место установки</string>
+    <string name="status">Статус</string>
+    <string name="accuracy_class">Класс точности</string>
+    <string name="measurement_limit">Предел измерений</string>
+    <string name="valve_number">Номер крана/узла</string>
+    <string name="additional_info">Дополнительная информация</string>
+
+    <!-- Сообщения -->
+    <string name="validation_inventory_number_required">Инвентарный номер обязателен</string>
+    <string name="validation_inventory_number_unique">Инвентарный номер должен быть уникальным</string>
+    <string name="validation_location_required">Место установки обязательно</string>
+    <string name="validation_type_required">Тип прибора обязателен</string>
+
+    <!-- Статусы -->
+    <string name="status_in_work">В работе</string>
+    <string name="status_repair">В ремонте</string>
+    <string name="status_reserve">В резерве</string>
+    <string name="status_decommissioned">Списан</string>
+
+    <!-- Диалоги -->
+    <string name="dialog_delete_title">Удаление прибора</string>
+    <string name="dialog_delete_message">Вы уверены, что хотите удалить прибор %s?</string>
+    <string name="dialog_delete_confirm">Удалить</string>
+
+    <!-- Пустые состояния -->
+    <string name="empty_devices">Нет приборов для отображения</string>
+    <string name="empty_schemes">Нет схем для отображения</string>
+
+    <!-- new -->
+    <string name="no_photo_available">Нет фотографии</string>
+    <string name="tap_to_add_photo">Нажмите чтобы добавить</string>
+    <string name="device_photo">Фотография прибора</string>
+    <string name="photo_gallery">Галерея фото</string>
+    <string name="take_photo">Сделать фото</string>
+    <string name="choose_from_gallery">Выбрать из галереи</string>
+    <string name="camera_permission_required">Для съемки фото требуется разрешение камеры</string>
+    <string name="gallery_permission_required">Для выбора фото требуется разрешение галереи</string>
+    <string name="photo_added_successfully">Фото успешно добавлено</string>
+    <string name="error_adding_photo">Ошибка при добавлении фото</string>
+    <string name="view_all_photos">Просмотреть все фото</string>
 </resources>

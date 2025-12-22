@@ -1,0 +1,28 @@
+package com.kipia.management.mobile.di
+
+import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.repository.DeviceRepositoryImpl
+import com.kipia.management.mobile.repository.SchemeRepository
+import com.kipia.management.mobile.repository.SchemeRepositoryImpl
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceRepository(
+        repositoryImpl: DeviceRepositoryImpl
+    ): DeviceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSchemeRepository(
+        repositoryImpl: SchemeRepositoryImpl
+    ): SchemeRepository
+}

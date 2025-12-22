@@ -15,7 +15,6 @@ data class Scheme(
     @ColumnInfo(name = "description")
     val description: String?,
 
-    // JSON данные схемы
     @ColumnInfo(name = "data")
-    val data: String?
+    val data: String  // JSON с данными схемы
 )

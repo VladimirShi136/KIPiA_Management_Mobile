@@ -1,17 +1,20 @@
 package com.kipia.management.mobile.data.database
 
 import androidx.room.TypeConverter
-import java.util.Date
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class Converters {
-    // Пример конвертера для Date, если будет нужно
+    private val gson = Gson()
+
     @TypeConverter
-    fun fromTimestamp(value: Long?): Date? {
-        return value?.let { Date(it) }
+    fun fromStringList(list: List<String>?): String? {
+        return if (list == null) null else gson.toJson(list)
     }
 
     @TypeConverter
-    fun dateToTimestamp(date: Date?): Long? {
-        return date?.time
+    fun toStringList(json: String?): List<String>? {
+        return if (json == null) null else
+            gson.fromJson(json, object : TypeToken<List<String>>() {}.type)
     }
 }

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@id/navigation_devices">
+
+    <!-- Экран приборов -->
+    <fragment
+        android:id="@+id/navigation_devices"
+        android:name="com.kipia.management.mobile.ui.devices.DevicesFragment"
+        android:label="@string/title_devices"
+        tools:layout="@layout/fragment_devices">
+
+        <!-- Переход к редактированию/добавлению прибора -->
+        <action
+            android:id="@+id/action_devicesFragment_to_deviceEditFragment"
+            app:destination="@id/deviceEditFragment" />
+
+        <!-- Переход к деталям прибора -->
+        <action
+            android:id="@+id/action_devicesFragment_to_deviceDetailFragment"
+            app:destination="@id/deviceDetailFragment">
+            <argument
+                android:name="deviceId"
+                app:argType="integer"
+                android:defaultValue="0" />
+        </action>
+
+    </fragment>
+
+    <!-- Экран редактирования прибора -->
+    <fragment
+        android:id="@+id/deviceEditFragment"
+        android:name="com.kipia.management.mobile.ui.devices.DeviceEditFragment"
+        android:label="@string/title_edit_device">
+        <argument
+            android:name="deviceId"
+            app:argType="integer"
+            android:defaultValue="0" />
+    </fragment>
+
+    <!-- Экран деталей прибора -->
+    <fragment
+        android:id="@+id/deviceDetailFragment"
+        android:name="com.kipia.management.mobile.ui.devices.DeviceDetailFragment"
+        android:label="@string/title_device_details">
+        <argument
+            android:name="deviceId"
+            app:argType="integer"
+            android:defaultValue="0" />
+    </fragment>
+
+    <!-- Экран схем (пока заглушка) -->
+    <fragment
+        android:id="@+id/navigation_schemes"
+        android:name="com.kipia.management.mobile.ui.schemes.SchemesFragment"
+        android:label="@string/title_schemes"
+        tools:layout="@layout/fragment_schemes" />
+
+    <!-- Экран отчетов (пока заглушка) -->
+    <fragment
+        android:id="@+id/navigation_reports"
+        android:name="com.kipia.management.mobile.ui.reports.ReportsFragment"
+        android:label="@string/title_reports"
+        tools:layout="@layout/fragment_reports" />
+
+</navigation>

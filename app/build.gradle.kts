@@ -1,17 +1,18 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.org.jetbrains.kotlin.android)
-    alias(libs.plugins.org.jetbrains.kotlin.plugin.compose)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.dagger.hilt)
 }
 
 android {
-    namespace = "com.kipia.management"
-    compileSdk = 36
+    namespace = "com.kipia.management.mobile"
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.kipia.management"
-        minSdk = 26
-        targetSdk = 36
+        applicationId = "com.kipia.management.mobile"
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
 
@@ -30,47 +31,57 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
+
+    kotlinOptions {
+        jvmTarget = "17"
     }
+
     buildFeatures {
-        compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.6.10"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
+        viewBinding = true
+        buildConfig = true
     }
 }
 
 dependencies {
-    // Core Android
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
+    // Используем bundles из libs.versions.toml
+    implementation(libs.bundles.android.base)
+    implementation(libs.bundles.lifecycle.bundle)
+    implementation(libs.bundles.navigation.bundle)
+    implementation(libs.bundles.camerax.bundle) // Добавьте эту строку
 
-    // Compose BOM - используйте последнюю стабильную версию
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
+    // Room
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler) // Теперь будет работать
+
+    // Hilt
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.android.compiler) // Теперь будет работать
+    implementation(libs.hilt.navigation.fragment)
+
+    // Coroutines
+    implementation(libs.coroutines.android)
+
+    // Glide
+    implementation(libs.glide)
+    kapt(libs.glide.compiler) // Теперь будет работать
+
+    // Прочие зависимости (упростите)
+    implementation(libs.gson)
+    implementation(libs.timber)
 
     // Testing
     testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    androidTestImplementation(libs.ext.junit)
+    androidTestImplementation(libs.espresso)
+}
+
+// Для Room compiler нужно создать reference вручную если нет
+kapt {
+    correctErrorTypes = true
 }

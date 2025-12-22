@@ -3,7 +3,6 @@ package com.kipia.management.mobile.data.entities
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.google.gson.Gson
 
 @Entity(tableName = "devices")
 data class Device(
@@ -43,21 +42,9 @@ data class Device(
     @ColumnInfo(name = "additional_info")
     val additionalInfo: String?,
 
-    // JSON массив путей к фото
-    @ColumnInfo(name = "photos")
-    val photosJson: String? = "[]"
-) {
-    // Helper методы для работы с фото
-    fun getPhotoList(): List<String> {
-        return try {
-            Gson().fromJson(photosJson ?: "[]", Array<String>::class.java).toList()
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
+    @ColumnInfo(name = "photo_path")
+    val photoPath: String?,  // Основное фото
 
-    fun setPhotoList(photos: List<String>): Device {
-        val json = Gson().toJson(photos)
-        return this.copy(photosJson = json)
-    }
-}
+    @ColumnInfo(name = "photos")
+    val photos: String?  // JSON с путями к фото
+)

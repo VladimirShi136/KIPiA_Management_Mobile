@@ -1,16 +1,12 @@
 package com.kipia.management.mobile.data.database
 
-import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.kipia.management.mobile.data.dao.DeviceDao
-import com.kipia.management.mobile.data.dao.SchemeDao
-import com.kipia.management.mobile.data.dao.DeviceLocationDao
-import com.kipia.management.mobile.data.entities.Device
-import com.kipia.management.mobile.data.entities.Scheme
-import com.kipia.management.mobile.data.entities.DeviceLocation
+import android.content.Context
+import com.kipia.management.mobile.data.dao.*
+import com.kipia.management.mobile.data.entities.*
 
 @Database(
     entities = [Device::class, Scheme::class, DeviceLocation::class],
@@ -19,6 +15,7 @@ import com.kipia.management.mobile.data.entities.DeviceLocation
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+
     abstract fun deviceDao(): DeviceDao
     abstract fun schemeDao(): SchemeDao
     abstract fun deviceLocationDao(): DeviceLocationDao
@@ -32,9 +29,9 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "kipia_management.db" // Имя такое же как в десктопной версии!
+                    "kipia_management.db"  // Имя такое же как в десктопной версии
                 )
-                    .fallbackToDestructiveMigration() // для начала, потом замените на миграции
+                    .fallbackToDestructiveMigration()  // Для начала используем это
                     .build()
                 INSTANCE = instance
                 instance
