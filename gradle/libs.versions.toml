@@ -1,12 +1,12 @@
 [versions]
 # Gradle и Kotlin
 agp = "8.13.2"
-kotlin = "1.9.20"
+kotlin = "2.3.0"
 
 # Android
-compileSdk = "34"
+compileSdk = "35"
 minSdk = "24"
-targetSdk = "34"
+targetSdk = "35"
 
 # Библиотеки
 coreKtx = "1.12.0"
