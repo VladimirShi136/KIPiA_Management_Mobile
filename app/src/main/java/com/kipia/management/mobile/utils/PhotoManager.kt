@@ -19,6 +19,10 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.graphics.*
+import android.graphics.BitmapFactory
+import timber.log.Timber
+import java.io.FileOutputStream
 
 class PhotoManager(
     private val fragment: Fragment,
@@ -164,6 +168,34 @@ class PhotoManager(
                 e.printStackTrace()
                 null
             }
+        }
+    }
+
+    fun rotatePhoto(context: Context, originalPath: String, degrees: Float): String? {
+        return try {
+            val originalFile = File(originalPath)
+            if (!originalFile.exists()) return null
+
+            val bitmap = BitmapFactory.decodeFile(originalPath)
+            val matrix = Matrix().apply { postRotate(degrees) }
+            val rotatedBitmap = Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+            )
+
+            // Сохраняем повернутую версию
+            val rotatedFile = File(context.filesDir, "rotated_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(rotatedFile).use { out ->
+                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+
+            // Освобождаем память
+            bitmap.recycle()
+            rotatedBitmap.recycle()
+
+            rotatedFile.absolutePath
+        } catch (e: Exception) {
+            Timber.e(e, "Error rotating photo")
+            null
         }
     }
 }

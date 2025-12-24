@@ -58,6 +58,35 @@
         android:label="@string/title_schemes"
         tools:layout="@layout/fragment_schemes" />
 
+    <!-- Редактор схем -->
+    <fragment
+        android:id="@+id/schemeEditorFragment"
+        android:name="com.kipia.management.mobile.ui.schemes.SchemeEditorFragment"
+        android:label="Редактор схем"
+        tools:layout="@layout/fragment_scheme_editor">
+
+        <argument
+            android:name="schemeId"
+            app:argType="integer"
+            android:defaultValue="0" />
+
+        <!-- И добавь действие из SchemesFragment (который создадим позже): -->
+        <action
+            android:id="@+id/action_schemesFragment_to_schemeEditorFragment"
+            app:destination="@id/schemeEditorFragment">
+            <argument
+                android:name="schemeId"
+                app:argType="integer"
+                android:defaultValue="0" />
+        </action>
+
+        <!-- Также добавь действие для создания новой схемы: -->
+        <action
+            android:id="@+id/action_schemesFragment_to_schemeEditorFragment_new"
+            app:destination="@id/schemeEditorFragment" />
+
+    </fragment>
+
     <!-- Экран отчетов (пока заглушка) -->
     <fragment
         android:id="@+id/navigation_reports"

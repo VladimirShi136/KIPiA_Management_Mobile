@@ -1,9 +1,21 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Ночная версия темы. Наследуем от тёмной Material 3 без ActionBar. -->
-    <style name="Theme.Material3.DayNight.NoActionBar" parent="android:Theme.Material.Light">
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:enforceNavigationBarContrast">false</item>
-        <item name="android:enforceStatusBarContrast">false</item>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Темная тема приложения -->
+    <style name="Theme.KipiaManagement" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/purple_200</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorOnPrimary">@android:color/black</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/teal_200</item>
+        <item name="colorSecondaryVariant">@color/teal_200</item>
+        <item name="colorOnSecondary">@android:color/black</item>
+
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+
+        <!-- Window背景 -->
+        <item name="android:windowBackground">@color/background_dark</item>
     </style>
 </resources>

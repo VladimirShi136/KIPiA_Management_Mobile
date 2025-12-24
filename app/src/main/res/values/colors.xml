@@ -9,13 +9,20 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Цвета статусов -->
+    <!-- Цвета статусов приборов -->
     <color name="status_in_work">#4CAF50</color>
     <color name="status_repair">#FF9800</color>
     <color name="status_reserve">#2196F3</color>
     <color name="status_decommissioned">#F44336</color>
 
-    <!-- Тема -->
+    <!-- Дополнительные цвета -->
     <color name="primary_color">#3F51B5</color>
     <color name="secondary_color">#FF4081</color>
+    <color name="error_color">#F44336</color>
+    <color name="success_color">#4CAF50</color>
+    <color name="warning_color">#FF9800</color>
+
+    <!-- Для темной темы -->
+    <color name="background_dark">#121212</color>
+    <color name="surface_dark">#1E1E1E</color>
 </resources>

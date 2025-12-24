@@ -9,4 +9,5 @@ interface SchemeRepository {
     suspend fun insertScheme(scheme: Scheme): Long
     suspend fun updateScheme(scheme: Scheme)
     suspend fun deleteScheme(scheme: Scheme)
+    suspend fun deleteSchemeById(id: Int)
 }

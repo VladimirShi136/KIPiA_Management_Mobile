@@ -1,9 +1,6 @@
 package com.kipia.management.mobile.di
 
-import com.kipia.management.mobile.repository.DeviceRepository
-import com.kipia.management.mobile.repository.DeviceRepositoryImpl
-import com.kipia.management.mobile.repository.SchemeRepository
-import com.kipia.management.mobile.repository.SchemeRepositoryImpl
+import com.kipia.management.mobile.repository.*
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -25,4 +22,10 @@ abstract class RepositoryModule {
     abstract fun bindSchemeRepository(
         repositoryImpl: SchemeRepositoryImpl
     ): SchemeRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceLocationRepository(
+        repositoryImpl: DeviceLocationRepositoryImpl
+    ): DeviceLocationRepository
 }

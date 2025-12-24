@@ -61,4 +61,39 @@
     <string name="photo_added_successfully">Фото успешно добавлено</string>
     <string name="error_adding_photo">Ошибка при добавлении фото</string>
     <string name="view_all_photos">Просмотреть все фото</string>
+
+    <string name="fullscreen_photo">Полноэкранный просмотр фото</string>
+    <string name="close">Закрыть</string>
+    <string name="delete_photo_title">Удаление фото</string>
+    <string name="delete_photo_confirmation">Удалить это фото?</string>
+    <string name="photo_deleted">Фото удалено</string>
+    <string name="rotate_left">Повернуть влево</string>
+    <string name="rotate_right">Повернуть вправо</string>
+
+    <!-- Для редактора схем -->
+    <string name="scheme_editor">Редактор схем</string>
+    <string name="new_scheme">Новая схема</string>
+    <string name="devices">Приборы</string>
+    <string name="drag_device_hint">Перетащите прибор на схему</string>
+    <string name="device_added">Прибор добавлен на схему</string>
+    <string name="position_saved">Позиция прибора сохранена</string>
+    <string name="save_scheme">Сохранение схемы</string>
+    <string name="enter_scheme_name">Введите название для новой схемы:</string>
+    <string name="scheme_name">Название схемы</string>
+    <string name="scheme_description">Описание (необязательно)</string>
+    <string name="confirm_cancel">Подтверждение</string>
+    <string name="cancel_changes_message">Отменить изменения? Все несохраненные данные будут потеряны.</string>
+    <string name="continue_editing">Продолжить редактирование</string>
+    <string name="scheme_saved">Схема \'%s\' сохранена</string>
+    <string name="changes_saved">Изменения сохранены</string>
+
+    <!-- Для SchemesFragment -->
+    <string name="no_schemes">Нет схем</string>
+    <string name="create_first_scheme">Создайте первую схему</string>
+    <string name="edit">Редактировать</string>
+    <string name="duplicate">Дублировать</string>
+    <string name="delete_scheme">Удаление схемы</string>
+    <string name="delete_scheme_confirmation">Удалить схему \"%s\"?</string>
+    <string name="scheme_created">Схема создана</string>
+    <string name="scheme_deleted">Схема удалена</string>
 </resources>

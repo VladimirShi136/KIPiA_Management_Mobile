@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -18,12 +19,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.kipia.management.mobile.R
 import com.kipia.management.mobile.adapters.PhotoAdapter
 import com.kipia.management.mobile.databinding.FragmentDeviceDetailBinding
+import com.kipia.management.mobile.ui.photos.FullScreenPhotoDialog
 import com.kipia.management.mobile.utils.PhotoManager
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class DeviceDetailFragment : Fragment() {
+class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListener {
 
     private var _binding: FragmentDeviceDetailBinding? = null
     private val binding get() = _binding!!
@@ -231,8 +233,9 @@ class DeviceDetailFragment : Fragment() {
     }
 
     private fun showPhotoViewerDialog(photoPath: String) {
-        // TODO: Реализовать полноэкранный просмотр фото
-        // Можно использовать DialogFragment с ImageView
+        val deviceId = viewModel.device.value?.id?.toLong() ?: 0L
+        val dialog = FullScreenPhotoDialog.newInstance(photoPath, deviceId)
+        dialog.show(parentFragmentManager, "FullScreenPhotoDialog")
     }
 
     private fun showPhotoAddedMessage() {
@@ -252,4 +255,22 @@ class DeviceDetailFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
+
+    override fun onPhotoDeleted(photoPath: String) {
+        viewModel.deletePhoto(photoPath)
+        Toast.makeText(requireContext(), R.string.photo_deleted, Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onPhotoRotated(oldPath: String, newPath: String) {
+        // Обновляем путь в базе данных
+        if (viewModel.device.value?.photoPath == oldPath) {
+            viewModel.updateDevicePhoto(newPath)
+        } else {
+            // Это дополнительное фото
+            viewModel.addAdditionalPhoto(newPath)
+            // Удаляем старую версию
+            viewModel.deletePhoto(oldPath)
+        }
+    }
+
 }
