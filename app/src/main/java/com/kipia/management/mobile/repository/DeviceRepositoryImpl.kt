@@ -33,4 +33,9 @@ class DeviceRepositoryImpl @Inject constructor(
 
     override suspend fun getDeviceByInventoryNumber(inventoryNumber: String): Device? =
         deviceDao.getDeviceByInventoryNumber(inventoryNumber)
+
+    override suspend fun validateInventoryNumber(inventoryNumber: String, excludeId: Int): Boolean {
+        val existing = deviceDao.getDeviceByInventoryNumber(inventoryNumber)
+        return existing == null || existing.id == excludeId
+    }
 }

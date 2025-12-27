@@ -55,8 +55,9 @@ class SchemeEditorViewModel @Inject constructor(
             _scheme.value = schemeRepository.getSchemeById(schemeId)
 
             // Загружаем все приборы для выбора
-            val allDevices = deviceRepository.getAllDevices()
-            _devices.value = allDevices
+            deviceRepository.getAllDevices().collect { deviceList ->
+                _devices.value = deviceList
+            }
 
             // Загружаем расположения приборов на этой схеме
             val locations = deviceLocationRepository.getLocationsForScheme(schemeId)
@@ -102,7 +103,7 @@ class SchemeEditorViewModel @Inject constructor(
                 it.deviceId == deviceId && it.schemeId == schemeId
             }
 
-            location?.let {
+            location?.let { it ->
                 deviceLocationRepository.deleteLocation(it)
 
                 // Обновляем локальный список

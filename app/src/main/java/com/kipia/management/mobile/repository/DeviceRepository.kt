@@ -14,4 +14,5 @@ interface DeviceRepository {
     fun getAllLocations(): Flow<List<String>>
     suspend fun countDevicesByStatus(status: String): Int
     suspend fun getDeviceByInventoryNumber(inventoryNumber: String): Device?
+    suspend fun validateInventoryNumber(inventoryNumber: String, excludeId: Int = 0): Boolean
 }

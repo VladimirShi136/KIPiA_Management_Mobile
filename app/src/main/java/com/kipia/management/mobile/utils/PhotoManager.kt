@@ -1,28 +1,26 @@
 package com.kipia.management.mobile.utils
 
-import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
+import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import android.graphics.*
-import android.graphics.BitmapFactory
-import timber.log.Timber
-import java.io.FileOutputStream
 
 class PhotoManager(
     private val fragment: Fragment,
@@ -147,7 +145,7 @@ class PhotoManager(
         fun copyPhotoToAppStorage(context: Context, sourceUri: Uri): String? {
             return try {
                 val inputStream = context.contentResolver.openInputStream(sourceUri)
-                val fileName = generateFileName()
+                val fileName = "IMG_${System.currentTimeMillis()}.jpg"
                 val outputDir = File(context.filesDir, "device_photos")
 
                 if (!outputDir.exists()) {

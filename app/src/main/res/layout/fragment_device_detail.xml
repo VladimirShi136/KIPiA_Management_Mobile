@@ -40,7 +40,7 @@
                     android:layout_width="64dp"
                     android:layout_height="64dp"
                     android:src="@drawable/ic_photo_camera"
-                    android:tint="?attr/colorOnSurfaceVariant"/>
+                    app:tint="?attr/colorOnSurfaceVariant"/>
 
                 <TextView
                     android:layout_width="wrap_content"

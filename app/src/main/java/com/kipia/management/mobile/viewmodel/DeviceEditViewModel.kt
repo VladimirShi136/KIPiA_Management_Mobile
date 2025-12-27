@@ -46,10 +46,20 @@ class DeviceEditViewModel @Inject constructor(
         } else {
             // Новый прибор
             _device.value = Device(
-                type = "",
-                inventoryNumber = "",
-                location = "",
-                status = "В работе"
+                id = 0,
+                type = "", // обязательно
+                name = "", // было не передано
+                manufacturer = null, // было не передано
+                inventoryNumber = "", // обязательно
+                year = null, // было не передано
+                measurementLimit = null, // было не передано
+                accuracyClass = null, // было не передано
+                location = "", // обязательно
+                valveNumber = null, // было не передано
+                status = "В работе",
+                additionalInfo = null, // было не передано
+                photoPath = null, // было не передано
+                photos = null // было не передано
             )
         }
     }
@@ -98,10 +108,20 @@ class DeviceEditViewModel @Inject constructor(
 
         // Создание/обновление прибора
         val currentDevice = _device.value ?: Device(
-            type = type,
-            inventoryNumber = inventoryNumber,
-            location = location,
-            status = status
+            id = 0,
+            type = "", // обязательно
+            name = "", // было не передано
+            manufacturer = null, // было не передано
+            inventoryNumber = "", // обязательно
+            year = null, // было не передано
+            measurementLimit = null, // было не передано
+            accuracyClass = null, // было не передано
+            location = "", // обязательно
+            valveNumber = null, // было не передано
+            status = "В работе",
+            additionalInfo = null, // было не передано
+            photoPath = null, // было не передано
+            photos = null // было не передано
         )
 
         val updatedDevice = currentDevice.copy(

@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -16,232 +14,248 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/title_edit_device"
-            android:textSize="24sp"
-            android:textStyle="bold"
             android:layout_marginBottom="24dp"
-            android:textColor="?attr/colorOnSurface"/>
+            android:text="@string/title_edit_device"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
-        <!-- Инвентарный номер -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutInventoryNumber"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
+        <!-- ДОБАВЬТЕ ЭТИ ЭЛЕМЕНТЫ -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:errorEnabled="true">
+            android:layout_gravity="center"
+            android:visibility="gone" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editInventoryNumber"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/inventory_number"
-                android:inputType="textCapCharacters"
-                android:maxLines="1"
-                android:importantForAutofill="no"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Тип прибора -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutType"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:errorEnabled="true">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editType"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/device_type"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Наименование -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/device_name"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Производитель -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editManufacturer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/manufacturer"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Год выпуска -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editYear"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/year"
-                android:inputType="number"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Место установки -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutLocation"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:errorEnabled="true">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editLocation"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/location"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Статус (Spinner) -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <AutoCompleteTextView
-                android:id="@+id/spinnerStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/status"
-                android:inputType="none"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Класс точности -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editAccuracyClass"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/accuracy_class"
-                android:inputType="numberDecimal"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Предел измерений -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editMeasurementLimit"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/measurement_limit"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Номер крана/узла -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editValveNumber"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/valve_number"
-                android:maxLines="1"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Дополнительная информация -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editAdditionalInfo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/additional_info"
-                android:inputType="textMultiLine"
-                android:minLines="3"
-                android:maxLines="5"/>
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Кнопки действий -->
         <LinearLayout
+            android:id="@+id/content"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end">
+            android:orientation="vertical"
+            android:visibility="visible">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonCancel"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="wrap_content"
+
+            <!-- Инвентарный номер -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutInventoryNumber"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="@string/cancel"/>
+                android:layout_marginBottom="16dp"
+                app:errorEnabled="true">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonSave"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="wrap_content"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editInventoryNumber"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/inventory_number"
+                    android:importantForAutofill="no"
+                    android:inputType="textCapCharacters"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Тип прибора -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutType"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/save"/>
+                android:layout_marginBottom="16dp"
+                app:errorEnabled="true">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonDelete"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editType"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/device_type"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Наименование -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/delete"
-                android:visibility="gone"/>
+                android:layout_marginBottom="16dp">
 
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/device_name"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Производитель -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editManufacturer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/manufacturer"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Год выпуска -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editYear"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/year"
+                    android:inputType="number"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Место установки -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutLocation"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:errorEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/location"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Статус (Spinner) -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <AutoCompleteTextView
+                    android:id="@+id/spinnerStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/status"
+                    android:inputType="none" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Класс точности -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editAccuracyClass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/accuracy_class"
+                    android:inputType="numberDecimal"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Предел измерений -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editMeasurementLimit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/measurement_limit"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Номер крана/узла -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editValveNumber"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/valve_number"
+                    android:maxLines="1" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Дополнительная информация -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editAdditionalInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/additional_info"
+                    android:inputType="textMultiLine"
+                    android:maxLines="5"
+                    android:minLines="3" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Кнопки действий -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonCancel"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/cancel" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonSave"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/save" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonDelete"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/delete"
+                    android:visibility="gone" />
+
+            </LinearLayout>
         </LinearLayout>
-
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -82,7 +82,7 @@ class DeviceAdapter(
                 try {
                     val listType = object : TypeToken<List<String>>() {}.type
                     gson.fromJson<List<String>>(photosJson, listType) ?: emptyList()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emptyList()
                 }
             }

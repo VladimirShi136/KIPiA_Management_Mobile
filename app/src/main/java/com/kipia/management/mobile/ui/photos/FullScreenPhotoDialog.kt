@@ -2,13 +2,14 @@ package com.kipia.management.mobile.ui.photos
 
 import android.app.AlertDialog
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.DialogFragment
 import com.bumptech.glide.Glide
+import com.kipia.management.mobile.R
 import com.kipia.management.mobile.databinding.DialogFullscreenPhotoBinding
 import com.kipia.management.mobile.utils.PhotoManager
 
@@ -58,7 +59,7 @@ class FullScreenPhotoDialog : DialogFragment() {
         // Настройка диалога
         dialog?.window?.apply {
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundDrawable(ColorDrawable(Color.BLACK))
+            setBackgroundDrawable(Color.BLACK.toDrawable())
         }
 
         photoPath = arguments?.getString(ARG_PHOTO_PATH) ?: ""

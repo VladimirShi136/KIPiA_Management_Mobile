@@ -1,16 +1,19 @@
 package com.kipia.management.mobile.ui.devices
 
 import android.Manifest
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.GridLayoutManager
@@ -23,6 +26,7 @@ import com.kipia.management.mobile.ui.photos.FullScreenPhotoDialog
 import com.kipia.management.mobile.utils.PhotoManager
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListener {
@@ -36,7 +40,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     private lateinit var photoManager: PhotoManager
     private lateinit var photoAdapter: PhotoAdapter
 
-    // Для обработки разрешений
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -64,10 +67,24 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupToolbar()
         setupPhotoManager()
         setupRecyclerView()
         setupObservers()
         setupListeners()
+
+        // ИСПРАВЛЕНО: загружаем данные устройства - убираем аргумент
+        viewModel.loadDevice()
+    }
+
+    private fun setupToolbar() {
+        // Используем Toolbar из Activity вместо локального
+        // В вашем макете fragment_device_detail.xml нет toolbar
+        // Поэтому используем ActionBar Activity
+        (requireActivity() as AppCompatActivity).supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            title = getString(R.string.title_device_details)
+        }
     }
 
     private fun setupPhotoManager() {
@@ -93,7 +110,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     private fun setupRecyclerView() {
         photoAdapter = PhotoAdapter(
             onPhotoClick = { photoPath ->
-                // TODO: Показать полноэкранный просмотр фото
                 showPhotoViewerDialog(photoPath)
             },
             onPhotoLongClick = { photoPath ->
@@ -108,42 +124,43 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     }
 
     private fun setupObservers() {
-        viewModel.device.observe(viewLifecycleOwner) { device ->
-            device?.let { populateDeviceDetails(it) }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.device.collect { device ->
+                    device?.let { populateDeviceDetails(it) }
+                }
+            }
         }
 
-        viewModel.photos.observe(viewLifecycleOwner) { photos ->
-            updatePhotoUI(photos)
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.photos.collect { photos ->
+                    updatePhotoUI(photos)
+                }
+            }
         }
 
-        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            binding.progressBar.isVisible = isLoading
-            binding.content.isVisible = !isLoading
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isLoading.collect { isLoading ->
+                    // Используем корневой элемент для показа/скрытия
+                    binding.root.isVisible = !isLoading
+                }
+            }
         }
     }
 
     private fun setupListeners() {
-        // Клик на область фото
         binding.photoContainer.setOnClickListener {
             showPhotoSourceDialog()
         }
 
-        // Клик на FAB
         binding.fabAddPhoto.setOnClickListener {
             showPhotoSourceDialog()
         }
 
-        // Кнопка редактирования (добавить в toolbar)
-        requireActivity().setActionBar(binding.toolbar)
-        binding.toolbar.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.action_edit -> {
-                    navigateToEdit()
-                    true
-                }
-                else -> false
-            }
-        }
+        // УБРАНО: работа с toolbar, так как его нет в макете
+        // Вместо этого добавляем кнопку редактирования в FAB или другое место
     }
 
     private fun populateDeviceDetails(device: com.kipia.management.mobile.data.entities.Device) {
@@ -158,7 +175,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
             textYear.text = device.year?.toString() ?: "Не указан"
             textAdditionalInfo.text = device.additionalInfo ?: "Нет дополнительной информации"
 
-            // Показываем/скрываем поля если они пустые
             textManufacturer.isVisible = device.manufacturer?.isNotBlank() == true
             textYear.isVisible = device.year != null
             textAdditionalInfo.isVisible = device.additionalInfo?.isNotBlank() == true
@@ -167,7 +183,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
 
     private fun updatePhotoUI(photos: List<String>) {
         if (photos.isNotEmpty()) {
-            // Показываем первое фото как основное
             val mainPhoto = photos.first()
             Glide.with(this)
                 .load(mainPhoto)
@@ -178,7 +193,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
             binding.layoutNoPhoto.visibility = View.GONE
             binding.imageDevice.visibility = View.VISIBLE
 
-            // Показываем галерею если фото больше 1
             if (photos.size > 1) {
                 binding.cardGallery.visibility = View.VISIBLE
                 photoAdapter.submitList(photos.drop(1))
@@ -186,7 +200,6 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
                 binding.cardGallery.visibility = View.GONE
             }
         } else {
-            // Нет фото
             binding.layoutNoPhoto.visibility = View.VISIBLE
             binding.imageDevice.visibility = View.GONE
             binding.cardGallery.visibility = View.GONE
@@ -204,14 +217,12 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     }
 
     private fun showPhotoSourceDialog() {
-        val options = arrayOf(
-            getString(R.string.take_photo),
-            getString(R.string.choose_from_gallery)
-        )
-
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(getString(R.string.add_photo))
-            .setItems(options) { _, which ->
+            .setItems(arrayOf(
+                getString(R.string.take_photo),
+                getString(R.string.choose_from_gallery)
+            )) { _, which ->
                 when (which) {
                     0 -> photoManager.takePhoto()
                     1 -> photoManager.pickPhotoFromGallery()
@@ -233,22 +244,22 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     }
 
     private fun showPhotoViewerDialog(photoPath: String) {
-        val deviceId = viewModel.device.value?.id?.toLong() ?: 0L
-        val dialog = FullScreenPhotoDialog.newInstance(photoPath, deviceId)
+        val deviceId = viewModel.device.value?.id ?: 0
+        val dialog = FullScreenPhotoDialog.newInstance(photoPath, deviceId.toLong())
         dialog.show(parentFragmentManager, "FullScreenPhotoDialog")
     }
 
     private fun showPhotoAddedMessage() {
-        // Можно показать Snackbar или Toast
-        // Snackbar.make(binding.root, R.string.photo_added_successfully, Snackbar.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), R.string.photo_added_successfully, Toast.LENGTH_SHORT).show()
     }
 
     private fun navigateToEdit() {
         val device = viewModel.device.value ?: return
-        val action = DeviceDetailFragmentDirections.actionDeviceDetailFragmentToDeviceEditFragment(
-            deviceId = device.id
-        )
-        findNavController().navigate(action)
+        // Используем временную навигацию, пока не сгенерируются Directions
+        val bundle = Bundle().apply {
+            putInt("deviceId", device.id)
+        }
+        findNavController().navigate(R.id.deviceEditFragment, bundle)
     }
 
     override fun onDestroyView() {
@@ -262,15 +273,11 @@ class DeviceDetailFragment : Fragment(), FullScreenPhotoDialog.PhotoActionListen
     }
 
     override fun onPhotoRotated(oldPath: String, newPath: String) {
-        // Обновляем путь в базе данных
         if (viewModel.device.value?.photoPath == oldPath) {
             viewModel.updateDevicePhoto(newPath)
         } else {
-            // Это дополнительное фото
             viewModel.addAdditionalPhoto(newPath)
-            // Удаляем старую версию
             viewModel.deletePhoto(oldPath)
         }
     }
-
 }

@@ -51,12 +51,29 @@
             android:defaultValue="0" />
     </fragment>
 
-    <!-- Экран схем (пока заглушка) -->
+    <!-- Экран схем -->
     <fragment
         android:id="@+id/navigation_schemes"
         android:name="com.kipia.management.mobile.ui.schemes.SchemesFragment"
         android:label="@string/title_schemes"
-        tools:layout="@layout/fragment_schemes" />
+        tools:layout="@layout/fragment_schemes">
+
+        <!-- Действие для открытия редактора схем (существующей) -->
+        <action
+            android:id="@+id/action_schemesFragment_to_schemeEditorFragment"
+            app:destination="@id/schemeEditorFragment">
+            <argument
+                android:name="schemeId"
+                app:argType="integer"
+                android:defaultValue="0" />
+        </action>
+
+        <!-- Действие для создания новой схемы (без аргумента schemeId) -->
+        <action
+            android:id="@+id/action_schemesFragment_to_schemeEditorFragment_new"
+            app:destination="@id/schemeEditorFragment" />
+
+    </fragment>
 
     <!-- Редактор схем -->
     <fragment
@@ -70,24 +87,9 @@
             app:argType="integer"
             android:defaultValue="0" />
 
-        <!-- И добавь действие из SchemesFragment (который создадим позже): -->
-        <action
-            android:id="@+id/action_schemesFragment_to_schemeEditorFragment"
-            app:destination="@id/schemeEditorFragment">
-            <argument
-                android:name="schemeId"
-                app:argType="integer"
-                android:defaultValue="0" />
-        </action>
-
-        <!-- Также добавь действие для создания новой схемы: -->
-        <action
-            android:id="@+id/action_schemesFragment_to_schemeEditorFragment_new"
-            app:destination="@id/schemeEditorFragment" />
-
     </fragment>
 
-    <!-- Экран отчетов (пока заглушка) -->
+    <!-- Экран отчетов (пока заглушка)-->
     <fragment
         android:id="@+id/navigation_reports"
         android:name="com.kipia.management.mobile.ui.reports.ReportsFragment"

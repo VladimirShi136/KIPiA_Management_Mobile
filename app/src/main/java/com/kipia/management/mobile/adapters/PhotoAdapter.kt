@@ -38,7 +38,7 @@ class PhotoAdapter(
             Glide.with(binding.root.context)
                 .load(photoPath)
                 .placeholder(R.drawable.ic_photo)
-                .error(R.drawable.ic_broken_image)
+                .error(android.R.drawable.ic_dialog_alert) // Временное решение
                 .centerCrop()
                 .into(binding.imagePhoto)
 

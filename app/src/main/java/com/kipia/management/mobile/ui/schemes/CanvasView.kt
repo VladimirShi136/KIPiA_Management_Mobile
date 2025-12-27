@@ -1,13 +1,18 @@
 package com.kipia.management.mobile.ui.schemes
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import com.kipia.management.mobile.R
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.DeviceLocation
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class CanvasView @JvmOverloads constructor(
     context: Context,
@@ -137,7 +142,7 @@ class CanvasView @JvmOverloads constructor(
 
             // Текст с инвентарным номером (первые 5 символов)
             val shortNumber = if (device.inventoryNumber.length > 5) {
-                device.inventoryNumber.substring(0, 5) + "..."
+                device.inventoryNumber.take(5) + "..."
             } else {
                 device.inventoryNumber
             }
@@ -201,9 +206,9 @@ class CanvasView @JvmOverloads constructor(
             val deviceY = location?.y ?: 0f
 
             // Проверяем, попадает ли точка в круг прибора
-            val distance = Math.sqrt(
-                Math.pow((x - deviceX).toDouble(), 2.0) +
-                        Math.pow((y - deviceY).toDouble(), 2.0)
+            val distance = sqrt(
+                (x - deviceX).toDouble().pow(2.0) +
+                        (y - deviceY).toDouble().pow(2.0)
             )
 
             if (distance <= deviceIconSize / 2) {

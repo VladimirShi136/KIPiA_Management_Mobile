@@ -37,7 +37,7 @@ class DeviceDetailViewModel @Inject constructor(
         loadDevice()
     }
 
-    private fun loadDevice() {
+    fun loadDevice() {
         viewModelScope.launch {
             _isLoading.value = true
             _device.value = repository.getDeviceById(deviceId)

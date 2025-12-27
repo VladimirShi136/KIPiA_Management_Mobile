@@ -1,12 +1,10 @@
 package com.kipia.management.mobile.adapters
 
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.kipia.management.mobile.R
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.databinding.ItemSchemeBinding
 import java.text.SimpleDateFormat
