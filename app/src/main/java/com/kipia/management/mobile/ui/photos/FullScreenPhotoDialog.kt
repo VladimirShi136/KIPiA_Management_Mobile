@@ -1,25 +1,38 @@
 package com.kipia.management.mobile.ui.photos
 
-import android.app.AlertDialog
-import android.graphics.Color
+import android.app.Dialog
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
-import androidx.core.graphics.drawable.toDrawable
+import android.widget.ImageView
 import androidx.fragment.app.DialogFragment
 import com.bumptech.glide.Glide
-import com.kipia.management.mobile.R
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.kipia.management.mobile.databinding.DialogFullscreenPhotoBinding
-import com.kipia.management.mobile.utils.PhotoManager
+import java.io.File
 
 class FullScreenPhotoDialog : DialogFragment() {
+
+    private var _binding: DialogFullscreenPhotoBinding? = null
+    private val binding get() = _binding!!
+
+    private var photoPath: String? = null
+    private var deviceId: Long = 0L
+    private var currentRotation = 0
+
+    interface PhotoActionListener {
+        fun onPhotoDeleted(photoPath: String)
+        fun onPhotoRotated(oldPath: String, newPath: String)
+    }
 
     companion object {
         private const val ARG_PHOTO_PATH = "photo_path"
         private const val ARG_DEVICE_ID = "device_id"
 
-        fun newInstance(photoPath: String, deviceId: Long = 0): FullScreenPhotoDialog {
+        fun newInstance(photoPath: String, deviceId: Long): FullScreenPhotoDialog {
             return FullScreenPhotoDialog().apply {
                 arguments = Bundle().apply {
                     putString(ARG_PHOTO_PATH, photoPath)
@@ -29,120 +42,135 @@ class FullScreenPhotoDialog : DialogFragment() {
         }
     }
 
-    private var _binding: DialogFullscreenPhotoBinding? = null
-    private val binding get() = _binding!!
-
-    private var photoPath: String = ""
-    private var deviceId: Long = 0
-    private var currentRotation = 0f
-
-    // Callback для обновления фото в родительском фрагменте
-    interface PhotoActionListener {
-        fun onPhotoDeleted(photoPath: String)
-        fun onPhotoRotated(oldPath: String, newPath: String)
-    }
-
-    private var listener: PhotoActionListener? = null
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        _binding = DialogFullscreenPhotoBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        // Настройка диалога
-        dialog?.window?.apply {
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundDrawable(Color.BLACK.toDrawable())
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        arguments?.let {
+            photoPath = it.getString(ARG_PHOTO_PATH)
+            deviceId = it.getLong(ARG_DEVICE_ID)
         }
+    }
 
-        photoPath = arguments?.getString(ARG_PHOTO_PATH) ?: ""
-        deviceId = arguments?.getLong(ARG_DEVICE_ID) ?: 0L
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        _binding = DialogFullscreenPhotoBinding.inflate(LayoutInflater.from(requireContext()))
 
-        // Находим родительский фрагмент как слушатель
-        parentFragment?.let {
-            if (it is PhotoActionListener) {
-                listener = it
-            }
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setView(binding.root)
+            .create()
+
+        setupPhoto()
+        setupListeners()
+
+        return dialog
+    }
+
+    private fun setupPhoto() {
+        photoPath?.let { path ->
+            Glide.with(this)
+                .load(File(path))
+                .into(binding.fullscreenImage)
         }
-
-        loadPhoto()
-        setupClickListeners()
     }
 
-    private fun loadPhoto() {
-        Glide.with(this)
-            .load(photoPath)
-            .placeholder(R.drawable.ic_photo)
-            .into(binding.fullscreenImage)
-    }
-
-    private fun setupClickListeners() {
-        // Закрытие
+    private fun setupListeners() {
         binding.buttonClose.setOnClickListener {
             dismiss()
         }
 
         binding.fullscreenImage.setOnClickListener {
+            // Можно добавить зум при двойном тапе
+        }
+
+        binding.buttonRotateLeft.setOnClickListener {
+            rotatePhoto(-90)
+        }
+
+        binding.buttonRotateRight.setOnClickListener {
+            rotatePhoto(90)
+        }
+
+        binding.buttonDelete.setOnClickListener {
+            showDeleteConfirmationDialog()
+        }
+    }
+
+    private fun rotatePhoto(degrees: Int) {
+        photoPath?.let { path ->
+            val file = File(path)
+            if (file.exists()) {
+                val bitmap = BitmapFactory.decodeFile(path)
+                val matrix = Matrix()
+                matrix.postRotate(degrees.toFloat())
+
+                val rotatedBitmap = Bitmap.createBitmap(
+                    bitmap, 0, 0,
+                    bitmap.width, bitmap.height,
+                    matrix, true
+                )
+
+                // Сохраняем повернутое изображение
+                val rotatedPath = saveRotatedBitmap(rotatedBitmap, path)
+
+                // Обновляем отображение
+                Glide.with(this)
+                    .load(File(rotatedPath))
+                    .into(binding.fullscreenImage)
+
+                // Уведомляем слушателя
+                (parentFragment as? PhotoActionListener)?.onPhotoRotated(path, rotatedPath)
+
+                // Обновляем путь к текущему фото
+                photoPath = rotatedPath
+                currentRotation = (currentRotation + degrees) % 360
+
+                bitmap.recycle()
+                rotatedBitmap.recycle()
+            }
+        }
+    }
+
+    private fun saveRotatedBitmap(bitmap: Bitmap, originalPath: String): String {
+        val file = File(originalPath)
+        val fileName = file.nameWithoutExtension
+        val extension = file.extension
+        val timestamp = System.currentTimeMillis()
+        val newFileName = "${fileName}_rotated_$timestamp.$extension"
+        val newFile = File(file.parent, newFileName)
+
+        try {
+            val outputStream = newFile.outputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+            outputStream.flush()
+            outputStream.close()
+            return newFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return originalPath
+        }
+    }
+
+    private fun showDeleteConfirmationDialog() {
+        photoPath?.let { path ->
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Удалить фото")
+                .setMessage("Вы уверены, что хотите удалить это фото?")
+                .setPositiveButton("Удалить") { _, _ ->
+                    deletePhoto(path)
+                }
+                .setNegativeButton("Отмена", null)
+                .show()
+        }
+    }
+
+    private fun deletePhoto(path: String) {
+        val file = File(path)
+        if (file.exists()) {
+            file.delete()
+
+            // Уведомляем слушателя
+            (parentFragment as? PhotoActionListener)?.onPhotoDeleted(path)
+
             dismiss()
         }
-
-        // Поворот влево (-90 градусов)
-        binding.buttonRotateLeft.setOnClickListener {
-            rotatePhoto(-90f)
-        }
-
-        // Поворот вправо (+90 градусов)
-        binding.buttonRotateRight.setOnClickListener {
-            rotatePhoto(90f)
-        }
-
-        // Удаление
-        binding.buttonDelete.setOnClickListener {
-            showDeleteConfirmation()
-        }
-    }
-
-    private fun rotatePhoto(degrees: Float) {
-        // Используем PhotoManager для поворота
-        val photoManager = PhotoManager(
-            fragment = this,
-            onPhotoTaken = { /* не используется здесь */ },
-            onPhotoSelected = { /* не используется здесь */ }
-        )
-
-        val newPath = photoManager.rotatePhoto(requireContext(), photoPath, degrees)
-        newPath?.let {
-            // Обновляем отображение
-            Glide.with(this)
-                .load(newPath)
-                .into(binding.fullscreenImage)
-
-            // Уведомляем родительский фрагмент
-            listener?.onPhotoRotated(photoPath, newPath)
-
-            // Обновляем текущий путь
-            photoPath = newPath
-            currentRotation += degrees
-        }
-    }
-
-    private fun showDeleteConfirmation() {
-        AlertDialog.Builder(requireContext())
-            .setTitle(getString(R.string.delete_photo_title))
-            .setMessage(getString(R.string.delete_photo_confirmation))
-            .setPositiveButton(getString(R.string.delete)) { _, _ ->
-                listener?.onPhotoDeleted(photoPath)
-                dismiss()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .show()
     }
 
     override fun onDestroyView() {
