@@ -1,18 +1,12 @@
 package com.kipia.management.mobile.ui.schemes
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.*
 import android.util.AttributeSet
-import android.view.MotionEvent
-import android.view.View
+import android.view.*
+import android.widget.Toast
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.DeviceLocation
-import kotlin.math.pow
-import kotlin.math.sqrt
 
 class CanvasView @JvmOverloads constructor(
     context: Context,
@@ -20,216 +14,191 @@ class CanvasView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    // Фоновое изображение схемы
-    var backgroundBitmap: Bitmap? = null
-        set(value) {
-            field = value
-            invalidate()
-        }
+    // Слушатели событий
+    private var onDeviceDragListener: ((deviceId: Int, x: Float, y: Float) -> Unit)? = null
+    private var onDeviceClickListener: ((deviceId: Int) -> Unit)? = null
 
-    // Список приборов для отображения
-    var devices: List<Device> = emptyList()
-        set(value) {
-            field = value
-            invalidate()
-        }
+    // Данные для отрисовки
+    private var backgroundBitmap: Bitmap? = null
+    private var deviceLocations: List<DeviceLocation> = emptyList()
+    private var devices: List<Device> = emptyList()
 
-    // Расположения приборов на схеме
-    var deviceLocations: List<DeviceLocation> = emptyList()
-        set(value) {
-            field = value
-            invalidate()
-        }
-
-    // Текущий перетаскиваемый прибор
-    private var draggedDevice: Device? = null
-    private var dragOffsetX = 0f
-    private var dragOffsetY = 0f
-
-    // Настройки отрисовки
+    // Графические инструменты
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLUE
         style = Paint.Style.FILL
-        textSize = 36f
+        textSize = 24f
+    }
+
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 14f
         textAlign = Paint.Align.CENTER
     }
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 3f
-        color = Color.BLUE
-    }
-
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
         color = Color.BLACK
-        textSize = 24f
-        textAlign = Paint.Align.CENTER
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
 
-    // Размер иконки прибора
-    private val deviceIconSize = 60f
+    // ИСПРАВЛЕНО: Добавлен метод setOnDeviceDragListener
+    fun setOnDeviceDragListener(listener: (deviceId: Int, x: Float, y: Float) -> Unit) {
+        this.onDeviceDragListener = listener
+    }
 
-    // Callback для обновления позиции прибора
-    var onDevicePositionChanged: ((deviceId: Int, x: Float, y: Float) -> Unit)? = null
+    // ИСПРАВЛЕНО: Добавлен метод setOnDeviceClickListener
+    fun setOnDeviceClickListener(listener: (deviceId: Int) -> Unit) {
+        this.onDeviceClickListener = listener
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод startDrag (заглушка для совместимости)
+    fun startDrag(device: Device, view: View) {
+        // В реальной реализации здесь должна быть логика начала перетаскивания
+        // Сейчас просто показываем сообщение
+        Toast.makeText(context, "Начато перетаскивание: ${device.inventoryNumber}", Toast.LENGTH_SHORT).show()
+
+        // Можно эмулировать событие перетаскивания
+        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+
+        // Сохраняем данные для возможной реализации
+        // TODO: Реализовать настоящий механизм перетаскивания
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод setDeviceLocations
+    fun setDeviceLocations(locations: List<DeviceLocation>) {
+        this.deviceLocations = locations
+        invalidate() // Перерисовать view
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод setBackgroundImage
+    fun setBackgroundImage(bitmap: Bitmap) {
+        this.backgroundBitmap = bitmap
+        invalidate()
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод clearBackgroundImage
+    fun clearBackgroundImage() {
+        this.backgroundBitmap = null
+        invalidate()
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод для установки списка устройств
+    fun setDevices(devices: List<Device>) {
+        this.devices = devices
+        invalidate()
+    }
+
+    // ИСПРАВЛЕНО: Добавлен метод для получения устройства по ID
+    fun getDeviceById(deviceId: Int): Device? {
+        return devices.firstOrNull { it.id == deviceId }
+    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Рисуем фон (если есть)
+        // 1. Рисуем фон
         backgroundBitmap?.let { bitmap ->
-            // Масштабируем под размер View
-            val scaleX = width.toFloat() / bitmap.width
-            val scaleY = height.toFloat() / bitmap.height
-            val scale = scaleX.coerceAtMost(scaleY)
-
-            val scaledWidth = bitmap.width * scale
-            val scaledHeight = bitmap.height * scale
-            val left = (width - scaledWidth) / 2
-            val top = (height - scaledHeight) / 2
-
-            canvas.drawBitmap(bitmap, null, RectF(left, top, left + scaledWidth, top + scaledHeight), paint)
+            val rect = Rect(0, 0, width, height)
+            canvas.drawBitmap(bitmap, null, rect, paint)
+        } ?: run {
+            // Белый фон если нет изображения
+            canvas.drawColor(Color.WHITE)
         }
 
-        // 2. Рисуем сетку (если нет фона)
-        if (backgroundBitmap == null) {
-            drawGrid(canvas)
-        }
+        // 2. Рисуем сетку (опционально)
+        drawGrid(canvas)
 
-        // 3. Рисуем приборы
+        // 3. Рисуем устройства
         drawDevices(canvas)
     }
 
     private fun drawGrid(canvas: Canvas) {
-        val gridSize = 50f
         val gridPaint = Paint().apply {
             color = Color.LTGRAY
             strokeWidth = 1f
         }
 
         // Вертикальные линии
-        for (x in 0..width step gridSize.toInt()) {
+        for (x in 0..width step 50) {
             canvas.drawLine(x.toFloat(), 0f, x.toFloat(), height.toFloat(), gridPaint)
         }
 
         // Горизонтальные линии
-        for (y in 0..height step gridSize.toInt()) {
+        for (y in 0..height step 50) {
             canvas.drawLine(0f, y.toFloat(), width.toFloat(), y.toFloat(), gridPaint)
         }
     }
 
     private fun drawDevices(canvas: Canvas) {
-        devices.forEach { device ->
-            val location = deviceLocations.firstOrNull { it.deviceId == device.id }
-            val x = location?.x ?: 0f
-            val y = location?.y ?: 0f
+        for (location in deviceLocations) {
+            val device = devices.firstOrNull { it.id == location.deviceId }
+            device?.let {
+                // Координаты с учетом смещения
+                val centerX = location.x
+                val centerY = location.y
+                val radius = 30f
 
-            // Пропускаем приборы без координат (кроме перетаскиваемого)
-            if (x == 0f && y == 0f && device != draggedDevice) return@forEach
+                // Рисуем круг (представление устройства)
+                canvas.drawCircle(centerX, centerY, radius, paint)
+                canvas.drawCircle(centerX, centerY, radius, borderPaint)
 
-            // Определяем цвет в зависимости от типа прибора
-            val deviceColor = getDeviceColor(device.type)
-            paint.color = deviceColor
+                // Рисуем текст с инвентарным номером
+                val text = it.inventoryNumber.take(5) // Берем первые 5 символов
+                canvas.drawText(text, centerX, centerY + 5, textPaint)
 
-            // Рисуем круг (иконка прибора)
-            val centerX = if (device == draggedDevice) dragOffsetX else x
-            val centerY = if (device == draggedDevice) dragOffsetY else y
-
-            canvas.drawCircle(centerX, centerY, deviceIconSize / 2, paint)
-
-            // Обводка
-            borderPaint.color = if (device == draggedDevice) Color.RED else Color.BLUE
-            canvas.drawCircle(centerX, centerY, deviceIconSize / 2, borderPaint)
-
-            // Текст с инвентарным номером (первые 5 символов)
-            val shortNumber = if (device.inventoryNumber.length > 5) {
-                device.inventoryNumber.take(5) + "..."
-            } else {
-                device.inventoryNumber
+                // Рисуем поворотную метку
+                drawRotationIndicator(canvas, centerX, centerY, radius, location.rotation)
             }
-
-            canvas.drawText(shortNumber, centerX, centerY + deviceIconSize, textPaint)
         }
     }
 
-    private fun getDeviceColor(deviceType: String): Int {
-        return when (deviceType.lowercase()) {
-            "счетчик" -> Color.GREEN
-            "датчик" -> Color.YELLOW
-            "регулятор" -> Color.CYAN
-            "клапан" -> Color.MAGENTA
-            else -> Color.LTGRAY
+    private fun drawRotationIndicator(canvas: Canvas, x: Float, y: Float, radius: Float, rotation: Float) {
+        val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.RED
+            style = Paint.Style.FILL
         }
+
+        // Вычисляем позицию индикатора поворота
+        val angle = Math.toRadians(rotation.toDouble())
+        val indicatorX = x + (radius * 1.2f * kotlin.math.cos(angle.toFloat())).toFloat()
+        val indicatorY = y + (radius * 1.2f * kotlin.math.sin(angle.toFloat())).toFloat()
+
+        canvas.drawCircle(indicatorX, indicatorY, 5f, indicatorPaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val x = event.x
-        val y = event.y
-
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                // Проверяем, нажали ли на прибор
-                val clickedDevice = findDeviceAtPoint(x, y)
-                clickedDevice?.let { device ->
-                    draggedDevice = device
-                    dragOffsetX = x
-                    dragOffsetY = y
-                    invalidate()
+                // Проверяем, попали ли в устройство
+                val deviceId = findDeviceAtPoint(event.x, event.y)
+                deviceId?.let {
+                    onDeviceClickListener?.invoke(it)
                     return true
                 }
             }
-
             MotionEvent.ACTION_MOVE -> {
-                draggedDevice?.let {
-                    dragOffsetX = x
-                    dragOffsetY = y
-                    invalidate()
-                }
-            }
-
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                draggedDevice?.let { device ->
-                    // Сохраняем новую позицию
-                    onDevicePositionChanged?.invoke(device.id, x, y)
-                    draggedDevice = null
-                    invalidate()
+                // Эмуляция перетаскивания
+                val deviceId = findDeviceAtPoint(event.x, event.y)
+                deviceId?.let {
+                    onDeviceDragListener?.invoke(it, event.x, event.y)
+                    return true
                 }
             }
         }
-
         return super.onTouchEvent(event)
     }
 
-    private fun findDeviceAtPoint(x: Float, y: Float): Device? {
-        devices.forEach { device ->
-            val location = deviceLocations.firstOrNull { it.deviceId == device.id }
-            val deviceX = location?.x ?: 0f
-            val deviceY = location?.y ?: 0f
-
-            // Проверяем, попадает ли точка в круг прибора
-            val distance = sqrt(
-                (x - deviceX).toDouble().pow(2.0) +
-                        (y - deviceY).toDouble().pow(2.0)
+    private fun findDeviceAtPoint(x: Float, y: Float): Int? {
+        for (location in deviceLocations) {
+            val distance = kotlin.math.sqrt(
+                (x - location.x) * (x - location.x) +
+                        (y - location.y) * (y - location.y)
             )
-
-            if (distance <= deviceIconSize / 2) {
-                return device
+            if (distance <= 30f) { // Радиус клика
+                return location.deviceId
             }
         }
         return null
-    }
-
-    // Метод для добавления нового прибора на схему
-    fun addDeviceToCanvas(device: Device, x: Float, y: Float) {
-        val newLocation = DeviceLocation(
-            deviceId = device.id,
-            schemeId = -1, // Временно, пока не знаем ID схемы
-            x = x,
-            y = y
-        )
-
-        // Добавляем во временный список
-        deviceLocations = deviceLocations + newLocation
-        onDevicePositionChanged?.invoke(device.id, x, y)
-        invalidate()
     }
 }

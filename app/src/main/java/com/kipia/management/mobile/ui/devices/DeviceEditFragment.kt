@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
+import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.databinding.FragmentDeviceEditBinding
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -25,6 +26,8 @@ class DeviceEditFragment : Fragment() {
     private val viewModel: com.kipia.management.mobile.viewmodel.DeviceEditViewModel by viewModels()
     private val args: DeviceEditFragmentArgs by navArgs()
 
+    private val statuses = listOf("В работе", "В ремонте", "В резерве", "Списан")
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -37,19 +40,22 @@ class DeviceEditFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        setupViews()
+        setupSpinner()
         setupObservers()
         setupListeners()
 
+        // ИСПРАВЛЕНО: Передаем deviceId в ViewModel для загрузки
         viewModel.loadDevice(args.deviceId)
     }
 
-    private fun setupViews() {
-        // Настройка Spinner для статуса
-        val statuses = listOf("В работе", "В ремонте", "В резерве", "Списан")
-        binding.spinnerStatus.setAdapter(
-            com.google.android.material.R.layout.support_simple_spinner_dropdown_item
+    private fun setupSpinner() {
+        // Создаем адаптер для AutoCompleteTextView
+        val adapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            statuses
         )
+        binding.spinnerStatus.setAdapter(adapter)
     }
 
     private fun setupObservers() {
@@ -63,15 +69,17 @@ class DeviceEditFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.errors.collect { errors ->
-                    errors?.let { showErrors(it) }
+                // ИСПРАВЛЕНО: Собираем Flow ошибок
+                viewModel.validationErrors.collect { errors ->
+                    showErrors(errors)
                 }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.success.collect { success ->
+                // ИСПРАВЛЕНО: Собираем Flow успешного сохранения
+                viewModel.saveSuccess.collect { success ->
                     if (success) {
                         findNavController().navigateUp()
                     }
@@ -103,7 +111,7 @@ class DeviceEditFragment : Fragment() {
         }
     }
 
-    private fun populateForm(device: com.kipia.management.mobile.data.entities.Device) {
+    private fun populateForm(device: Device) {
         binding.apply {
             editInventoryNumber.setText(device.inventoryNumber)
             editType.setText(device.type)
@@ -111,7 +119,10 @@ class DeviceEditFragment : Fragment() {
             editManufacturer.setText(device.manufacturer ?: "")
             editYear.setText(device.year?.toString() ?: "")
             editLocation.setText(device.location)
+
+            // Устанавливаем значение в AutoCompleteTextView
             spinnerStatus.setText(device.status, false)
+
             editAccuracyClass.setText(device.accuracyClass?.toString() ?: "")
             editMeasurementLimit.setText(device.measurementLimit ?: "")
             editValveNumber.setText(device.valveNumber ?: "")
@@ -123,7 +134,7 @@ class DeviceEditFragment : Fragment() {
     }
 
     private fun saveDevice() {
-        val device = com.kipia.management.mobile.data.entities.Device(
+        val device = Device(
             id = args.deviceId,
             inventoryNumber = binding.editInventoryNumber.text.toString(),
             type = binding.editType.text.toString(),
@@ -140,6 +151,7 @@ class DeviceEditFragment : Fragment() {
             photos = null
         )
 
+        // ИСПРАВЛЕНО: Вызываем правильный метод ViewModel
         viewModel.saveDevice(device)
     }
 

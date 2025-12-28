@@ -1,6 +1,5 @@
 package com.kipia.management.mobile.ui.schemes
 
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -72,8 +71,11 @@ class SchemeEditorFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.isLoading.collect { isLoading ->
-                    binding.loadingProgressBar.isVisible = isLoading
-                    binding.canvasContainer.isVisible = !isLoading
+                    // Вариант 1: через visibility
+                    binding.loadingProgressBar.visibility =
+                        if (isLoading) View.VISIBLE else View.GONE
+                    binding.canvasContainer.visibility =
+                        if (!isLoading) View.VISIBLE else View.GONE
                 }
             }
         }

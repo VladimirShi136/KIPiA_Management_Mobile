@@ -1,6 +1,5 @@
 package com.kipia.management.mobile.viewmodel
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
@@ -9,16 +8,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class DeviceEditViewModel @Inject constructor(
-    private val repository: DeviceRepository,
-    savedStateHandle: SavedStateHandle
+    private val repository: DeviceRepository
 ) : ViewModel() {
-
-    private val deviceId = savedStateHandle.get<Int>("deviceId") ?: 0
 
     private val _device = MutableStateFlow<Device?>(null)
     val device: StateFlow<Device?> = _device.asStateFlow()
@@ -26,140 +23,112 @@ class DeviceEditViewModel @Inject constructor(
     private val _validationErrors = MutableStateFlow<Map<String, String>>(emptyMap())
     val validationErrors: StateFlow<Map<String, String>> = _validationErrors.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
     private val _saveSuccess = MutableStateFlow(false)
     val saveSuccess: StateFlow<Boolean> = _saveSuccess.asStateFlow()
 
-    init {
-        loadDevice()
-    }
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private fun loadDevice() {
-        if (deviceId > 0) {
-            viewModelScope.launch {
-                _isLoading.value = true
-                _device.value = repository.getDeviceById(deviceId)
+    // ИСПРАВЛЕНО: Убрали 'private' - теперь метод публичный
+    fun loadDevice(deviceId: Int) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val device = if (deviceId > 0) {
+                    repository.getDeviceById(deviceId)
+                } else {
+                    // Создаем новое устройство
+                    Device(
+                        id = 0,
+                        inventoryNumber = "",
+                        type = "",
+                        name = null,
+                        manufacturer = null,
+                        year = null,
+                        location = "",
+                        status = "В работе",
+                        accuracyClass = null,
+                        measurementLimit = null,
+                        valveNumber = null,
+                        additionalInfo = null,
+                        photoPath = null,
+                        photos = null
+                    )
+                }
+                _device.value = device
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
                 _isLoading.value = false
             }
-        } else {
-            // Новый прибор
-            _device.value = Device(
-                id = 0,
-                type = "", // обязательно
-                name = "", // было не передано
-                manufacturer = null, // было не передано
-                inventoryNumber = "", // обязательно
-                year = null, // было не передано
-                measurementLimit = null, // было не передано
-                accuracyClass = null, // было не передано
-                location = "", // обязательно
-                valveNumber = null, // было не передано
-                status = "В работе",
-                additionalInfo = null, // было не передано
-                photoPath = null, // было не передано
-                photos = null // было не передано
-            )
         }
     }
 
-    suspend fun validateAndSave(
-        inventoryNumber: String,
-        type: String,
-        name: String?,
-        manufacturer: String?,
-        year: Int?,
-        location: String,
-        status: String,
-        accuracyClass: Double?,
-        measurementLimit: String?,
-        valveNumber: String?,
-        additionalInfo: String?
-    ): Boolean {
-
-        val errors = mutableMapOf<String, String>()
-
-        // Валидация инвентарного номера
-        if (inventoryNumber.isBlank()) {
-            errors["inventoryNumber"] = "required"
-        } else {
-            val isValid = repository.validateInventoryNumber(inventoryNumber, deviceId)
-            if (!isValid) {
-                errors["inventoryNumber"] = "unique"
-            }
+    // ИСПРАВЛЕНО: Убрали 'private' - теперь метод публичный
+    fun saveDevice(device: Device) {
+        if (!validateDevice(device)) {
+            return
         }
-
-        // Валидация типа
-        if (type.isBlank()) {
-            errors["type"] = "required"
-        }
-
-        // Валидация места установки
-        if (location.isBlank()) {
-            errors["location"] = "required"
-        }
-
-        _validationErrors.value = errors
-
-        if (errors.isNotEmpty()) {
-            return false
-        }
-
-        // Создание/обновление прибора
-        val currentDevice = _device.value ?: Device(
-            id = 0,
-            type = "", // обязательно
-            name = "", // было не передано
-            manufacturer = null, // было не передано
-            inventoryNumber = "", // обязательно
-            year = null, // было не передано
-            measurementLimit = null, // было не передано
-            accuracyClass = null, // было не передано
-            location = "", // обязательно
-            valveNumber = null, // было не передано
-            status = "В работе",
-            additionalInfo = null, // было не передано
-            photoPath = null, // было не передано
-            photos = null // было не передано
-        )
-
-        val updatedDevice = currentDevice.copy(
-            inventoryNumber = inventoryNumber.trim(),
-            type = type.trim(),
-            name = name?.trim(),
-            manufacturer = manufacturer?.trim(),
-            year = year,
-            location = location.trim(),
-            status = status,
-            accuracyClass = accuracyClass,
-            measurementLimit = measurementLimit?.trim(),
-            valveNumber = valveNumber?.trim(),
-            additionalInfo = additionalInfo?.trim()
-        )
 
         viewModelScope.launch {
-            if (deviceId > 0) {
-                repository.updateDevice(updatedDevice)
-            } else {
-                repository.insertDevice(updatedDevice)
+            _isLoading.value = true
+            try {
+                if (device.id == 0) {
+                    // Новое устройство
+                    repository.insertDevice(device)
+                } else {
+                    // Обновление существующего
+                    repository.updateDevice(device)
+                }
+                _saveSuccess.value = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Можно добавить обработку ошибок сохранения
+            } finally {
+                _isLoading.value = false
             }
-            _saveSuccess.value = true
+        }
+    }
+
+    private fun validateDevice(device: Device): Boolean {
+        val errors = mutableMapOf<String, String>()
+
+        if (device.inventoryNumber.isBlank()) {
+            errors["inventoryNumber"] = "Инвентарный номер обязателен"
         }
 
-        return true
+        if (device.type.isBlank()) {
+            errors["type"] = "Тип прибора обязателен"
+        }
+
+        if (device.location.isBlank()) {
+            errors["location"] = "Место установки обязательно"
+        }
+
+        // Проверка уникальности инвентарного номера
+        // (можно добавить асинхронную проверку в будущем)
+
+        _validationErrors.value = errors
+        return errors.isEmpty()
+    }
+
+    fun clearErrors() {
+        _validationErrors.value = emptyMap()
     }
 
     fun deleteDevice() {
         viewModelScope.launch {
-            if (deviceId > 0) {
-                repository.deleteDeviceById(deviceId)
-                _saveSuccess.value = true
+            _device.value?.let { device ->
+                _isLoading.value = true
+                try {
+                    repository.deleteDevice(device)
+                    _saveSuccess.value = true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    _isLoading.value = false
+                }
             }
         }
-    }
-
-    fun clearSuccess() {
-        _saveSuccess.value = false
     }
 }

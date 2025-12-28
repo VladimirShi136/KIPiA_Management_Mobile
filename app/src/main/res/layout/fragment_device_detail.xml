@@ -54,7 +54,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="@string/tap_to_add_photo"
+                    android:text="@string/add_photo"
                     android:textSize="14sp"
                     android:textColor="?attr/colorOnSurfaceVariant"/>
 
