@@ -31,5 +31,5 @@
     <color name="red_500">#F44336</color>
     <color name="blue_500">#2196F3</color>
     <color name="yellow_500">#FFEB3B</color>
-    <color name="holo_purple">@android:color/holo_purple</color>
+    <color name="holo_purple">#FF9C27B0</color>
 </resources>
