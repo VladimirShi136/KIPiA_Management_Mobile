@@ -32,4 +32,28 @@
     <color name="blue_500">#2196F3</color>
     <color name="yellow_500">#FFEB3B</color>
     <color name="holo_purple">#FF9C27B0</color>
+
+    <!-- Gray shades for Material Design -->
+    <color name="gray_50">#FAFAFA</color>
+    <color name="gray_100">#F5F5F5</color>
+    <color name="gray_200">#EEEEEE</color>
+    <color name="gray_300">#E0E0E0</color>  <!-- Для colorOutline -->
+    <color name="gray_400">#BDBDBD</color>
+    <color name="gray_500">#9E9E9E</color>
+    <color name="gray_600">#757575</color>  <!-- Для colorOnSurfaceVariant -->
+    <color name="gray_700">#616161</color>
+    <color name="gray_800">#424242</color>
+    <color name="gray_900">#212121</color>
+
+    <!-- Material Design color aliases -->
+    <color name="colorPrimary">@color/purple_500</color>
+    <color name="colorPrimaryVariant">@color/purple_700</color>
+    <color name="colorSecondary">@color/teal_200</color>
+    <color name="colorSecondaryVariant">@color/teal_700</color>
+
+    <!-- Surface colors -->
+    <color name="colorSurface">@color/white</color>
+    <color name="colorOnSurface">@color/black</color>  <!-- Для основного текста -->
+    <color name="colorOnSurfaceVariant">@color/gray_600</color>  <!-- Для второстепенного текста -->
+    <color name="colorOutline">@color/gray_300</color>  <!-- Для разделителей -->
 </resources>

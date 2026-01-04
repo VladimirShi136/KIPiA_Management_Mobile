@@ -24,8 +24,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        enableEdgeToEdge()
+        setSupportActionBar(binding.toolbar)
 
+        enableEdgeToEdge()
         setupNavigation()
         setupEdgeToEdge()
     }

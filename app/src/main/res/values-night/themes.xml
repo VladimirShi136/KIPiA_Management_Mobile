@@ -17,5 +17,12 @@
 
         <!-- Window背景 -->
         <item name="android:windowBackground">@color/background_dark</item>
+        <item name="colorOutline">@color/gray_300</item>
+        <item name="colorOnSurface">@color/black</item>
+        <item name="colorOnSurfaceVariant">@color/gray_600</item>
+
+        <!-- Или для темной темы в values-night/themes.xml -->
+        <item name="colorOnSurface">@color/white</item>
+        <item name="colorOnSurfaceVariant">@color/gray_400</item>
     </style>
 </resources>
