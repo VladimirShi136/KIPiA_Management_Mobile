@@ -85,6 +85,9 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso)
+
+    // MPAndroidChart для графиков
+    implementation(libs.mp.android.chart)
 }
 
 // Для Room compiler нужно создать reference вручную если нет
