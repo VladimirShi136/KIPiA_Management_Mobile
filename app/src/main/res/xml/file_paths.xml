@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-files-path
-        name="device_photos"
-        path="Pictures/" />
-    <files-path
-        name="app_photos"
-        path="device_photos/" />
-    <cache-path
-        name="cache"
-        path="device_photos/" />
+<paths>
+    <!-- Внутреннее хранилище приложения -->
+    <files-path name="files" path="." />
+    <files-path name="device_photos" path="device_photos/" />
+
+    <!-- Кэш приложения -->
+    <cache-path name="cache" path="." />
+
+    <!-- Внешнее хранилище (для старых версий) -->
+    <external-files-path name="external_files" path="." />
+    <external-files-path name="external_pictures" path="Pictures/KIPiA/" />
+
+    <!-- Внешний кэш -->
+    <external-cache-path name="external_cache" path="." />
+
+    <!-- Корневой каталог SD карты (если нужно) -->
+    <!-- <external-path name="external" path="." /> -->
 </paths>

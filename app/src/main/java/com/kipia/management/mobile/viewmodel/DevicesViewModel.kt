@@ -2,10 +2,14 @@ package com.kipia.management.mobile.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.asLiveData
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.repository.DeviceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -14,29 +18,104 @@ class DevicesViewModel @Inject constructor(
     private val repository: DeviceRepository
 ) : ViewModel() {
 
-    val allDevices = repository.getAllDevices().asLiveData()
-    val allLocations = repository.getAllLocations().asLiveData()
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
 
-    fun addDevice(device: Device) {
-        viewModelScope.launch {
-            repository.insertDevice(device)
-        }
+    private val _typeFilter = MutableStateFlow<String?>(null)
+    val typeFilter: StateFlow<String?> = _typeFilter
+
+    private val _statusFilter = MutableStateFlow<String?>(null)
+    val statusFilter: StateFlow<String?> = _statusFilter
+
+    private val _isLoading = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
+
+    val uiState = combine(_isLoading, _error, _typeFilter, _statusFilter) {
+            isLoading, error, typeFilter, statusFilter ->
+        DevicesUiState(
+            isLoading = isLoading,
+            error = error,
+            typeFilter = typeFilter,
+            statusFilter = statusFilter
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DevicesUiState()
+    )
+
+    // Фильтрация устройств
+    val devices = combine(
+        repository.getAllDevices(),
+        _searchQuery,
+        _typeFilter,
+        _statusFilter
+    ) { devices, query, typeFilter, statusFilter ->
+        devices.filter { device ->
+            val matchesQuery = query.isBlank() ||
+                    device.inventoryNumber.contains(query, ignoreCase = true) ||
+                    device.name?.contains(query, ignoreCase = true) == true ||
+                    device.manufacturer?.contains(query, ignoreCase = true) == true ||
+                    device.location.contains(query, ignoreCase = true) ||
+                    device.valveNumber?.contains(query, ignoreCase = true) == true
+
+            val matchesType = typeFilter == null || device.type == typeFilter
+            val matchesStatus = statusFilter == null || device.status == statusFilter
+
+            matchesQuery && matchesType && matchesStatus
+        }.sortedBy { it.inventoryNumber }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
     }
 
-    fun updateDevice(device: Device) {
-        viewModelScope.launch {
-            repository.updateDevice(device)
-        }
+    fun setTypeFilter(filter: String?) {
+        _typeFilter.value = filter
+    }
+
+    fun setStatusFilter(filter: String?) {
+        _statusFilter.value = filter
     }
 
     fun deleteDevice(device: Device) {
         viewModelScope.launch {
-            repository.deleteDevice(device)
+            try {
+                _isLoading.value = true
+                repository.deleteDevice(device)
+            } catch (e: Exception) {
+                _error.value = "Ошибка удаления: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
-    suspend fun validateInventoryNumber(inventoryNumber: String, excludeId: Int = 0): Boolean {
-        val existing = repository.getDeviceByInventoryNumber(inventoryNumber)
-        return existing == null || existing.id == excludeId
+    fun clearError() {
+        _error.value = null
+    }
+
+    fun refreshDevices() {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                // Обновление происходит через Flow автоматически
+            } catch (e: Exception) {
+                _error.value = "Ошибка обновления: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 }
+
+data class DevicesUiState(
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val typeFilter: String? = null,
+    val statusFilter: String? = null
+)

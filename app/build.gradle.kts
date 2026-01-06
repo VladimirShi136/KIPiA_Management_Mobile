@@ -1,11 +1,8 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.dagger.hilt)
-    alias(libs.plugins.navigation.safeargs)
+    alias(libs.plugins.kotlin.ksp)
 }
 
 android {
@@ -40,60 +37,79 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures {
-        viewBinding = true
-        buildConfig = true
+    kotlin {
+        jvmToolchain(17)
     }
-}
 
-// Новый блок для Kotlin-компилятора
-kotlin {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_17 // Указываем через тип JvmTarget
+    buildFeatures {
+        viewBinding = false
+        buildConfig = true
+        compose = true
+    }
+
+    @Suppress("UnstableApiUsage")
+    composeOptions {
+        kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
 dependencies {
-    // Используем bundles из libs.versions.toml
+    // ========== JETPACK COMPOSE ==========
+    implementation(platform(libs.compose.bom))
+    implementation(libs.bundles.compose.bundle)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+
+    // ========== COIL (ПОЛНАЯ ЗАМЕНА GLIDE) ==========
+    implementation(libs.bundles.coil.bundle)
+
+    // Accompanist
+    implementation(libs.bundles.accompanist.bundle)
+
+    // ========== БАЗОВЫЕ ЗАВИСИМОСТИ ==========
     implementation(libs.bundles.android.base)
     implementation(libs.bundles.lifecycle.bundle)
-    implementation(libs.bundles.navigation.bundle)
-    implementation(libs.bundles.camerax.bundle)
 
-    // Room
+    // Navigation Compose
+    implementation(libs.navigation.compose)
+
+    // ========== БИБЛИОТЕКИ С KSP ==========
+
+    // Room с KSP
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
-    kapt(libs.room.compiler)
+    ksp(libs.room.compiler)
 
-    // Hilt
+    // Hilt с KSP
     implementation(libs.hilt.android)
-    kapt(libs.hilt.android.compiler)
-    implementation(libs.hilt.navigation.fragment)
+    ksp(libs.hilt.ksp)
+
+    // Hilt Navigation Compose
+    implementation(libs.hilt.navigation.compose)
 
     // Coroutines
     implementation(libs.coroutines.android)
 
-    // Glide
-    implementation(libs.glide)
-    kapt(libs.glide.compiler)
+    // CameraX
+    implementation(libs.bundles.camerax.bundle)
 
     // Прочие зависимости
     implementation(libs.gson)
     implementation(libs.timber)
 
-    // Testing
+    // MPAndroidChart
+    implementation(libs.mp.android.chart)
+
+    // ========== ТЕСТИРОВАНИЕ ==========
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso)
-
-    // MPAndroidChart для графиков
-    implementation(libs.mp.android.chart)
-
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)  // Material Components для XML
-}
-
-// Для Room compiler нужно создать reference вручную если нет
-kapt {
-    correctErrorTypes = true
 }

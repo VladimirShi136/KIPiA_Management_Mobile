@@ -1,70 +1,68 @@
 package com.kipia.management.mobile
 
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.AppBarConfiguration
-import androidx.navigation.ui.setupActionBarWithNavController
-import androidx.navigation.ui.setupWithNavController
-import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.kipia.management.mobile.databinding.ActivityMainBinding
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.compose.rememberNavController
+import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
+import com.kipia.management.mobile.ui.navigation.KIPiANavHost
+import com.kipia.management.mobile.ui.theme.KIPiATheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // УСТАНОВИТЕ ТЕМУ ПЕРЕД super.onCreate()
-        setTheme(R.style.Theme_KipiaManagement)
-
         super.onCreate(savedInstanceState)
 
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        // Устанавливаем тему Material 3
+        setTheme(R.style.Theme_KipiaManagement)
 
-        setSupportActionBar(binding.toolbar)
-
-        enableEdgeToEdge()
-        setupNavigation()
-        setupEdgeToEdge()
-    }
-
-    private fun setupNavigation() {
-        val navView: BottomNavigationView = binding.bottomNavigationView
-
-        val navHostFragment = supportFragmentManager
-            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        val navController = navHostFragment.navController
-
-        // Конфигурация для отображения кнопки "Назад"
-        val appBarConfiguration = AppBarConfiguration(
-            setOf(
-                R.id.navigation_devices,
-                R.id.navigation_schemes,
-                R.id.navigation_reports
-            )
-        )
-
-        setupActionBarWithNavController(navController, appBarConfiguration)
-        navView.setupWithNavController(navController)
-    }
-
-    private fun setupEdgeToEdge() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
+        setContent {
+            KIPiAApp()
         }
     }
+}
 
-    override fun onSupportNavigateUp(): Boolean {
-        val navHostFragment = supportFragmentManager
-            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        return navHostFragment.navController.navigateUp() || super.onSupportNavigateUp()
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun KIPiAApp() {
+    KIPiATheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            val navController = rememberNavController()
+
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { androidx.compose.material3.Text(stringResource(R.string.app_name)) },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    )
+                },
+                bottomBar = {
+                    BottomNavigationBar(navController = navController)
+                }
+            ) { paddingValues ->
+                KIPiANavHost(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize(),
+                    paddingValues = paddingValues
+                )
+            }
+        }
     }
 }

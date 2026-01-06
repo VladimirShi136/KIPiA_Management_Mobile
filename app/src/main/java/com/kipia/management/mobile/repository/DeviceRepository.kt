@@ -1,18 +1,30 @@
 package com.kipia.management.mobile.repository
 
+import com.kipia.management.mobile.data.dao.DeviceDao
 import com.kipia.management.mobile.data.entities.Device
 import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-interface DeviceRepository {
-    fun getAllDevices(): Flow<List<Device>>
-    fun getDevicesByLocation(location: String): Flow<List<Device>>
-    suspend fun getDeviceById(id: Int): Device?
-    suspend fun insertDevice(device: Device): Long
-    suspend fun updateDevice(device: Device)
-    suspend fun deleteDevice(device: Device)
-    suspend fun deleteDeviceById(id: Int)
-    fun getAllLocations(): Flow<List<String>>
-    suspend fun countDevicesByStatus(status: String): Int
-    suspend fun getDeviceByInventoryNumber(inventoryNumber: String): Device?
-    suspend fun validateInventoryNumber(inventoryNumber: String, excludeId: Int = 0): Boolean
+@Singleton
+class DeviceRepository @Inject constructor(
+    private val deviceDAO: DeviceDao
+) {
+    fun getAllDevices(): Flow<List<Device>> = deviceDAO.getAllDevices()
+
+    fun getDeviceById(id: Int): Flow<Device?> = deviceDAO.getDeviceById(id)
+
+    suspend fun insertDevice(device: Device) = deviceDAO.insertDevice(device)
+
+    suspend fun deleteDevice(device: Device) = deviceDAO.deleteDevice(device)
+
+    suspend fun updateDevice(device: Device) = deviceDAO.updateDevice(device)
+
+    fun getDevicesByType(type: String): Flow<List<Device>> = deviceDAO.getDevicesByType(type)
+
+    fun getDevicesByStatus(status: String): Flow<List<Device>> = deviceDAO.getDevicesByStatus(status)
+
+    fun getDeviceTypes(): Flow<List<String>> = deviceDAO.getDeviceTypes()
+
+    fun getDeviceStatuses(): Flow<List<String>> = deviceDAO.getDeviceStatuses()
 }

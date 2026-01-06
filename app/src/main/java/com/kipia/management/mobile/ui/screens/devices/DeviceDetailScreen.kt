@@ -1,0 +1,535 @@
+package com.kipia.management.mobile.ui.screens.devices
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeviceDetailScreen(
+    deviceId: Int,
+    onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Int) -> Unit,
+    viewModel: DeviceDetailViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val device by viewModel.device.collectAsStateWithLifecycle()
+
+    // Загружаем устройство при входе на экран
+    LaunchedEffect(deviceId) {
+        viewModel.loadDevice(deviceId)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Детали прибора") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onNavigateToEdit(deviceId) }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.toggleFavorite() }
+                    ) {
+                        Icon(
+                            if (uiState.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "В избранное",
+                            tint = if (uiState.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        when {
+            uiState.isLoading -> {
+                LoadingState()
+            }
+            uiState.error != null -> {
+                ErrorState(
+                    error = uiState.error,
+                    onRetry = { viewModel.loadDevice(deviceId) },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+            device != null -> {
+                DeviceDetailContent(
+                    device = device!!,
+                    photos = uiState.photos,
+                    onPhotoClick = { _ ->
+                        // TODO: Открыть полноэкранный просмотр
+                    },
+                    onShare = { viewModel.shareDeviceInfo() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+            else -> {
+                EmptyState(
+                    onNavigateBack = onNavigateBack,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DeviceDetailContent(
+    device: Device,
+    photos: List<String>,
+    onPhotoClick: (Int) -> Unit,
+    onShare: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Основное фото
+        device.getMainPhoto()?.let { mainPhoto ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(250.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                AsyncImage(
+                    model = mainPhoto,
+                    contentDescription = "Основное фото прибора",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+
+        // Информационная карточка
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // Заголовок с инвентарным номером
+                Text(
+                    text = device.getDisplayName(),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Инвентарный номер: ${device.inventoryNumber}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Статус с цветным индикатором
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatusBadge(status = device.status)
+                }
+            }
+        }
+
+        // Основная информация
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                SectionTitle("Основная информация")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                DeviceDetailRow(
+                    label = "Тип прибора:",
+                    value = device.type
+                )
+
+                device.manufacturer?.let { manufacturer ->
+                    DeviceDetailRow(
+                        label = "Производитель:",
+                        value = manufacturer
+                    )
+                }
+
+                device.year?.let { year ->
+                    DeviceDetailRow(
+                        label = "Год выпуска:",
+                        value = year.toString()
+                    )
+                }
+
+                device.measurementLimit?.let { limit ->
+                    DeviceDetailRow(
+                        label = "Предел измерений:",
+                        value = limit
+                    )
+                }
+
+                device.accuracyClass?.let { accuracy ->
+                    DeviceDetailRow(
+                        label = "Класс точности:",
+                        value = accuracy.toString()
+                    )
+                }
+
+                DeviceDetailRow(
+                    label = "Место установки:",
+                    value = device.location
+                )
+
+                device.valveNumber?.let { valve ->
+                    DeviceDetailRow(
+                        label = "Номер вентиля:",
+                        value = valve
+                    )
+                }
+            }
+        }
+
+        // Дополнительная информация
+        device.additionalInfo?.takeIf { it.isNotBlank() }?.let { info ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    SectionTitle("Дополнительная информация")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = info,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Галерея фото
+        if (photos.isNotEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    SectionTitle("Фотографии (${photos.size})")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    PhotoGallery(
+                        photos = photos,
+                        onPhotoClick = onPhotoClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Кнопки действий
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Кнопка "Поделиться"
+            OutlinedButton(
+                onClick = onShare,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text("Поделиться")
+            }
+
+            // Кнопка "QR код"
+            OutlinedButton(
+                onClick = { /* TODO: Генерация QR кода */ },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    Icons.Default.QrCode,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text("QR код")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun StatusBadge(status: String) {
+    val (backgroundColor, textColor) = when (status) {
+        "В работе" -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))  // Зеленый
+        "На ремонте" -> Pair(Color(0xFFFFF3E0), Color(0xFFEF6C00)) // Оранжевый
+        "Списан" -> Pair(Color(0xFFFFEBEE), Color(0xFFC62828))    // Красный
+        "В резерве" -> Pair(Color(0xFFF5F5F5), Color(0xFF616161)) // Серый
+        else -> Pair(Color(0xFFF5F5F5), Color(0xFF616161))
+    }
+
+    Surface(
+        color = backgroundColor,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.padding(horizontal = 8.dp)
+    ) {
+        Text(
+            text = status,
+            color = textColor,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
+fun DeviceDetailRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(140.dp)
+        )
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun PhotoGallery(
+    photos: List<String>,
+    onPhotoClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Показываем до 3 фото в ряд
+        photos.chunked(3).forEach { rowPhotos ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                rowPhotos.forEachIndexed { _, photo ->
+                    val photoIndex = photos.indexOf(photo)
+                    PhotoThumbnail(
+                        photoPath = photo,
+                        onClick = { onPhotoClick(photoIndex) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Заполняем оставшиеся места пустыми
+                repeat(3 - rowPhotos.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotoThumbnail(
+    photoPath: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.aspectRatio(1f),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        AsyncImage(
+            model = photoPath,
+            contentDescription = "Фото прибора",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+fun LoadingState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Загрузка...")
+        }
+    }
+}
+
+@Composable
+fun ErrorState(
+    error: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Error,
+            contentDescription = "Ошибка",
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Ошибка",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.error
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(onClick = onRetry) {
+            Text("Повторить")
+        }
+    }
+}
+
+@Composable
+fun EmptyState(
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.SearchOff,
+            contentDescription = "Не найдено",
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Прибор не найден",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Прибор был удален или произошла ошибка",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(onClick = onNavigateBack) {
+            Text("Вернуться")
+        }
+    }
+}
+
+@Composable
+fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.primary
+    )
+}

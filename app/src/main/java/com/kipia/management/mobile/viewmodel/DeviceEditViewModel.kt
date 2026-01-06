@@ -7,7 +7,6 @@ import com.kipia.management.mobile.repository.DeviceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -17,118 +16,113 @@ class DeviceEditViewModel @Inject constructor(
     private val repository: DeviceRepository
 ) : ViewModel() {
 
-    private val _device = MutableStateFlow<Device?>(null)
-    val device: StateFlow<Device?> = _device.asStateFlow()
+    private val _device = MutableStateFlow(Device.createEmpty())
+    val device: StateFlow<Device> = _device
 
-    private val _validationErrors = MutableStateFlow<Map<String, String>>(emptyMap())
-    val validationErrors: StateFlow<Map<String, String>> = _validationErrors.asStateFlow()
+    private val _uiState = MutableStateFlow(DeviceEditUiState())
+    val uiState: StateFlow<DeviceEditUiState> = _uiState
 
-    private val _saveSuccess = MutableStateFlow(false)
-    val saveSuccess: StateFlow<Boolean> = _saveSuccess.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    // ИСПРАВЛЕНО: Убрали 'private' - теперь метод публичный
     fun loadDevice(deviceId: Int) {
         viewModelScope.launch {
-            _isLoading.value = true
+            _uiState.update { it.copy(isLoading = true) }
             try {
-                val device = if (deviceId > 0) {
-                    repository.getDeviceById(deviceId)
-                } else {
-                    // Создаем новое устройство
-                    Device(
-                        id = 0,
-                        inventoryNumber = "",
-                        type = "",
-                        name = null,
-                        manufacturer = null,
-                        year = null,
-                        location = "",
-                        status = "В работе",
-                        accuracyClass = null,
-                        measurementLimit = null,
-                        valveNumber = null,
-                        additionalInfo = null,
-                        photoPath = null,
-                        photos = null
-                    )
+                repository.getDeviceById(deviceId).collect { loadedDevice ->
+                    loadedDevice?.let {
+                        _device.value = it
+                        validateForm()
+                    }
                 }
-                _device.value = device
             } catch (e: Exception) {
-                e.printStackTrace()
+                _uiState.update { it.copy(error = "Ошибка загрузки: ${e.message}") }
             } finally {
-                _isLoading.value = false
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
-    // ИСПРАВЛЕНО: Убрали 'private' - теперь метод публичный
-    fun saveDevice(device: Device) {
-        if (!validateDevice(device)) {
-            return
-        }
+    fun updateDevice(transform: (Device) -> Device) {
+        _device.update { transform(it) }
+        validateForm()
+    }
 
+    fun saveDevice() {
         viewModelScope.launch {
-            _isLoading.value = true
+            if (!_uiState.value.isFormValid) return@launch
+
+            _uiState.update { it.copy(isLoading = true) }
             try {
-                if (device.id == 0) {
-                    // Новое устройство
-                    repository.insertDevice(device)
-                } else {
-                    // Обновление существующего
-                    repository.updateDevice(device)
-                }
-                _saveSuccess.value = true
+                repository.insertDevice(_device.value)
+                _uiState.update { it.copy(isSuccess = true) }
             } catch (e: Exception) {
-                e.printStackTrace()
-                // Можно добавить обработку ошибок сохранения
+                _uiState.update { it.copy(error = "Ошибка сохранения: ${e.message}") }
             } finally {
-                _isLoading.value = false
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
-    }
-
-    private fun validateDevice(device: Device): Boolean {
-        val errors = mutableMapOf<String, String>()
-
-        if (device.inventoryNumber.isBlank()) {
-            errors["inventoryNumber"] = "Инвентарный номер обязателен"
-        }
-
-        if (device.type.isBlank()) {
-            errors["type"] = "Тип прибора обязателен"
-        }
-
-        if (device.location.isBlank()) {
-            errors["location"] = "Место установки обязательно"
-        }
-
-        // Проверка уникальности инвентарного номера
-        // (можно добавить асинхронную проверку в будущем)
-
-        _validationErrors.value = errors
-        return errors.isEmpty()
-    }
-
-    fun clearErrors() {
-        _validationErrors.value = emptyMap()
     }
 
     fun deleteDevice() {
         viewModelScope.launch {
-            _device.value?.let { device ->
-                _isLoading.value = true
-                try {
-                    repository.deleteDevice(device)
-                    _saveSuccess.value = true
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    _isLoading.value = false
-                }
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                repository.deleteDevice(_device.value)
+                _uiState.update { it.copy(isSuccess = true) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Ошибка удаления: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
+
+    private fun validateForm() {
+        val currentDevice = _device.value
+        val errors = mutableListOf<String>()
+
+        // Проверка обязательных полей
+        if (currentDevice.type.isBlank()) {
+            errors.add("type")
+            _uiState.update { it.copy(typeError = "Укажите тип прибора") }
+        } else {
+            _uiState.update { it.copy(typeError = null) }
+        }
+
+        if (currentDevice.inventoryNumber.isBlank()) {
+            errors.add("inventoryNumber")
+            _uiState.update { it.copy(inventoryNumberError = "Укажите инвентарный номер") }
+        } else {
+            _uiState.update { it.copy(inventoryNumberError = null) }
+        }
+
+        if (currentDevice.location.isBlank()) {
+            errors.add("location")
+            _uiState.update { it.copy(locationError = "Укажите место установки") }
+        } else {
+            _uiState.update { it.copy(locationError = null) }
+        }
+
+        _uiState.update {
+            it.copy(
+                isFormValid = errors.isEmpty(),
+                validationErrors = errors
+            )
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
 }
+
+data class DeviceEditUiState(
+    val isLoading: Boolean = false,
+    val isSuccess: Boolean = false,
+    val error: String? = null,
+    val isFormValid: Boolean = false,
+    val validationErrors: List<String> = emptyList(),
+    val isTypeExpanded: Boolean = false,
+    val isStatusExpanded: Boolean = false,
+    val typeError: String? = null,
+    val inventoryNumberError: String? = null,
+    val locationError: String? = null
+)
