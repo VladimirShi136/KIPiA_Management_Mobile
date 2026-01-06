@@ -1,47 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- ОСНОВНАЯ ТЕМА ПРИЛОЖЕНИЯ (Светлая) -->
     <style name="Theme.KipiaManagement" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
+        <!-- Primary colors -->
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
-        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
 
-        <!-- Secondary brand color. -->
+        <!-- Secondary colors -->
         <item name="colorSecondary">@color/colorSecondary</item>
         <item name="colorSecondaryVariant">@color/colorSecondaryVariant</item>
-        <item name="colorOnSecondary">@color/black</item>
-
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+        <item name="colorOnSecondary">@color/colorOnSecondary</item>
 
         <!-- Surface colors -->
         <item name="colorSurface">@color/colorSurface</item>
+        <item name="colorSurfaceVariant">@color/colorSurfaceVariant</item>
         <item name="colorOnSurface">@color/colorOnSurface</item>
         <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
+
+        <!-- Background colors - используем android:windowBackground для фона -->
+        <item name="android:windowBackground">@color/colorBackground</item>
+
+        <!-- Error colors -->
+        <item name="colorError">@color/colorError</item>
+        <item name="colorOnError">@color/colorOnError</item>
+
+        <!-- Outline -->
         <item name="colorOutline">@color/colorOutline</item>
 
-        <!-- Customize your theme here. -->
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
+        <!-- Status bar -->
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+
+        <!-- Material Components стили -->
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.FilledBox</item>
+        <item name="checkboxStyle">@style/Widget.MaterialComponents.CompoundButton.CheckBox</item>
+        <item name="radioButtonStyle">@style/Widget.MaterialComponents.CompoundButton.RadioButton</item>
+
+        <!-- Toolbar -->
+        <item name="toolbarStyle">@style/Widget.MaterialComponents.Toolbar.Primary</item>
+
+        <!-- CardView -->
+        <item name="cardViewStyle">@style/Widget.MaterialComponents.CardView</item>
+
+        <!-- Дополнительные настройки -->
+        <item name="android:textColorHint">?attr/colorOnSurfaceVariant</item>
+        <item name="android:colorBackground">@color/colorBackground</item>
     </style>
 
-    <!-- Стиль для текста с иконкой (используется в fragment_device_detail.xml) -->
+    <!-- Дополнительные стили -->
+    <style name="Theme.KipiaManagement.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
     <style name="Widget.MaterialComponents.TextView.DetailItem" parent="Widget.MaterialComponents.TextView">
         <item name="android:textSize">14sp</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
         <item name="android:drawablePadding">8dp</item>
+        <item name="android:drawableTint">?attr/colorPrimary</item>
+        <item name="android:layout_marginBottom">4dp</item>
     </style>
 
-    <!-- Тема для MaterialToolbar -->
-    <style name="ThemeOverlay.KipiaManagement.Toolbar" parent="ThemeOverlay.MaterialComponents.Dark.ActionBar">
-        <item name="android:textColorPrimary">@android:color/white</item>
-        <item name="android:textColorSecondary">@android:color/white</item>
-    </style>
-
-    <!-- Тема для диалогов -->
-    <style name="ThemeOverlay.KipiaManagement.Dialog" parent="ThemeOverlay.MaterialComponents.Dialog">
-        <item name="android:windowBackground">@android:color/transparent</item>
+    <!-- Стиль для кнопок -->
+    <style name="Button.Primary" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="cornerRadius">24dp</item>
     </style>
 </resources>

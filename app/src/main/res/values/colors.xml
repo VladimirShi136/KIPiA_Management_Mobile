@@ -25,8 +25,10 @@
     <!-- Для темной темы -->
     <color name="background_dark">#121212</color>
     <color name="surface_dark">#1E1E1E</color>
+    <color name="on_surface_dark">#FFFFFF</color>
+    <color name="on_surface_variant_dark">#BDBDBD</color>
 
-    <!-- Reports: -->
+    <!-- Reports -->
     <color name="green_500">#4CAF50</color>
     <color name="red_500">#F44336</color>
     <color name="blue_500">#2196F3</color>
@@ -37,23 +39,36 @@
     <color name="gray_50">#FAFAFA</color>
     <color name="gray_100">#F5F5F5</color>
     <color name="gray_200">#EEEEEE</color>
-    <color name="gray_300">#E0E0E0</color>  <!-- Для colorOutline -->
+    <color name="gray_300">#E0E0E0</color>
     <color name="gray_400">#BDBDBD</color>
     <color name="gray_500">#9E9E9E</color>
-    <color name="gray_600">#757575</color>  <!-- Для colorOnSurfaceVariant -->
+    <color name="gray_600">#757575</color>
     <color name="gray_700">#616161</color>
     <color name="gray_800">#424242</color>
     <color name="gray_900">#212121</color>
 
-    <!-- Material Design color aliases -->
+    <!-- Material Design color aliases (ОБЯЗАТЕЛЬНЫЕ) -->
     <color name="colorPrimary">@color/purple_500</color>
     <color name="colorPrimaryVariant">@color/purple_700</color>
+    <item name="colorOnPrimary" type="color">@color/white</item>
+
     <color name="colorSecondary">@color/teal_200</color>
     <color name="colorSecondaryVariant">@color/teal_700</color>
+    <item name="colorOnSecondary" type="color">@color/black</item>
 
-    <!-- Surface colors -->
     <color name="colorSurface">@color/white</color>
-    <color name="colorOnSurface">@color/black</color>  <!-- Для основного текста -->
-    <color name="colorOnSurfaceVariant">@color/gray_600</color>  <!-- Для второстепенного текста -->
-    <color name="colorOutline">@color/gray_300</color>  <!-- Для разделителей -->
+    <color name="colorSurfaceVariant">@color/gray_200</color>
+    <item name="colorOnSurface" type="color">@color/black</item>
+    <item name="colorOnSurfaceVariant" type="color">@color/gray_600</item>
+
+    <color name="colorOutline">@color/gray_300</color>
+
+    <color name="colorError">@color/red_500</color>
+    <item name="colorOnError" type="color">@color/white</item>
+
+    <!-- Фоновые цвета -->
+    <color name="colorBackground">@color/white</color>
+    <color name="colorOnBackground">@color/black</color>
+    <color name="colorBackgroundDark">@color/background_dark</color>
+    <color name="colorOnBackgroundDark">@color/on_surface_dark</color>
 </resources>

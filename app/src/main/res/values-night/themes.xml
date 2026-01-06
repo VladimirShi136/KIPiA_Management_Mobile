@@ -1,28 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Темная тема приложения -->
+    <!-- ТЕМНАЯ ТЕМА ПРИЛОЖЕНИЯ -->
     <style name="Theme.KipiaManagement" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
+        <!-- Primary colors -->
         <item name="colorPrimary">@color/purple_200</item>
         <item name="colorPrimaryVariant">@color/purple_700</item>
-        <item name="colorOnPrimary">@android:color/black</item>
+        <item name="colorOnPrimary">@color/black</item>
 
-        <!-- Secondary brand color. -->
+        <!-- Secondary colors -->
         <item name="colorSecondary">@color/teal_200</item>
         <item name="colorSecondaryVariant">@color/teal_200</item>
-        <item name="colorOnSecondary">@android:color/black</item>
+        <item name="colorOnSecondary">@color/black</item>
 
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">?attr/colorPrimary</item>
+        <!-- Surface colors -->
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorSurfaceVariant">@color/gray_800</item>
+        <item name="colorOnSurface">@color/on_surface_dark</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant_dark</item>
 
-        <!-- Window背景 -->
+        <!-- Background colors - используем android:windowBackground -->
         <item name="android:windowBackground">@color/background_dark</item>
-        <item name="colorOutline">@color/gray_300</item>
-        <item name="colorOnSurface">@color/black</item>
-        <item name="colorOnSurfaceVariant">@color/gray_600</item>
 
-        <!-- Или для темной темы в values-night/themes.xml -->
-        <item name="colorOnSurface">@color/white</item>
-        <item name="colorOnSurfaceVariant">@color/gray_400</item>
+        <!-- Error colors -->
+        <item name="colorError">@color/red_500</item>
+        <item name="colorOnError">@color/white</item>
+
+        <!-- Outline -->
+        <item name="colorOutline">@color/gray_700</item>
+
+        <!-- Status bar -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">@color/background_dark</item>
+
+        <!-- Material Components стили (те же что и в светлой) -->
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.FilledBox</item>
+        <item name="checkboxStyle">@style/Widget.MaterialComponents.CompoundButton.CheckBox</item>
+        <item name="radioButtonStyle">@style/Widget.MaterialComponents.CompoundButton.RadioButton</item>
+
+        <!-- Toolbar -->
+        <item name="toolbarStyle">@style/Widget.MaterialComponents.Toolbar.Primary</item>
+
+        <!-- CardView -->
+        <item name="cardViewStyle">@style/Widget.MaterialComponents.CardView</item>
+
+        <!-- Дополнительные настройки -->
+        <item name="android:textColorHint">?attr/colorOnSurfaceVariant</item>
+        <item name="android:colorBackground">@color/background_dark</item>
     </style>
 </resources>

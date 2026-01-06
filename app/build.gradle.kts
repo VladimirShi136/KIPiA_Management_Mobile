@@ -58,16 +58,16 @@ dependencies {
     implementation(libs.bundles.android.base)
     implementation(libs.bundles.lifecycle.bundle)
     implementation(libs.bundles.navigation.bundle)
-    implementation(libs.bundles.camerax.bundle) // Добавьте эту строку
+    implementation(libs.bundles.camerax.bundle)
 
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
-    kapt(libs.room.compiler) // Теперь будет работать
+    kapt(libs.room.compiler)
 
     // Hilt
     implementation(libs.hilt.android)
-    kapt(libs.hilt.android.compiler) // Теперь будет работать
+    kapt(libs.hilt.android.compiler)
     implementation(libs.hilt.navigation.fragment)
 
     // Coroutines
@@ -75,9 +75,9 @@ dependencies {
 
     // Glide
     implementation(libs.glide)
-    kapt(libs.glide.compiler) // Теперь будет работать
+    kapt(libs.glide.compiler)
 
-    // Прочие зависимости (упростите)
+    // Прочие зависимости
     implementation(libs.gson)
     implementation(libs.timber)
 
@@ -88,6 +88,9 @@ dependencies {
 
     // MPAndroidChart для графиков
     implementation(libs.mp.android.chart)
+
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)  // Material Components для XML
 }
 
 // Для Room compiler нужно создать reference вручную если нет
