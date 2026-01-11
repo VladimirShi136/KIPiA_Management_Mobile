@@ -33,11 +33,16 @@ class DeviceEditViewModel @Inject constructor(
                         _device.value = it
                         validateForm()
                     }
+                    // Сброс isLoading после получения первого значения
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Ошибка загрузки: ${e.message}") }
-            } finally {
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Ошибка загрузки: ${e.message}"
+                    )
+                }
             }
         }
     }
@@ -53,7 +58,15 @@ class DeviceEditViewModel @Inject constructor(
 
             _uiState.update { it.copy(isLoading = true) }
             try {
-                repository.insertDevice(_device.value)
+                val currentDevice = _device.value
+
+                // Если у устройства есть ID - обновляем, иначе создаем новое
+                if (currentDevice.id > 0) {
+                    repository.updateDevice(currentDevice) // ← ДОБАВЬТЕ ЭТОТ МЕТОД
+                } else {
+                    repository.insertDevice(currentDevice)
+                }
+
                 _uiState.update { it.copy(isSuccess = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Ошибка сохранения: ${e.message}") }

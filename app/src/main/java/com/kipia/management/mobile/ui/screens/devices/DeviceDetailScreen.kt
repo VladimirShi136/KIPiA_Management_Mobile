@@ -15,7 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
@@ -27,7 +27,7 @@ fun DeviceDetailScreen(
     deviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
-    viewModel: DeviceDetailViewModel = viewModel()
+    viewModel: DeviceDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
@@ -35,7 +35,9 @@ fun DeviceDetailScreen(
 
     // Загружаем устройство при входе на экран
     LaunchedEffect(deviceId) {
-        viewModel.loadDevice(deviceId)
+        if (deviceId > 0) {
+            viewModel.loadDevice(deviceId)
+        }
     }
 
     Scaffold(

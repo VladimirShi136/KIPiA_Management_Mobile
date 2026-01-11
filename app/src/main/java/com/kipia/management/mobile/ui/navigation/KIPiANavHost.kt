@@ -52,7 +52,7 @@ fun KIPiANavHost(
 
             if (deviceId != null) {
                 DeviceDetailScreen(
-                    deviceId = deviceId,
+                    deviceId = deviceId, // ← передаем deviceId как параметр
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEdit = {
                         navController.navigate("device_edit/$deviceId")
@@ -62,11 +62,11 @@ fun KIPiANavHost(
         }
 
         // Экран редактирования устройства
-        composable("device_edit/{deviceId?}") { backStackEntry ->
+        composable("device_edit/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
 
             DeviceEditScreen(
-                deviceId = deviceId,
+                deviceId = deviceId, // deviceId может быть null для нового прибора
                 onNavigateBack = { navController.popBackStack() },
                 onSaveSuccess = { navController.popBackStack() }
             )

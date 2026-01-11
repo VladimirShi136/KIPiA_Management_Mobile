@@ -16,10 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
@@ -32,7 +31,7 @@ fun DeviceEditScreen(
     deviceId: Int?,
     onNavigateBack: () -> Unit,
     onSaveSuccess: () -> Unit,
-    viewModel: DeviceEditViewModel = viewModel()
+    viewModel: DeviceEditViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
@@ -40,8 +39,10 @@ fun DeviceEditScreen(
     val scope = rememberCoroutineScope()
 
     // Инициализация при загрузке
-    LaunchedEffect(deviceId) {
-        deviceId?.let { viewModel.loadDevice(it) }
+    LaunchedEffect(key1 = deviceId) {
+        if (deviceId != null && deviceId > 0) {
+            viewModel.loadDevice(deviceId)
+        }
     }
 
     // Обработка результатов
@@ -514,47 +515,49 @@ fun DeviceEditMainPhotoSection(
             .height(200.dp),
         shape = MaterialTheme.shapes.medium
     ) {
-        if (photoPath != null) {
-            AsyncImage(
-                model = photoPath,
-                contentDescription = "Основное фото",
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (photoPath != null) {
+                AsyncImage(
+                    model = photoPath,
+                    contentDescription = "Основное фото",
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center // ← Исправлено
                 ) {
-                    Icon(
-                        Icons.Default.PhotoCamera,
-                        contentDescription = "Добавить фото",
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Добавить основное фото",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.PhotoCamera,
+                            contentDescription = "Добавить фото",
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Добавить основное фото",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
-        }
 
-        // Кнопка добавления/изменения фото
-        IconButton(
-            onClick = onSelectPhoto,
-            modifier = Modifier
-                .align(Alignment.BottomEnd as Alignment.Horizontal)
-                .padding(8.dp)
-        ) {
-            Icon(
-                if (photoPath != null) Icons.Default.Edit else Icons.Default.Add,
-                contentDescription = if (photoPath != null) "Изменить фото" else "Добавить фото",
-                tint = MaterialTheme.colorScheme.primary
-            )
+            // Кнопка добавления/изменения фото
+            IconButton(
+                onClick = onSelectPhoto,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd) // ← ИСПРАВЛЕНО (без as Alignment.Horizontal)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    if (photoPath != null) Icons.Default.Edit else Icons.Default.Add,
+                    contentDescription = if (photoPath != null) "Изменить фото" else "Добавить фото",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
