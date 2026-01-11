@@ -32,4 +32,7 @@ interface DeviceDao {
 
     @Query("SELECT DISTINCT status FROM devices ORDER BY status")
     fun getDeviceStatuses(): Flow<List<String>>
+
+    @Query("SELECT * FROM devices")
+    suspend fun getAllDevicesSync(): List<Device>
 }

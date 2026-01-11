@@ -1,18 +1,16 @@
 package com.kipia.management.mobile.ui.screens.schemes
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -22,8 +20,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
-import java.text.SimpleDateFormat
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +95,7 @@ fun SortMenu(
 
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.Sort, contentDescription = "Сортировка")
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Сортировка")
         }
 
         DropdownMenu(
@@ -113,10 +109,13 @@ fun SortMenu(
                     expanded = false
                 },
                 leadingIcon = {
-                    Icon(
-                        if (currentSort == SortBy.NAME_ASC) Icons.Default.Check else null,
-                        contentDescription = null
-                    )
+                    // Альтернативный подход: показываем/скрываем иконку
+                    if (currentSort == SortBy.NAME_ASC) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                    } else {
+                        // Пустая иконка с тем же размером
+                        Spacer(modifier = Modifier.size(24.dp))
+                    }
                 }
             )
             DropdownMenuItem(
@@ -126,36 +125,11 @@ fun SortMenu(
                     expanded = false
                 },
                 leadingIcon = {
-                    Icon(
-                        if (currentSort == SortBy.NAME_DESC) Icons.Default.Check else null,
-                        contentDescription = null
-                    )
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("По дате (новые)") },
-                onClick = {
-                    onSortSelected(SortBy.DATE_DESC)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(
-                        if (currentSort == SortBy.DATE_DESC) Icons.Default.Check else null,
-                        contentDescription = null
-                    )
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("По дате (старые)") },
-                onClick = {
-                    onSortSelected(SortBy.DATE_ASC)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(
-                        if (currentSort == SortBy.DATE_ASC) Icons.Default.Check else null,
-                        contentDescription = null
-                    )
+                    if (currentSort == SortBy.NAME_DESC) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                    } else {
+                        Spacer(modifier = Modifier.size(24.dp))
+                    }
                 }
             )
         }
@@ -310,7 +284,7 @@ fun SchemeCard(
                 }
             }
 
-            // Премиум схема
+            // Информация о схеме
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -375,7 +349,10 @@ fun SchemeCard(
                 }
             }
 
-            // Даты создания и обновления
+            // Если у схемы есть даты, показываем их
+            // Пока убираем даты, так как их нет в сущности Scheme
+            // Можно добавить поля createdAt и updatedAt в Scheme если нужно
+            /*
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -395,6 +372,7 @@ fun SchemeCard(
                     )
                 }
             }
+            */
         }
     }
 }
@@ -460,11 +438,13 @@ fun EmptySchemesState(
     }
 }
 
+/*
 private fun formatDate(timestamp: Long): String {
     val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
     return dateFormat.format(Date(timestamp))
 }
+*/
 
 enum class SortBy {
-    NAME_ASC, NAME_DESC, DATE_ASC, DATE_DESC
+    NAME_ASC, NAME_DESC
 }

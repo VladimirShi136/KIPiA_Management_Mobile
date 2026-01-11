@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,7 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
@@ -26,10 +27,11 @@ fun DeviceDetailScreen(
     deviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
-    viewModel: DeviceDetailViewModel = hiltViewModel()
+    viewModel: DeviceDetailViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
+    val photos by viewModel.photos.collectAsStateWithLifecycle(initialValue = emptyList()) // ← ВОТ ОНО!
 
     // Загружаем устройство при входе на экран
     LaunchedEffect(deviceId) {
@@ -42,7 +44,10 @@ fun DeviceDetailScreen(
                 title = { Text("Детали прибора") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад"
+                        )
                     }
                 },
                 actions = {
@@ -65,11 +70,11 @@ fun DeviceDetailScreen(
     ) { paddingValues ->
         when {
             uiState.isLoading -> {
-                LoadingState()
+                DeviceDetailLoadingState()
             }
             uiState.error != null -> {
-                ErrorState(
-                    error = uiState.error,
+                DeviceDetailErrorState(
+                    error = uiState.error ?: "Неизвестная ошибка",
                     onRetry = { viewModel.loadDevice(deviceId) },
                     modifier = Modifier
                         .fillMaxSize()
@@ -79,9 +84,10 @@ fun DeviceDetailScreen(
             device != null -> {
                 DeviceDetailContent(
                     device = device!!,
-                    photos = uiState.photos,
-                    onPhotoClick = { _ ->
+                    photos = photos, // ← Используем photos из отдельного StateFlow
+                    onPhotoClick = { index ->
                         // TODO: Открыть полноэкранный просмотр
+                        println("Нажато фото с индексом: $index")
                     },
                     onShare = { viewModel.shareDeviceInfo() },
                     modifier = Modifier
@@ -90,7 +96,7 @@ fun DeviceDetailScreen(
                 )
             }
             else -> {
-                EmptyState(
+                DeviceDetailEmptyState(
                     onNavigateBack = onNavigateBack,
                     modifier = Modifier
                         .fillMaxSize()
@@ -183,7 +189,7 @@ fun DeviceDetailContent(
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
-                SectionTitle("Основная информация")
+                DeviceDetailSectionTitle("Основная информация")
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -244,7 +250,7 @@ fun DeviceDetailContent(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    SectionTitle("Дополнительная информация")
+                    DeviceDetailSectionTitle("Дополнительная информация")
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -267,11 +273,11 @@ fun DeviceDetailContent(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    SectionTitle("Фотографии (${photos.size})")
+                    DeviceDetailSectionTitle("Фотографии (${photos.size})")
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    PhotoGallery(
+                    DevicePhotoGallery(
                         photos = photos,
                         onPhotoClick = onPhotoClick,
                         modifier = Modifier.fillMaxWidth()
@@ -369,7 +375,7 @@ fun DeviceDetailRow(
 }
 
 @Composable
-fun PhotoGallery(
+fun DevicePhotoGallery(
     photos: List<String>,
     onPhotoClick: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -386,7 +392,7 @@ fun PhotoGallery(
             ) {
                 rowPhotos.forEachIndexed { _, photo ->
                     val photoIndex = photos.indexOf(photo)
-                    PhotoThumbnail(
+                    DevicePhotoThumbnail(
                         photoPath = photo,
                         onClick = { onPhotoClick(photoIndex) },
                         modifier = Modifier.weight(1f)
@@ -403,7 +409,7 @@ fun PhotoGallery(
 }
 
 @Composable
-fun PhotoThumbnail(
+fun DevicePhotoThumbnail(
     photoPath: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -423,7 +429,7 @@ fun PhotoThumbnail(
 }
 
 @Composable
-fun LoadingState() {
+fun DeviceDetailLoadingState() {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -439,7 +445,7 @@ fun LoadingState() {
 }
 
 @Composable
-fun ErrorState(
+fun DeviceDetailErrorState(
     error: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
@@ -483,7 +489,7 @@ fun ErrorState(
 }
 
 @Composable
-fun EmptyState(
+fun DeviceDetailEmptyState(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -526,7 +532,7 @@ fun EmptyState(
 }
 
 @Composable
-fun SectionTitle(text: String) {
+fun DeviceDetailSectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

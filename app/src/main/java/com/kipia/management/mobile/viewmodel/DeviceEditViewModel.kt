@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.utils.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DeviceEditViewModel @Inject constructor(
-    private val repository: DeviceRepository
+    private val repository: DeviceRepository,
+    private val photoManager: PhotoManager
 ) : ViewModel() {
 
     private val _device = MutableStateFlow(Device.createEmpty())
@@ -111,6 +113,11 @@ class DeviceEditViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    // Добавьте методы для работы с фото
+    suspend fun savePhotoFromUri(uri: android.net.Uri): String? {
+        return photoManager.savePhotoFromUri(uri)
     }
 }
 

@@ -21,12 +21,17 @@ class SchemesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
-    private val _sortBy = MutableStateFlow(SortBy.DATE_DESC)
+    private val _sortBy = MutableStateFlow(SortBy.NAME_ASC)
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
-    val uiState = combine(_searchQuery, _sortBy, _isLoading, _error) {
-            searchQuery, sortBy, isLoading, error ->
+    // Используем combine для 4 потоков
+    val uiState = combine(
+        _searchQuery,
+        _sortBy,
+        _isLoading,
+        _error
+    ) { searchQuery, sortBy, isLoading, error ->
         SchemesUiState(
             searchQuery = searchQuery,
             sortBy = sortBy,
@@ -41,8 +46,8 @@ class SchemesViewModel @Inject constructor(
 
     // Сортировка и фильтрация схем
     val schemes = repository.getAllSchemes()
-        .combine(_searchQuery, _sortBy) { schemes, query, sortBy ->
-            var filtered = if (query.isBlank()) {
+        .combine(_searchQuery) { schemes, query ->
+            if (query.isBlank()) {
                 schemes
             } else {
                 schemes.filter { scheme ->
@@ -50,17 +55,16 @@ class SchemesViewModel @Inject constructor(
                             scheme.description?.contains(query, ignoreCase = true) == true
                 }
             }
-
-            // Сортировка
-            filtered = when (sortBy) {
-                SortBy.NAME_ASC -> filtered.sortedBy { it.name }
-                SortBy.NAME_DESC -> filtered.sortedByDescending { it.name }
-                SortBy.DATE_ASC -> filtered.sortedBy { it.createdAt }
-                SortBy.DATE_DESC -> filtered.sortedByDescending { it.createdAt }
+        }
+        .combine(_sortBy) { filteredSchemes, sortBy ->
+            // Сортировка только по имени
+            when (sortBy) {
+                SortBy.NAME_ASC -> filteredSchemes.sortedBy { it.name }
+                SortBy.NAME_DESC -> filteredSchemes.sortedByDescending { it.name }
+                else -> filteredSchemes // Для других значений оставляем как есть
             }
-
-            filtered
-        }.stateIn(
+        }
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
@@ -107,7 +111,7 @@ class SchemesViewModel @Inject constructor(
 
 data class SchemesUiState(
     val searchQuery: String = "",
-    val sortBy: SortBy = SortBy.DATE_DESC,
+    val sortBy: SortBy = SortBy.NAME_ASC,
     val isLoading: Boolean = false,
     val error: String? = null
 )

@@ -3,12 +3,12 @@ package com.kipia.management.mobile.ui.screens.photos
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,16 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.component1
-import androidx.core.graphics.component2
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
-import com.kipia.management.mobile.R
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
 
@@ -59,7 +55,7 @@ fun PhotosScreen(
                         onClick = { viewModel.toggleViewMode() }
                     ) {
                         Icon(
-                            if (uiState.isGridView) Icons.Default.GridView else Icons.Default.ViewList,
+                            if (uiState.isGridView) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
                             contentDescription = if (uiState.isGridView) "Список" else "Сетка"
                         )
                     }
@@ -73,7 +69,7 @@ fun PhotosScreen(
             }
             uiState.error != null -> {
                 ErrorState(
-                    error = uiState.error,
+                    error = uiState.error ?: "Неизвестная ошибка", // Явное извлечение
                     onRetry = { viewModel.loadPhotos() },
                     modifier = Modifier
                         .fillMaxSize()
@@ -92,8 +88,8 @@ fun PhotosScreen(
                     photos = photos,
                     viewMode = uiState.viewMode,
                     selectedDeviceId = uiState.selectedDeviceId,
-                    onPhotoClick = { photo, device ->
-                        onNavigateToFullScreenPhoto(photo, device.getDisplayName())
+                    onPhotoClick = { photoPath, device ->
+                        onNavigateToFullScreenPhoto(photoPath, device.getDisplayName())
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -147,7 +143,7 @@ fun DeviceFilterDropdown(
                 }
             )
 
-            Divider()
+            HorizontalDivider()
 
             devices.forEach { device ->
                 DropdownMenuItem(
@@ -230,7 +226,8 @@ fun PhotosGrid(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         contentPadding = PaddingValues(4.dp)
     ) {
-        items(photos, key = { (photoPath, _) -> photoPath }) { (photoPath, device) ->
+        items(photos.size, key = { index -> photos[index].first }) { index ->
+            val (photoPath, device) = photos[index]
             PhotoGridItem(
                 photoPath = photoPath,
                 device = device,
@@ -313,7 +310,8 @@ fun PhotosList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
-        items(photos, key = { (photoPath, _) -> photoPath }) { (photoPath, device) ->
+        items(photos.size, key = { index -> photos[index].first }) { index ->
+            val (photoPath, device) = photos[index]
             PhotoListItem(
                 photoPath = photoPath,
                 device = device,

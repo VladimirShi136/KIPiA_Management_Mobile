@@ -60,56 +60,45 @@ android {
 }
 
 dependencies {
-    // ========== JETPACK COMPOSE ==========
+    // Compose BOM
     implementation(platform(libs.compose.bom))
-    implementation(libs.bundles.compose.bundle)
-    debugImplementation(libs.compose.ui.tooling)
-    debugImplementation(libs.compose.ui.test.manifest)
-    androidTestImplementation(platform(libs.compose.bom))
-    androidTestImplementation(libs.compose.ui.test.junit4)
 
-    // ========== COIL (ПОЛНАЯ ЗАМЕНА GLIDE) ==========
-    implementation(libs.bundles.coil.bundle)
-
-    // Accompanist
-    implementation(libs.bundles.accompanist.bundle)
-
-    // ========== БАЗОВЫЕ ЗАВИСИМОСТИ ==========
-    implementation(libs.bundles.android.base)
-    implementation(libs.bundles.lifecycle.bundle)
-
-    // Navigation Compose
+    // Compose
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.activity.compose)
     implementation(libs.navigation.compose)
+    implementation(libs.compose.material.icons.extended)
 
-    // ========== БИБЛИОТЕКИ С KSP ==========
+    // Core
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.viewmodel.ktx)
+    implementation(libs.lifecycle.runtime.compose)
 
-    // Room с KSP
+    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Hilt с KSP
+    // Hilt
     implementation(libs.hilt.android)
-    ksp(libs.hilt.ksp)
-
-    // Hilt Navigation Compose
+    ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Coroutines
-    implementation(libs.coroutines.android)
+    // Coil
+    implementation(libs.coil.compose)
 
-    // CameraX
-    implementation(libs.bundles.camerax.bundle)
-
-    // Прочие зависимости
+    // Other
     implementation(libs.gson)
+    implementation(libs.material)
     implementation(libs.timber)
 
-    // MPAndroidChart
-    implementation(libs.mp.android.chart)
-
-    // ========== ТЕСТИРОВАНИЕ ==========
+    // Testing
     testImplementation(libs.junit)
+    androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso)
 }

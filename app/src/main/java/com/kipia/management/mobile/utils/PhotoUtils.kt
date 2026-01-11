@@ -1,5 +1,7 @@
 package com.kipia.management.mobile.utils
 
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CoroutineScope
@@ -7,12 +9,14 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun rememberPhotoState(
+    photoManager: PhotoManager,
     scope: CoroutineScope,
     snackbarHostState: androidx.compose.material3.SnackbarHostState
 ): PhotoState {
     val context = LocalContext.current
 
-    val permissionLauncher = PhotoManager.rememberPermissionLauncher(
+    // 1. Лаунчер для разрешений
+    val permissionLauncher = PhotoManagerCompose.rememberPermissionLauncher(
         onPermissionGranted = { /* Можно показать сообщение */ },
         onPermissionDenied = {
             scope.launch {
@@ -21,12 +25,12 @@ fun rememberPhotoState(
         }
     )
 
-    val pickPhotoLauncher = PhotoManager.rememberPickPhotoLauncher(
+    // 2. Лаунчер для выбора фото из галереи
+    val pickPhotoLauncher = PhotoManagerCompose.rememberPickPhotoLauncher(
         onPhotoSelected = { uri ->
             scope.launch {
-                val savedPath = PhotoManager.savePhotoFromUri(context, uri)
+                val savedPath = photoManager.savePhotoFromUri(uri)
                 savedPath?.let { path ->
-                    // Обработка сохраненного фото
                     snackbarHostState.showSnackbar("Фото сохранено")
                 } ?: run {
                     snackbarHostState.showSnackbar("Ошибка сохранения фото")
@@ -35,10 +39,12 @@ fun rememberPhotoState(
         }
     )
 
-    val (takePhotoLauncher, setPhotoUri) = PhotoManager.rememberTakePhotoLauncher(
+    // 3. Лаунчер для съемки фото
+    val (takePhotoLauncher, setPhotoUri) = PhotoManagerCompose.rememberTakePhotoLauncher(
+        photoManager = photoManager,
         onPhotoTaken = { uri ->
             scope.launch {
-                val savedPath = PhotoManager.savePhotoFromUri(context, uri)
+                val savedPath = photoManager.savePhotoFromUri(uri)
                 savedPath?.let { path ->
                     snackbarHostState.showSnackbar("Фото сохранено")
                 } ?: run {
@@ -50,8 +56,14 @@ fun rememberPhotoState(
 
     return remember(scope, snackbarHostState) {
         PhotoState(
-            permissionLauncher = permissionLauncher,
-            pickPhotoLauncher = pickPhotoLauncher,
+            permissionLauncher = { permissions ->
+                permissionLauncher.launch(permissions)
+            },
+            pickPhotoLauncher = {
+                pickPhotoLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
             takePhotoLauncher = takePhotoLauncher,
             setPhotoUri = setPhotoUri
         )
@@ -62,5 +74,5 @@ data class PhotoState(
     val permissionLauncher: (Array<String>) -> Unit,
     val pickPhotoLauncher: () -> Unit,
     val takePhotoLauncher: () -> Unit,
-    val setPhotoUri: (android.net.Uri?) -> Unit
+    val setPhotoUri: (android.net.Uri) -> Unit
 )

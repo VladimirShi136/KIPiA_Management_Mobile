@@ -13,154 +13,94 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import kotlinx.coroutines.launch
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object PhotoManager {
-
-    /**
-     * Создает лаунчер для запроса разрешений в Compose
-     */
-    @Composable
-    fun rememberPermissionLauncher(
-        onPermissionGranted: () -> Unit = {},
-        onPermissionDenied: () -> Unit = {}
-    ) = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.all { it.value }
-        if (allGranted) {
-            onPermissionGranted()
-        } else {
-            onPermissionDenied()
-        }
-    }
-
-    /**
-     * Создает лаунчер для выбора фото из галереи
-     */
-    @Composable
-    fun rememberPickPhotoLauncher(
-        onPhotoSelected: (Uri) -> Unit
-    ) = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        uri?.let(onPhotoSelected)
-    }
-
-    /**
-     * Создает лаунчер для съемки фото
-     */
-    @Composable
-    fun rememberTakePhotoLauncher(
-        onPhotoTaken: (Uri) -> Unit
-    ): Pair<() -> Unit, (Uri) -> Unit> {
-        var photoUri by remember { mutableStateOf<Uri?>(null) }
-
-        val takePictureLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicture()
-        ) { success ->
-            if (success && photoUri != null) {
-                photoUri?.let(onPhotoTaken)
-            }
-        }
-
-        val launchTakePhoto: () -> Unit = {
-            val context = LocalContext.current
-            createImageFile(context)?.let { uri ->
-                photoUri = uri
-                takePictureLauncher.launch(uri)
-            }
-        }
-
-        return Pair(launchTakePhoto, { photoUri = it })
-    }
+@Singleton
+class PhotoManager @Inject constructor(
+    @param:ApplicationContext private val context: Context
+) {
 
     /**
      * Проверяет разрешения для камеры
      */
-    @Composable
     fun checkCameraPermission(): Boolean {
-        val context = LocalContext.current
-        return remember(context) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        }
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     /**
      * Проверяет разрешения для чтения медиа
      */
-    @Composable
     fun checkStoragePermission(): Boolean {
-        val context = LocalContext.current
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
 
-        return remember(context) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.READ_MEDIA_IMAGES
-                ) == PackageManager.PERMISSION_GRANTED
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ) == PackageManager.PERMISSION_GRANTED
-            } else {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ) == PackageManager.PERMISSION_GRANTED &&
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                        ) == PackageManager.PERMISSION_GRANTED
-            }
+    /**
+     * Проверяет все необходимые разрешения
+     */
+    fun hasAllRequiredPermissions(): Boolean {
+        val permissions = getRequiredPermissions()
+        return permissions.all { permission ->
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
     }
 
     /**
      * Получает список разрешений для запроса
      */
-    @Composable
     fun getRequiredPermissions(): Array<String> {
-        return remember {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.READ_MEDIA_IMAGES
-                )
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                )
-            } else {
-                arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                )
-            }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
         }
     }
 
     /**
      * Открывает настройки разрешений
      */
-    fun openAppSettings(context: Context) {
+    fun openAppSettings() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", context.packageName, null)
         }
@@ -170,7 +110,7 @@ object PhotoManager {
     /**
      * Создает временный файл для фото
      */
-    fun createImageFile(context: Context): Uri? {
+    fun createImageFile(): Uri? {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ - используем MediaStore
@@ -214,7 +154,7 @@ object PhotoManager {
     /**
      * Сохраняет фото из Uri в постоянное хранилище приложения
      */
-    suspend fun savePhotoFromUri(context: Context, uri: Uri): String? {
+    suspend fun savePhotoFromUri(uri: Uri): String? {
         return kotlin.runCatching {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 val fileName = "IMG_${System.currentTimeMillis()}.jpg"
@@ -238,7 +178,7 @@ object PhotoManager {
     /**
      * Поворачивает фото на указанный угол
      */
-    fun rotatePhoto(context: Context, photoPath: String, degrees: Float): String? {
+    fun rotatePhoto(photoPath: String, degrees: Float): String? {
         return try {
             val originalFile = File(photoPath)
             if (!originalFile.exists()) return null
@@ -280,7 +220,7 @@ object PhotoManager {
     /**
      * Удаляет фото
      */
-    fun deletePhoto(context: Context, photoPath: String): Boolean {
+    fun deletePhoto(photoPath: String): Boolean {
         return try {
             val file = File(photoPath)
             if (file.exists()) {
@@ -302,6 +242,17 @@ object PhotoManager {
             e.printStackTrace()
             false
         }
+    }
+
+    /**
+     * Получает папку для хранения фото устройств
+     */
+    fun getDevicePhotosDir(): File {
+        val dir = File(context.filesDir, "device_photos")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir
     }
 
     /**

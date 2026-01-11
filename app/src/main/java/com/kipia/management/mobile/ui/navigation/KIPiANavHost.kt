@@ -1,20 +1,19 @@
 package com.kipia.management.mobile.ui.navigation
 
 import android.net.Uri
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navigation
 import com.kipia.management.mobile.ui.screens.devices.DeviceDetailScreen
 import com.kipia.management.mobile.ui.screens.devices.DeviceEditScreen
 import com.kipia.management.mobile.ui.screens.devices.DevicesScreen
 import com.kipia.management.mobile.ui.screens.photos.FullScreenPhotoScreen
 import com.kipia.management.mobile.ui.screens.photos.PhotosScreen
+import com.kipia.management.mobile.ui.screens.reports.ReportsScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
@@ -73,26 +72,7 @@ fun KIPiANavHost(
             )
         }
 
-        // Полноэкранный просмотр фото
-        composable("fullscreen_photo/{photoPath}") { backStackEntry ->
-            val photoPath = backStackEntry.arguments?.getString("photoPath") ?: ""
-
-            FullScreenPhotoScreen(
-                photoPath = photoPath,
-                onNavigateBack = { navController.popBackStack() },
-                onRotateLeft = {
-                    // TODO: Поворот фото влево
-                },
-                onRotateRight = {
-                    // TODO: Поворот фото вправо
-                },
-                onDelete = {
-                    // TODO: Удаление фото
-                }
-            )
-        }
-
-        // Остальные экраны (заглушки)
+        // Схемы
         composable(BottomNavItem.Schemes.route) {
             SchemesScreen(
                 onNavigateToSchemeEditor = { schemeId ->
@@ -106,6 +86,7 @@ fun KIPiANavHost(
             )
         }
 
+        // Редактор схем
         composable("scheme_editor/{schemeId?}") { backStackEntry ->
             val schemeId = backStackEntry.arguments?.getString("schemeId")?.toIntOrNull()
 
@@ -116,22 +97,24 @@ fun KIPiANavHost(
             )
         }
 
+        // Отчеты
         composable(BottomNavItem.Reports.route) {
-            // TODO: ReportsScreen
-            Text("Отчеты (в разработке)")
+            ReportsScreen()
         }
 
+        // Фото
         composable(BottomNavItem.Photos.route) {
             PhotosScreen(
                 onNavigateToFullScreenPhoto = { photoPath, deviceName ->
-                    navController.navigate("fullscreen_photo/$photoPath?deviceName=${Uri.encode(deviceName)}")
+                    navController.navigate("fullscreen_photo/${Uri.encode(photoPath)}?deviceName=${Uri.encode(deviceName)}")
                 }
             )
         }
 
+        // Полноэкранный просмотр фото (ОДИН роут, а не два!)
         composable("fullscreen_photo/{photoPath}") { backStackEntry ->
-            val photoPath = backStackEntry.arguments?.getString("photoPath") ?: ""
-            val deviceName = backStackEntry.arguments?.getString("deviceName") ?: "Прибор"
+            val photoPath = Uri.decode(backStackEntry.arguments?.getString("photoPath") ?: "")
+            val deviceName = Uri.decode(backStackEntry.arguments?.getString("deviceName") ?: "Прибор")
 
             // Создаем ViewModel для управления фото
             val photoDetailViewModel: PhotoDetailViewModel = hiltViewModel()

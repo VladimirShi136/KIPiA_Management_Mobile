@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.data.entities
 
+import androidx.compose.ui.graphics.Color
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -111,7 +112,7 @@ data class Device(
         } else {
             try {
                 Gson().fromJson(photos, Array<String>::class.java).toList()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
         }
@@ -200,4 +201,21 @@ data class Device(
             setPhotoList(updatedPhotos)
         }
     }
+
+    fun Device.getStatusColor(): Color {
+        return when (status) {
+            "В работе" -> Color(0xFF4CAF50)      // Зеленый
+            "На ремонте" -> Color(0xFFFF9800)    // Оранжевый
+            "Списан" -> Color(0xFFF44336)        // Красный
+            "В резерве" -> Color(0xFF9E9E9E)     // Серый
+            else -> Color.Gray
+        }
+    }
+
+    fun Device.getStatusColorCompose(): androidx.compose.ui.graphics.Color {
+        return androidx.compose.ui.graphics.Color(
+            android.graphics.Color.parseColor(getStatusColorHex())
+        )
+    }
+
 }

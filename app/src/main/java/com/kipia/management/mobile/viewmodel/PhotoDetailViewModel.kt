@@ -21,11 +21,7 @@ class PhotoDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val rotatedPath = photoManager.rotatePhoto(
-                    android.content.ContextWrapper(), // TODO: Получить контекст
-                    photoPath,
-                    degrees
-                )
+                val rotatedPath = photoManager.rotatePhoto(photoPath, degrees)
 
                 if (rotatedPath != null) {
                     _uiState.value = _uiState.value.copy(
@@ -52,10 +48,7 @@ class PhotoDetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val success = photoManager.deletePhoto(
-                    android.content.ContextWrapper(), // TODO: Получить контекст
-                    photoPath
-                )
+                val success = photoManager.deletePhoto(photoPath)
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

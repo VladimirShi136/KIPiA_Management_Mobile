@@ -3,105 +3,218 @@ package com.kipia.management.mobile.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.repository.SchemeRepository
+import com.kipia.management.mobile.ui.screens.reports.models.*
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import com.kipia.management.mobile.viewmodel.ReportsViewModel
-import com.kipia.management.mobile.viewmodel.ReportStatistics
 
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
-    private val deviceRepository: DeviceRepository
+    private val deviceRepository: DeviceRepository,
+    private val schemeRepository: SchemeRepository
 ) : ViewModel() {
 
-    // Состояния фильтрации
-    private val _selectedLocation = MutableStateFlow<String?>(null)
-    private val _selectedStatus = MutableStateFlow<String?>(null)
-    private val _dateRange = MutableStateFlow<Pair<Long, Long>?>(null)
+    private val _reports = MutableStateFlow<List<Report>>(emptyList())
+    val reports: StateFlow<List<Report>> = _reports.asStateFlow()
 
-    // Данные
-    private val _allDevices = MutableStateFlow<List<Device>>(emptyList())
-    private val _filteredDevices = MutableStateFlow<List<Device>>(emptyList())
-    val filteredDevices: StateFlow<List<Device>> = _filteredDevices.asStateFlow()
+    private val _currentReport = MutableStateFlow<Report?>(null)
+    val currentReport: StateFlow<Report?> = _currentReport.asStateFlow()
 
-    // Статистика
-    private val _statistics = MutableStateFlow<ReportStatistics>(ReportStatistics())
-    val statistics: StateFlow<ReportStatistics> = _statistics.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // Доступные фильтры
-    val availableLocations = deviceRepository.getAllLocations()
-    val availableStatuses = listOf("В работе", "В ремонте", "В резерве", "Списан")
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     init {
-        loadDevices()
-        setupFiltering()
+        loadReports()
     }
 
-    private fun loadDevices() {
+    private fun loadReports() {
         viewModelScope.launch {
-            deviceRepository.getAllDevices().collect { devices ->
-                _allDevices.value = devices
+            _isLoading.value = true
+            _error.value = null
+
+            try {
+                // Загружаем данные для отчетов
+                val devices = deviceRepository.getAllDevicesSync()
+
+                // Получаем схемы из Flow
+                val schemes = schemeRepository.getAllSchemes()
+                    .first() // Берем первый элемент из Flow
+
+                // Создаем стандартные отчеты
+                val reportList = mutableListOf<Report>()
+
+                // 1. Сводный отчет
+                reportList.add(generateSummaryReport(devices, schemes))
+
+                // 2. Список приборов
+                reportList.add(generateDeviceListReport(devices))
+
+                // 3. Распределение по статусам
+                reportList.add(generateStatusDistributionReport(devices))
+
+                // 4. Распределение по местам
+                reportList.add(generateLocationDistributionReport(devices))
+
+                // 5. Распределение по типам
+                reportList.add(generateTypeDistributionReport(devices))
+
+                _reports.value = reportList
+
+            } catch (e: Exception) {
+                _error.value = "Ошибка загрузки отчетов: ${e.message}"
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    private fun setupFiltering() {
-        viewModelScope.launch {
-            combine(
-                _allDevices,
-                _selectedLocation,
-                _selectedStatus,
-                _dateRange
-            ) { devices, location, status, dateRange ->
-                devices.filter { device ->
-                    (location == null || device.location == location) &&
-                            (status == null || device.status == status) &&
-                            // TODO: Добавить фильтрацию по дате если будет поле createdDate
-                            true
-                }
-            }.collect { filtered ->
-                _filteredDevices.value = filtered
-                calculateStatistics(filtered)
-            }
-        }
-    }
+    private fun generateSummaryReport(devices: List<Device>, schemes: List<Scheme>): SummaryReport {
+        val totalDevices = devices.size
+        val activeDevices = devices.count { it.status == "В работе" }
+        val offlineDevices = devices.count { it.status in listOf("На ремонте", "Списан", "В резерве") }
+        val totalSchemes = schemes.size
 
-    fun setLocationFilter(location: String?) {
-        _selectedLocation.value = location
-    }
+        val avgAccuracy = devices.mapNotNull { it.accuracyClass }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
 
-    fun setStatusFilter(status: String?) {
-        _selectedStatus.value = status
-    }
+        // Самое частое место
+        val mostCommonLocation = devices
+            .groupingBy { it.location ?: "Не указано" }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
 
-    fun clearFilters() {
-        _selectedLocation.value = null
-        _selectedStatus.value = null
-        _dateRange.value = null
-    }
+        // Самый частый тип
+        val mostCommonType = devices
+            .groupingBy { it.type ?: "Не указан" }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
 
-    private fun calculateStatistics(devices: List<Device>) {
-        val total = devices.size
-        val byStatus = devices.groupBy { it.status }.mapValues { it.value.size }
-        val byLocation = devices.groupBy { it.location }.mapValues { it.value.size }
-
-        _statistics.value = ReportStatistics(
-            totalDevices = total,
-            devicesByStatus = byStatus,
-            devicesByLocation = byLocation,
-            averageYear = devices.mapNotNull { it.year }.average().takeIf { !it.isNaN() }
+        return SummaryReport(
+            totalDevices = totalDevices,
+            activeDevices = activeDevices,
+            offlineDevices = offlineDevices,
+            totalSchemes = totalSchemes,
+            avgAccuracy = avgAccuracy,
+            mostCommonLocation = mostCommonLocation,
+            mostCommonType = mostCommonType
         )
     }
-}
 
-data class ReportStatistics(
-    val totalDevices: Int = 0,
-    val devicesByStatus: Map<String, Int> = emptyMap(),
-    val devicesByLocation: Map<String, Int> = emptyMap(),
-    val averageYear: Double? = null
-)
+    private fun generateDeviceListReport(devices: List<Device>): DeviceListReport {
+        return DeviceListReport(
+            devices = devices.sortedBy { it.name ?: "" },
+            sortBy = SortBy.NAME_ASC
+        )
+    }
+
+    private fun generateStatusDistributionReport(devices: List<Device>): StatusDistributionReport {
+        val statuses = devices
+            .groupingBy { it.status ?: "Не указан" }
+            .eachCount()
+            .toSortedMap()
+
+        return StatusDistributionReport(
+            statuses = statuses,
+            total = devices.size
+        )
+    }
+
+    private fun generateLocationDistributionReport(devices: List<Device>): LocationDistributionReport {
+        val locations = devices
+            .groupingBy { it.location ?: "Не указано" }
+            .eachCount()
+            .toSortedMap()
+
+        return LocationDistributionReport(
+            locations = locations,
+            total = devices.size
+        )
+    }
+
+    private fun generateTypeDistributionReport(devices: List<Device>): TypeDistributionReport {
+        val types = devices
+            .groupingBy { it.type ?: "Не указан" }
+            .eachCount()
+            .toSortedMap()
+
+        return TypeDistributionReport(
+            types = types,
+            total = devices.size
+        )
+    }
+
+    fun openReport(report: Report) {
+        _currentReport.value = report
+    }
+
+    fun closeReport() {
+        _currentReport.value = null
+    }
+
+    fun refreshReports() {
+        loadReports()
+    }
+
+    fun clearError() {
+        _error.value = null
+    }
+
+    // Обновленная generateCustomReport функция
+    suspend fun generateCustomReport(
+        devices: List<Device>,
+        type: ReportType,
+        filter: String? = null
+    ): Report {
+        // Получаем схемы для summary отчета
+        val schemes = schemeRepository.getAllSchemes().first()
+
+        return when (type) {
+            is ReportType.Summary -> generateSummaryReport(devices, schemes)
+            is ReportType.DeviceList -> DeviceListReport(
+                devices = devices.filter {
+                    filter == null || (it.name?.contains(filter, ignoreCase = true) == true)
+                }
+            )
+            is ReportType.StatusDistribution -> generateStatusDistributionReport(devices)
+            is ReportType.LocationDistribution -> generateLocationDistributionReport(devices)
+            is ReportType.TypeDistribution -> generateTypeDistributionReport(devices)
+        }
+    }
+
+    // Альтернативный вариант с Flow для реального времени
+    fun getReportsFlow(): Flow<List<Report>> {
+        return combine(
+            deviceRepository.getAllDevices(), // если есть Flow версия
+            schemeRepository.getAllSchemes()
+        ) { devices, schemes ->
+            val reportList = mutableListOf<Report>()
+
+            // 1. Сводный отчет
+            reportList.add(generateSummaryReport(devices, schemes))
+
+            // 2. Список приборов
+            reportList.add(generateDeviceListReport(devices))
+
+            // 3. Распределение по статусам
+            reportList.add(generateStatusDistributionReport(devices))
+
+            // 4. Распределение по местам
+            reportList.add(generateLocationDistributionReport(devices))
+
+            // 5. Распределение по типам
+            reportList.add(generateTypeDistributionReport(devices))
+
+            reportList
+        }
+    }
+}

@@ -20,9 +20,15 @@ class DeviceRepository @Inject constructor(
 
     suspend fun updateDevice(device: Device) = deviceDAO.updateDevice(device)
 
+    // Добавьте этот метод для отчетов
+    suspend fun getAllDevicesSync(): List<Device> {
+        return deviceDAO.getAllDevicesSync()
+    }
+
     fun getDevicesByType(type: String): Flow<List<Device>> = deviceDAO.getDevicesByType(type)
 
-    fun getDevicesByStatus(status: String): Flow<List<Device>> = deviceDAO.getDevicesByStatus(status)
+    fun getDevicesByStatus(status: String): Flow<List<Device>> =
+        deviceDAO.getDevicesByStatus(status)
 
     fun getDeviceTypes(): Flow<List<String>> = deviceDAO.getDeviceTypes()
 

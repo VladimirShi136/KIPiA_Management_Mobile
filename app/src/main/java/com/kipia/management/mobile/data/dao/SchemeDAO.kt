@@ -24,4 +24,7 @@ interface SchemeDao {
 
     @Query("DELETE FROM schemes WHERE id = :id")
     suspend fun deleteSchemeById(id: Int)
+
+    @Query("SELECT * FROM schemes")
+    suspend fun getAllSchemesSync(): List<Scheme>
 }
