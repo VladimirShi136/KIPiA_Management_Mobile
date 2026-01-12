@@ -10,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -19,6 +18,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -235,7 +235,7 @@ fun DeviceDetailContent(
 
                 device.valveNumber?.let { valve ->
                     DeviceDetailRow(
-                        label = "Номер вентиля:",
+                        label = "Номер крана:",
                         value = valve
                     )
                 }
@@ -328,22 +328,16 @@ fun DeviceDetailContent(
 
 @Composable
 fun StatusBadge(status: String) {
-    val (backgroundColor, textColor) = when (status) {
-        "В работе" -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))  // Зеленый
-        "На ремонте" -> Pair(Color(0xFFFFF3E0), Color(0xFFEF6C00)) // Оранжевый
-        "Списан" -> Pair(Color(0xFFFFEBEE), Color(0xFFC62828))    // Красный
-        "В резерве" -> Pair(Color(0xFFF5F5F5), Color(0xFF616161)) // Серый
-        else -> Pair(Color(0xFFF5F5F5), Color(0xFF616161))
-    }
+    val deviceStatus = DeviceStatus.fromString(status)
 
     Surface(
-        color = backgroundColor,
+        color = deviceStatus.backgroundColor,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.padding(horizontal = 8.dp)
     ) {
         Text(
             text = status,
-            color = textColor,
+            color = deviceStatus.textColor,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )

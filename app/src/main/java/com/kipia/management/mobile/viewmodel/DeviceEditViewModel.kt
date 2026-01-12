@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.utils.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,9 +61,20 @@ class DeviceEditViewModel @Inject constructor(
             try {
                 val currentDevice = _device.value
 
+                // Валидация статуса
+                if (!isValidStatus(currentDevice.status)) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "Некорректный статус: ${currentDevice.status}"
+                        )
+                    }
+                    return@launch
+                }
+
                 // Если у устройства есть ID - обновляем, иначе создаем новое
                 if (currentDevice.id > 0) {
-                    repository.updateDevice(currentDevice) // ← ДОБАВЬТЕ ЭТОТ МЕТОД
+                    repository.updateDevice(currentDevice)
                 } else {
                     repository.insertDevice(currentDevice)
                 }
@@ -74,6 +86,11 @@ class DeviceEditViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
+    }
+
+    // Проверка корректности статуса
+    private fun isValidStatus(status: String): Boolean {
+        return DeviceStatus.ALL_STATUSES.contains(status)
     }
 
     fun deleteDevice() {
@@ -116,6 +133,14 @@ class DeviceEditViewModel @Inject constructor(
             _uiState.update { it.copy(locationError = null) }
         }
 
+        // Валидация статуса
+        if (!isValidStatus(currentDevice.status)) {
+            errors.add("status")
+            _uiState.update { it.copy(statusError = "Некорректный статус") }
+        } else {
+            _uiState.update { it.copy(statusError = null) }
+        }
+
         _uiState.update {
             it.copy(
                 isFormValid = errors.isEmpty(),
@@ -125,7 +150,7 @@ class DeviceEditViewModel @Inject constructor(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(error = null) }
+        _uiState.update { it.copy(error = null, statusError = null) }
     }
 
     // Добавьте методы для работы с фото
@@ -144,5 +169,6 @@ data class DeviceEditUiState(
     val isStatusExpanded: Boolean = false,
     val typeError: String? = null,
     val inventoryNumberError: String? = null,
-    val locationError: String? = null
+    val locationError: String? = null,
+    val statusError: String? = null // ← Добавляем поле для ошибки статуса
 )

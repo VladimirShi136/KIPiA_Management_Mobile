@@ -429,7 +429,7 @@ fun DeviceEditForm(
                 expanded = isStatusExpanded,
                 onDismissRequest = { isStatusExpanded = false }
             ) {
-                Device.STATUSES.forEach { status ->
+                Device.STATUSES.forEach { status -> // Используем Device.STATUSES, который теперь ссылается на DeviceStatus.ALL_STATUSES
                     DropdownMenuItem(
                         text = { Text(status) },
                         onClick = {

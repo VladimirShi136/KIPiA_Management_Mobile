@@ -26,6 +26,12 @@ sealed class BottomNavItem(
         iconResId = R.drawable.ic_devices
     )
 
+    object Photos : BottomNavItem(
+        route = "photos",
+        titleResId = R.string.photo_gallery,
+        iconResId = R.drawable.ic_photo
+    )
+
     object Schemes : BottomNavItem(
         route = "schemes",
         titleResId = R.string.title_schemes,
@@ -37,19 +43,13 @@ sealed class BottomNavItem(
         titleResId = R.string.title_reports,
         iconResId = R.drawable.ic_reports
     )
-
-    object Photos : BottomNavItem(
-        route = "photos",
-        titleResId = R.string.photo_gallery,
-        iconResId = R.drawable.ic_photo
-    )
 }
 
 val bottomNavItems = listOf(
     BottomNavItem.Devices,
+    BottomNavItem.Photos,
     BottomNavItem.Schemes,
-    BottomNavItem.Reports,
-    BottomNavItem.Photos
+    BottomNavItem.Reports
 )
 
 @Composable

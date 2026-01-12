@@ -101,4 +101,8 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso)
+
+    // DataStore (НОВОЕ) ⬅️
+    implementation(libs.datastore.preferences)
+    implementation(libs.datastore.preferences.core)
 }

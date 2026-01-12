@@ -5,21 +5,29 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
 import com.kipia.management.mobile.ui.navigation.KIPiANavHost
 import com.kipia.management.mobile.ui.theme.KIPiATheme
+import com.kipia.management.mobile.viewmodel.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -63,15 +71,30 @@ fun KIPiAApp() {
             color = MaterialTheme.colorScheme.background
         ) {
             val navController = rememberNavController()
+            val themeViewModel: ThemeViewModel = hiltViewModel() // получаем ViewModel
 
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { androidx.compose.material3.Text(stringResource(R.string.app_name)) },
+                        title = { Text(stringResource(R.string.app_name)) },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary
-                        )
+                        ),
+                        actions = {
+                            // Добавляем кнопку переключения темы
+                            ThemeToggleButton()
+
+                            // Кнопка настроек
+                            IconButton(onClick = {
+                                navController.navigate("settings")
+                            }) {
+                                Icon(
+                                    Icons.Filled.Settings,
+                                    contentDescription = "Настройки"
+                                )
+                            }
+                        }
                     )
                 },
                 bottomBar = {

@@ -17,21 +17,19 @@ import javax.inject.Inject
 class DevicesViewModel @Inject constructor(
     private val repository: DeviceRepository
 ) : ViewModel() {
-
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
-
     private val _typeFilter = MutableStateFlow<String?>(null)
-    val typeFilter: StateFlow<String?> = _typeFilter
-
     private val _statusFilter = MutableStateFlow<String?>(null)
-    val statusFilter: StateFlow<String?> = _statusFilter
-
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
-    val uiState = combine(_isLoading, _error, _typeFilter, _statusFilter) {
-            isLoading, error, typeFilter, statusFilter ->
+    val uiState = combine(
+        _isLoading,
+        _error,
+        _typeFilter,
+        _statusFilter
+    ) { isLoading, error, typeFilter, statusFilter ->
         DevicesUiState(
             isLoading = isLoading,
             error = error,
@@ -57,7 +55,10 @@ class DevicesViewModel @Inject constructor(
                     device.name?.contains(query, ignoreCase = true) == true ||
                     device.manufacturer?.contains(query, ignoreCase = true) == true ||
                     device.location.contains(query, ignoreCase = true) ||
-                    device.valveNumber?.contains(query, ignoreCase = true) == true
+                    device.valveNumber?.contains(query, ignoreCase = true) == true ||
+                    device.type.contains(query, ignoreCase = true) ||
+                    device.measurementLimit?.contains(query, ignoreCase = true) == true ||
+                    device.status.contains(query, ignoreCase = true) // Добавляем поиск по статусу
 
             val matchesType = typeFilter == null || device.type == typeFilter
             val matchesStatus = statusFilter == null || device.status == statusFilter
@@ -89,23 +90,6 @@ class DevicesViewModel @Inject constructor(
                 repository.deleteDevice(device)
             } catch (e: Exception) {
                 _error.value = "Ошибка удаления: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    fun clearError() {
-        _error.value = null
-    }
-
-    fun refreshDevices() {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                // Обновление происходит через Flow автоматически
-            } catch (e: Exception) {
-                _error.value = "Ошибка обновления: ${e.message}"
             } finally {
                 _isLoading.value = false
             }

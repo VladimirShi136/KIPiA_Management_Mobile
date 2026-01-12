@@ -5,7 +5,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kipia.management.mobile.repository.PreferencesRepository
+import com.kipia.management.mobile.viewmodel.ThemeViewModel
 
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF006C4C),
@@ -33,10 +38,20 @@ private val DarkColorScheme = darkColorScheme(
 
 @Composable
 fun KIPiATheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val themeViewModel: ThemeViewModel = hiltViewModel()
+    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
+
+    // Определяем, темная ли тема
+    val isDarkTheme = when (themeMode) {
+        PreferencesRepository.THEME_LIGHT -> false
+        PreferencesRepository.THEME_DARK -> true
+        PreferencesRepository.THEME_FOLLOW_SYSTEM -> isSystemInDarkTheme()
+        else -> isSystemInDarkTheme()
+    }
+
+    val colorScheme = if (isDarkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,

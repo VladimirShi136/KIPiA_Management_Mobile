@@ -63,7 +63,7 @@ class DatabaseInitializer @Inject constructor(
                 accuracyClass = 1.5,
                 location = "Котельная №2",
                 valveNumber = "ВК-7",
-                status = "На ремонте",
+                status = "Испорчен",
                 additionalInfo = "Требуется замена контактной группы. В ремонте с 10.01.2024",
                 photoPath = null,
                 photos = null
@@ -95,7 +95,7 @@ class DatabaseInitializer @Inject constructor(
                 accuracyClass = 2.0,
                 location = "Холодильная камера №3",
                 valveNumber = null,
-                status = "В резерве",
+                status = "Хранение",
                 additionalInfo = "Запасной термометр. Поверен до 12.2025",
                 photoPath = null,
                 photos = null
@@ -127,7 +127,7 @@ class DatabaseInitializer @Inject constructor(
                 accuracyClass = 2.0,
                 location = "Водозабор, насосная №1",
                 valveNumber = "ВВ-8",
-                status = "Списан",
+                status = "Утерян",
                 additionalInfo = "Вышел из строя после гидроудара. Списан 15.11.2023",
                 photoPath = null,
                 photos = null
@@ -193,7 +193,7 @@ class DatabaseInitializer @Inject constructor(
                 accuracyClass = 0.2,
                 location = "Емкость Е-7",
                 valveNumber = null,
-                status = "На ремонте",
+                status = "Испорчен",
                 additionalInfo = "Нестабильные показания. Отправлен в лабораторию 08.01.2024",
                 photoPath = null,
                 photos = null
@@ -259,7 +259,7 @@ class DatabaseInitializer @Inject constructor(
                 accuracyClass = null,
                 location = "Пневмосистема",
                 valveNumber = null,
-                status = "В резерве",
+                status = "Хранение",
                 additionalInfo = "Запасной ресивер. Прошел гидроиспытания 15.11.2023",
                 photoPath = null,
                 photos = null

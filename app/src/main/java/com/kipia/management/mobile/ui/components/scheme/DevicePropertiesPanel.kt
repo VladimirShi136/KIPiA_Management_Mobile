@@ -7,10 +7,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
+import com.kipia.management.mobile.ui.theme.DeviceStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -235,7 +235,9 @@ fun DeviceInfoSection(device: Device) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Статус
+            // Статус - используем DeviceStatus
+            val deviceStatus = DeviceStatus.fromString(device.status)
+
             AssistChip(
                 onClick = {},
                 label = {
@@ -245,13 +247,7 @@ fun DeviceInfoSection(device: Device) {
                     )
                 },
                 colors = AssistChipDefaults.assistChipColors(
-                    containerColor = when (device.status) {
-                        "В работе" -> Color(0xFF4CAF50).copy(alpha = 0.2f)
-                        "На ремонте" -> Color(0xFFFF9800).copy(alpha = 0.2f)
-                        "Списан" -> Color(0xFFF44336).copy(alpha = 0.2f)
-                        "В резерве" -> Color(0xFF9E9E9E).copy(alpha = 0.2f)
-                        else -> Color.Gray.copy(alpha = 0.2f)
-                    }
+                    containerColor = deviceStatus.backgroundColor
                 )
             )
 

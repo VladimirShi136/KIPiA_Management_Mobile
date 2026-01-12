@@ -16,6 +16,7 @@ import com.kipia.management.mobile.ui.screens.photos.PhotosScreen
 import com.kipia.management.mobile.ui.screens.reports.ReportsScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
+import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 
 @Composable
@@ -87,7 +88,7 @@ fun KIPiANavHost(
         }
 
         // Редактор схем
-        composable("scheme_editor/{schemeId?}") { backStackEntry ->
+        composable("scheme_editor/{schemeId}") { backStackEntry ->
             val schemeId = backStackEntry.arguments?.getString("schemeId")?.toIntOrNull()
 
             SchemeEditorScreen(
@@ -135,6 +136,11 @@ fun KIPiANavHost(
                     navController.popBackStack()
                 }
             )
+        }
+
+        // Экран настроек
+        composable("settings") {
+            SettingsScreen(navController = navController)
         }
     }
 }

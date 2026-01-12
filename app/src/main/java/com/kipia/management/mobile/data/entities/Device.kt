@@ -5,6 +5,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.google.gson.Gson
+import com.kipia.management.mobile.ui.theme.DeviceStatus
 
 
 /**
@@ -68,13 +69,8 @@ data class Device(
     val photos: String?  // JSON с путями к фото
 ) {
     companion object {
-        // Статусы из вашего кода
-        val STATUSES = listOf(
-            "В работе",
-            "На ремонте",
-            "Списан",
-            "В резерве"
-        )
+        // Статусы из единого источника
+        val STATUSES = DeviceStatus.ALL_STATUSES
 
         // Типы приборов из вашего кода
         val TYPES = listOf(
@@ -129,16 +125,6 @@ data class Device(
 
     fun getDisplayName(): String {
         return name ?: "$type №$inventoryNumber"
-    }
-
-    fun getStatusColorHex(): String {
-        return when (status) {
-            "В работе" -> "#4CAF50"      // Зеленый
-            "На ремонте" -> "#FF9800"    // Оранжевый
-            "Списан" -> "#F44336"        // Красный
-            "В резерве" -> "#9E9E9E"     // Серый
-            else -> "#757575"
-        }
     }
 
     fun getMainPhoto(): String? {
@@ -201,21 +187,4 @@ data class Device(
             setPhotoList(updatedPhotos)
         }
     }
-
-    fun Device.getStatusColor(): Color {
-        return when (status) {
-            "В работе" -> Color(0xFF4CAF50)      // Зеленый
-            "На ремонте" -> Color(0xFFFF9800)    // Оранжевый
-            "Списан" -> Color(0xFFF44336)        // Красный
-            "В резерве" -> Color(0xFF9E9E9E)     // Серый
-            else -> Color.Gray
-        }
-    }
-
-    fun Device.getStatusColorCompose(): androidx.compose.ui.graphics.Color {
-        return androidx.compose.ui.graphics.Color(
-            android.graphics.Color.parseColor(getStatusColorHex())
-        )
-    }
-
 }

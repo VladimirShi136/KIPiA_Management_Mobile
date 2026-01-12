@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">KIPiA_Management_Mobile</string>
+    <string name="app_name">Учет приборов КИПиА</string>
 
     <!-- Навигация -->
     <string name="title_devices">Приборы</string>
@@ -36,9 +36,9 @@
 
     <!-- Статусы -->
     <string name="status_in_work">В работе</string>
-    <string name="status_repair">В ремонте</string>
-    <string name="status_reserve">В резерве</string>
-    <string name="status_decommissioned">Списан</string>
+    <string name="status_storage">Хранение</string>
+    <string name="status_lost">Утерян</string>
+    <string name="status_spoiled">Испорчен</string>
 
     <!-- Диалоги -->
     <string name="dialog_delete_title">Удаление прибора</string>
@@ -53,7 +53,7 @@
     <string name="no_photo_available">Нет фотографии</string>
     <string name="add_photo">Нажмите чтобы добавить</string>
     <string name="device_photo">Фотография прибора</string>
-    <string name="photo_gallery">Галерея фото</string>
+    <string name="photo_gallery">Галерея</string>
     <string name="take_photo">Сделать фото</string>
     <string name="choose_from_gallery">Выбрать из галереи</string>
     <string name="camera_permission_required">Для съемки фото требуется разрешение камеры</string>
@@ -96,4 +96,16 @@
     <string name="delete_scheme_confirmation">Удалить схему \"%s\"?</string>
     <string name="scheme_created">Схема создана</string>
     <string name="scheme_deleted">Схема удалена</string>
+
+    <!-- Настройки -->
+    <string name="settings">Настройки</string>
+    <string name="theme">Тема</string>
+    <string name="system_theme">Системная</string>
+    <string name="light_theme">Светлая</string>
+    <string name="dark_theme">Темная</string>
+    <string name="dynamic_colors">Динамические цвета</string>
+    <string name="dynamic_colors_desc">Использовать цвета обоев системы</string>
+    <string name="about">О приложении</string>
+    <string name="version">Версия</string>
+    <string name="developer">Разработчик</string>
 </resources>

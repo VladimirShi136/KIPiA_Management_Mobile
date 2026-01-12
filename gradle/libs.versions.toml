@@ -18,6 +18,7 @@ room = "2.6.1"
 hilt = "2.50"
 coroutines = "1.7.3"
 gson = "2.10.1"
+datastore = "1.1.0"
 
 # Jetpack Compose
 compose-bom = "2024.05.00"
@@ -38,6 +39,10 @@ espresso = "3.5.1"
 [libraries]
 # Base
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+
+# DataStore
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
 # Lifecycle
 lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }

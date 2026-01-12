@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.viewmodel
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
@@ -19,6 +20,7 @@ class DeviceDetailViewModel @Inject constructor(
     private val _device = MutableStateFlow<Device?>(null)
     val device: StateFlow<Device?> = _device
 
+    // Flow для получения списка фото
     val photos = _device.map { device ->
         device?.getPhotoList() ?: emptyList()
     }
@@ -66,19 +68,35 @@ class DeviceDetailViewModel @Inject constructor(
     fun shareDeviceInfo() {
         // TODO: Реализовать обмен информацией о приборе
         // Можно использовать Intent для отправки через другие приложения
+        val device = _device.value ?: return
+
+        val shareText = buildString {
+            appendLine("📊 Информация о приборе")
+            appendLine("📌 Тип: ${device.type}")
+            appendLine("🏷️ Название: ${device.name ?: "Не указано"}")
+            appendLine("🔢 Инв. номер: ${device.inventoryNumber}")
+            appendLine("📍 Место: ${device.location}")
+            appendLine("📊 Статус: ${device.status}")
+            device.manufacturer?.let { appendLine("🏭 Производитель: $it") }
+            device.year?.let { appendLine("📅 Год выпуска: $it") }
+            device.measurementLimit?.let { appendLine("📏 Предел измерений: $it") }
+            device.accuracyClass?.let { appendLine("🎯 Класс точности: $it") }
+        }
+
+        // Здесь будет логика отправки через Intent
+        println("Текст для отправки: $shareText")
     }
 
-    private suspend fun loadFavoriteStatus(deviceId: Int): Boolean {
+    private fun loadFavoriteStatus(deviceId: Int): Boolean {
         // TODO: Загрузить статус из SharedPreferences или БД
+        // Временная реализация:
         return false
     }
 
-    private suspend fun saveFavoriteStatus(deviceId: Int, isFavorite: Boolean) {
+    private fun saveFavoriteStatus(deviceId: Int, isFavorite: Boolean) {
         // TODO: Сохранить статус в SharedPreferences или БД
-    }
-
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        // Временная реализация:
+        println("Сохранение статуса избранного: deviceId=$deviceId, isFavorite=$isFavorite")
     }
 }
 

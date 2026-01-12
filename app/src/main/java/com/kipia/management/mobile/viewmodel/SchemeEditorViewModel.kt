@@ -35,7 +35,11 @@ class SchemeEditorViewModel @Inject constructor(
 ) : ViewModel() {
 
     // Получаем schemeId из SavedStateHandle
-    private val schemeId: Int? = savedStateHandle["schemeId"]
+    private val schemeId: Int? = run {
+        // Получаем как String, конвертируем в Int
+        val schemeIdString = savedStateHandle.get<String>("schemeId")
+        schemeIdString?.toIntOrNull()
+    }
 
     private val commandManager = CommandManager()
     private val _uiState = MutableStateFlow(SchemeEditorUiState())
