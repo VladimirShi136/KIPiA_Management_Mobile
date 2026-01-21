@@ -3,6 +3,7 @@ package com.kipia.management.mobile.data.entities
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 
 @Entity(
     tableName = "device_locations",
@@ -20,6 +21,10 @@ import androidx.room.ForeignKey
             childColumns = ["scheme_id"],
             onDelete = ForeignKey.CASCADE
         )
+    ],
+    indices =[
+        Index(value = ["device_id"]),
+        Index(value = ["scheme_id"])
     ]
 )
 data class DeviceLocation(

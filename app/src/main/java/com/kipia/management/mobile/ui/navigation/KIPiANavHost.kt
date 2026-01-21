@@ -17,11 +17,14 @@ import com.kipia.management.mobile.ui.screens.reports.ReportsScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
 import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
+import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 
 @Composable
 fun KIPiANavHost(
     navController: NavHostController = rememberNavController(),
+    updateBottomNavVisibility: (Boolean) -> Unit = {},
+    devicesViewModel: DevicesViewModel, // ← ПРИНИМАЕМ
     modifier: Modifier = Modifier,
     startDestination: String = BottomNavItem.Devices.route
 ) {
@@ -30,9 +33,10 @@ fun KIPiANavHost(
         startDestination = startDestination,
         modifier = modifier
     ) {
-        // Экран устройств
+        // Экран устройств — ✅ ТУТ ПЕРЕДАЁМ devicesViewModel
         composable(BottomNavItem.Devices.route) {
             DevicesScreen(
+                updateBottomNavVisibility = updateBottomNavVisibility,
                 onNavigateToDeviceDetail = { deviceId ->
                     navController.navigate("device_detail/$deviceId")
                 },
@@ -43,17 +47,18 @@ fun KIPiANavHost(
                         "device_edit"
                     }
                     navController.navigate(route)
-                }
+                },
+                viewModel = devicesViewModel, // ✅ ✅ ✅ ВАЖНО: ПЕРЕДАЁМ СЮДА!
+                deleteViewModel = hiltViewModel() // ← это отдельный ViewModel — оставляем
             )
         }
 
         // Детальный экран устройства
         composable("device_detail/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
-
             if (deviceId != null) {
                 DeviceDetailScreen(
-                    deviceId = deviceId, // ← передаем deviceId как параметр
+                    deviceId = deviceId,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEdit = {
                         navController.navigate("device_edit/$deviceId")
@@ -62,12 +67,20 @@ fun KIPiANavHost(
             }
         }
 
-        // Экран редактирования устройства
+        // Экран редактирования устройства (новый прибор — без ID)
+        composable("device_edit") {
+            DeviceEditScreen(
+                deviceId = null,
+                onNavigateBack = { navController.popBackStack() },
+                onSaveSuccess = { navController.popBackStack() }
+            )
+        }
+
+        // Экран редактирования существующего прибора (с ID)
         composable("device_edit/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
-
             DeviceEditScreen(
-                deviceId = deviceId, // deviceId может быть null для нового прибора
+                deviceId = deviceId,
                 onNavigateBack = { navController.popBackStack() },
                 onSaveSuccess = { navController.popBackStack() }
             )
@@ -90,7 +103,6 @@ fun KIPiANavHost(
         // Редактор схем
         composable("scheme_editor/{schemeId}") { backStackEntry ->
             val schemeId = backStackEntry.arguments?.getString("schemeId")?.toIntOrNull()
-
             SchemeEditorScreen(
                 schemeId = schemeId,
                 onNavigateBack = { navController.popBackStack() },
@@ -112,14 +124,11 @@ fun KIPiANavHost(
             )
         }
 
-        // Полноэкранный просмотр фото (ОДИН роут, а не два!)
+        // Полноэкранный просмотр фото
         composable("fullscreen_photo/{photoPath}") { backStackEntry ->
             val photoPath = Uri.decode(backStackEntry.arguments?.getString("photoPath") ?: "")
             val deviceName = Uri.decode(backStackEntry.arguments?.getString("deviceName") ?: "Прибор")
-
-            // Создаем ViewModel для управления фото
-            val photoDetailViewModel: PhotoDetailViewModel = hiltViewModel()
-
+            val photoDetailViewModel: PhotoDetailViewModel = hiltViewModel() // ← Правильно — отдельный ViewModel
             FullScreenPhotoScreen(
                 photoPath = photoPath,
                 deviceName = deviceName,
@@ -132,7 +141,6 @@ fun KIPiANavHost(
                 },
                 onDelete = {
                     photoDetailViewModel.deletePhoto(photoPath)
-                    // После удаления возвращаемся назад
                     navController.popBackStack()
                 }
             )

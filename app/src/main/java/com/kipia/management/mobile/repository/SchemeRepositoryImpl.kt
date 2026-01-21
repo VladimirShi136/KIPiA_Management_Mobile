@@ -22,4 +22,8 @@ class SchemeRepositoryImpl @Inject constructor(
     override suspend fun deleteScheme(scheme: Scheme) = schemeDao.deleteScheme(scheme)
 
     override suspend fun deleteSchemeById(id: Int) = schemeDao.deleteSchemeById(id)
+
+    override suspend fun getSchemeByName(name: String): Scheme? {
+        return schemeDao.getSchemeByName(name)
+    }
 }

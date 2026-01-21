@@ -177,14 +177,6 @@ fun DeviceEditScreen(
                     }
                 }
             },
-            onMainPhotoSelected = { uri ->
-                scope.launch {
-                    val photoPath = viewModel.savePhotoFromUri(uri)
-                    photoPath?.let { path ->
-                        viewModel.updateDevice { it.copy(photoPath = path) }
-                    }
-                }
-            },
             onPhotoDeleted = { photoIndex ->
                 val currentPhotos = device.getPhotoList().toMutableList()
                 if (currentPhotos.isNotEmpty() && photoIndex < currentPhotos.size) {
@@ -219,23 +211,21 @@ fun DeviceEditForm(
     onStatusChanged: (String) -> Unit,
     onAdditionalInfoChanged: (String) -> Unit,
     onPhotoSelected: (Uri) -> Unit,
-    onMainPhotoSelected: (Uri) -> Unit,
     onPhotoDeleted: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: DeviceEditViewModel = hiltViewModel()
 ) {
     var isTypeExpanded by remember { mutableStateOf(false) }
     var isStatusExpanded by remember { mutableStateOf(false) }
+
+    // ★★★★ ИСПРАВЛЯЕМ: Используем StateFlow из ViewModel ★★★★
+    val isLocationDropdownExpanded by viewModel.isLocationDropdownExpanded.collectAsStateWithLifecycle()
+    val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let(onPhotoSelected)
-    }
-
-    val mainPhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        uri?.let(onMainPhotoSelected)
     }
 
     Column(
@@ -245,9 +235,9 @@ fun DeviceEditForm(
         // Основное фото
         DeviceEditSectionTitle("Основное фото")
         DeviceEditMainPhotoSection(
-            photoPath = device.photoPath,
+            photos = device.getPhotoList(),
             onSelectPhoto = {
-                mainPhotoPicker.launch(
+                photoPicker.launch(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                 )
             }
@@ -387,14 +377,54 @@ fun DeviceEditForm(
         // Место установки и статус
         DeviceEditSectionTitle("Место и статус")
 
-        OutlinedTextField(
-            value = device.location,
-            onValueChange = onLocationChanged,
-            label = { Text("Место установки *") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = uiState.locationError != null
-        )
+        // ★★★★ ОБНОВЛЯЕМ: Поле местоположения с выпадающим списком ★★★★
+        ExposedDropdownMenuBox(
+            expanded = isLocationDropdownExpanded,
+            onExpandedChange = { expanded ->
+                if (expanded) {
+                    viewModel.expandLocationDropdown()
+                } else {
+                    viewModel.collapseLocationDropdown()
+                }
+            }
+        ) {
+            OutlinedTextField(
+                value = device.location,
+                onValueChange = { newValue ->
+                    onLocationChanged(newValue)
+                },
+                label = { Text("Место установки *") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = isLocationDropdownExpanded
+                    )
+                },
+                isError = uiState.locationError != null,
+                placeholder = {
+                    if (allLocations.isNotEmpty()) {
+                        Text("Введите или выберите из списка...")
+                    }
+                }
+            )
+
+            ExposedDropdownMenu(
+                expanded = isLocationDropdownExpanded && allLocations.isNotEmpty(),
+                onDismissRequest = { viewModel.collapseLocationDropdown() }
+            ) {
+                allLocations.forEach { location ->
+                    DropdownMenuItem(
+                        text = { Text(location) },
+                        onClick = {
+                            onLocationChanged(location)
+                            viewModel.collapseLocationDropdown()
+                        }
+                    )
+                }
+            }
+        }
 
         uiState.locationError?.let { error ->
             Text(
@@ -506,9 +536,11 @@ fun DeviceEditSectionTitle(text: String) {
 
 @Composable
 fun DeviceEditMainPhotoSection(
-    photoPath: String?,
+    photos: List<String>, // Принимаем список фото
     onSelectPhoto: () -> Unit
 ) {
+    val mainPhoto = photos.firstOrNull() // Первое фото - основное
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -516,16 +548,16 @@ fun DeviceEditMainPhotoSection(
         shape = MaterialTheme.shapes.medium
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (photoPath != null) {
+            if (mainPhoto != null) {
                 AsyncImage(
-                    model = photoPath,
+                    model = mainPhoto,
                     contentDescription = "Основное фото",
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center // ← Исправлено
+                    contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -549,12 +581,12 @@ fun DeviceEditMainPhotoSection(
             IconButton(
                 onClick = onSelectPhoto,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd) // ← ИСПРАВЛЕНО (без as Alignment.Horizontal)
+                    .align(Alignment.BottomEnd)
                     .padding(8.dp)
             ) {
                 Icon(
-                    if (photoPath != null) Icons.Default.Edit else Icons.Default.Add,
-                    contentDescription = if (photoPath != null) "Изменить фото" else "Добавить фото",
+                    if (mainPhoto != null) Icons.Default.Edit else Icons.Default.Add,
+                    contentDescription = if (mainPhoto != null) "Изменить фото" else "Добавить фото",
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

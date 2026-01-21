@@ -1,23 +1,23 @@
-// viewmodel/SchemesViewModel.kt
 package com.kipia.management.mobile.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.repository.SchemeRepository
 import com.kipia.management.mobile.ui.screens.schemes.SortBy
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SchemesViewModel @Inject constructor(
-    private val repository: SchemeRepository
+    private val repository: SchemeRepository,
+    private val deviceRepository: DeviceRepository
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -78,34 +78,43 @@ class SchemesViewModel @Inject constructor(
         _sortBy.value = sortBy
     }
 
-    fun deleteScheme(scheme: Scheme) {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                repository.deleteScheme(scheme)
-            } catch (e: Exception) {
-                _error.value = "Ошибка удаления: ${e.message}"
-            } finally {
-                _isLoading.value = false
+    suspend fun deleteScheme(scheme: Scheme): DeleteResult {
+        return try {
+            _isLoading.value = true
+
+            // ★★★★ ПРОВЕРКА: ЕСТЬ ЛИ ПРИБОРЫ С ЭТОЙ ЛОКАЦИЕЙ? ★★★★
+            val devices = deviceRepository.getAllDevicesSync()
+            val deviceCount = devices.count { it.location == scheme.name }
+
+            if (deviceCount > 0) {
+                return DeleteResult.Error("Нельзя удалить схему '$scheme.name'. " +
+                        "К ней привязано $deviceCount приборов. " +
+                        "Сначала удалите или переместите приборы.")
             }
+
+            // Если приборов нет - удаляем схему
+            repository.deleteScheme(scheme)
+            DeleteResult.Success
+        } catch (e: Exception) {
+            DeleteResult.Error(e.message ?: "Ошибка удаления")
+        } finally {
+            _isLoading.value = false
         }
     }
 
-    fun loadSchemes() {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                // Загрузка происходит через Flow автоматически
-            } catch (e: Exception) {
-                _error.value = "Ошибка загрузки: ${e.message}"
-            } finally {
-                _isLoading.value = false
+    // Дополнительный метод для отображения статуса
+    fun getSchemesWithStatus(): Flow<List<SchemeWithStatus>> {
+        return repository.getAllSchemes()
+            .combine(deviceRepository.getAllDevices()) { schemes, devices ->
+                schemes.map { scheme ->
+                    val deviceCount = devices.count { it.location == scheme.name }
+                    SchemeWithStatus(
+                        scheme = scheme,
+                        deviceCount = deviceCount,
+                        canDelete = deviceCount == 0
+                    )
+                }
             }
-        }
-    }
-
-    fun clearError() {
-        _error.value = null
     }
 }
 
@@ -115,3 +124,14 @@ data class SchemesUiState(
     val isLoading: Boolean = false,
     val error: String? = null
 )
+
+data class SchemeWithStatus(
+    val scheme: Scheme,
+    val deviceCount: Int,
+    val canDelete: Boolean
+)
+
+sealed class DeleteResult {
+    object Success : DeleteResult()
+    data class Error(val message: String) : DeleteResult()
+}

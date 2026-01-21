@@ -20,9 +20,11 @@ import com.kipia.management.mobile.repository.SchemeRepository
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShapeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -89,10 +91,17 @@ class SchemeEditorViewModel @Inject constructor(
 
     private fun loadDevices() {
         viewModelScope.launch {
-            _devices.value = deviceRepository.getAllDevicesSync()
+            // ★★★★ ЗАГРУЖАЕМ ПРИБОРЫ ПО ЛОКАЦИИ СХЕМЫ ★★★★
+            val schemeLocation = _uiState.value.scheme.name
+            if (schemeLocation.isNotBlank()) {
+                // Используем отфильтрованные приборы для текущей схемы
+                _devices.value = getDevicesForCurrentSchemeLocally()
+            } else {
+                // Если схема новая (без локации), загружаем все приборы
+                _devices.value = deviceRepository.getAllDevicesSync()
+            }
         }
     }
-
     fun updateSchemeName(name: String) {
         _uiState.update { state ->
             state.copy(
@@ -121,33 +130,60 @@ class SchemeEditorViewModel @Inject constructor(
     }
 
     fun addDevice(deviceId: Int, position: Offset) {
-        _uiState.update { state ->
-            val existingDevice = state.schemeData.devices.find { it.deviceId == deviceId }
-            if (existingDevice != null) {
-                // Обновляем позицию существующего устройства
-                val updatedDevices = state.schemeData.devices.map {
-                    if (it.deviceId == deviceId) {
-                        it.copy(x = position.x, y = position.y)
-                    } else it
-                }
-                state.copy(
-                    schemeData = state.schemeData.copy(devices = updatedDevices),
-                    isDirty = true
-                )
-            } else {
-                // Добавляем новое устройство
-                val newDevice = SchemeDevice(
-                    deviceId = deviceId,
-                    x = position.x,
-                    y = position.y,
-                    zIndex = state.schemeData.devices.size
-                )
-                val updatedDevices = state.schemeData.devices + newDevice
-                state.copy(
-                    schemeData = state.schemeData.copy(devices = updatedDevices),
-                    isDirty = true
-                )
+        viewModelScope.launch {
+            // ★★★★ ИСПОЛЬЗУЕМ СИНХРОННЫЙ МЕТОД ★★★★
+            val device = deviceRepository.getDeviceByIdSync(deviceId) ?: return@launch
+
+            // ★★★★ ЯВНАЯ ПРОВЕРКА ЛОКАЦИИ ★★★★
+            val schemeLocation = _uiState.value.scheme.name
+            if (schemeLocation.isNotBlank() && device.location != schemeLocation) {
+                return@launch
             }
+
+            _uiState.update { state ->
+                val existingDevice = state.schemeData.devices.find { it.deviceId == deviceId }
+                if (existingDevice != null) {
+                    val updatedDevices = state.schemeData.devices.map {
+                        if (it.deviceId == deviceId) {
+                            it.copy(x = position.x, y = position.y)
+                        } else it
+                    }
+                    state.copy(
+                        schemeData = state.schemeData.copy(devices = updatedDevices),
+                        isDirty = true
+                    )
+                } else {
+                    val newDevice = SchemeDevice(
+                        deviceId = deviceId,
+                        x = position.x,
+                        y = position.y,
+                        zIndex = state.schemeData.devices.size
+                    )
+                    val updatedDevices = state.schemeData.devices + newDevice
+                    state.copy(
+                        schemeData = state.schemeData.copy(devices = updatedDevices),
+                        isDirty = true
+                    )
+                }
+            }
+        }
+    }
+
+    fun getDevicesForCurrentScheme(): Flow<List<Device>> {
+        return deviceRepository.getAllDevices()
+            .map { devices ->
+                val schemeLocation = _uiState.value.scheme.name
+                devices.filter { it.location == schemeLocation }
+            }
+    }
+
+    private suspend fun getDevicesForCurrentSchemeLocally(): List<Device> {
+        val schemeLocation = _uiState.value.scheme.name
+        return if (schemeLocation.isNotBlank()) {
+            deviceRepository.getAllDevicesSync()
+                .filter { it.location == schemeLocation }
+        } else {
+            emptyList()
         }
     }
 

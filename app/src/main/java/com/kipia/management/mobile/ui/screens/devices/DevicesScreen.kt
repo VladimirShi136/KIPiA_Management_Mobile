@@ -1,6 +1,10 @@
 package com.kipia.management.mobile.ui.screens.devices
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -11,232 +15,172 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.ui.theme.DeviceStatusColors
+import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * Основной экран для отображения и управления приборами
- *
- * Ключевые улучшения:
- * 1. Верхняя панель статистики с цветовой кодировкой
- * 2. Горизонтально прокручиваемая таблица с фиксированными колонками
- * 3. Сортировка по всем колонкам
- * 4. Быстрая фильтрация по конкретной колонке
- * 5. Подсветка найденного текста при поиске
- * 6. Компактные бейджи статусов
- * 7. LazyColumn для производительности
- * 8. Контекстное меню действий для каждого прибора
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTextApi::class)
 @Composable
 fun DevicesScreen(
+    updateBottomNavVisibility: (Boolean) -> Unit = {},
     onNavigateToDeviceDetail: (Int) -> Unit,
     onNavigateToDeviceEdit: (Int?) -> Unit,
-    viewModel: DevicesViewModel = hiltViewModel()
+    viewModel: DevicesViewModel,
+    deleteViewModel: DeviceDeleteViewModel = hiltViewModel()
 ) {
     val devices by viewModel.devices.collectAsStateWithLifecycle()
-    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchQuery = uiState.searchQuery
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var sortColumn by remember { mutableStateOf(SortColumn.INVENTORY_NUMBER) }
     var sortAscending by remember { mutableStateOf(true) }
-    var quickFilterColumn by remember { mutableStateOf<SortColumn?>(null) }
-    var quickFilterText by remember { mutableStateOf("") }
+    val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
+    val verticalScrollState = rememberLazyListState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Приборы")
-                        AnimatedVisibility(visible = searchQuery.isNotEmpty()) {
-                            Text(
-                                text = " • Поиск: \"$searchQuery\"",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    // Поиск
-                    var showSearch by remember { mutableStateOf(false) }
-                    if (showSearch) {
-                        SearchField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.setSearchQuery(it) },
-                            onClose = {
-                                showSearch = false
-                                viewModel.setSearchQuery("")
-                            }
-                        )
-                    } else {
-                        IconButton(onClick = { showSearch = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Поиск")
-                        }
-                    }
+    // Логика для bottom navigation
+    val shouldShowBottomNav by remember {
+        derivedStateOf {
+            with(verticalScrollState) {
+                // 1. Если список пустой - показываем навигацию
+                if (layoutInfo.totalItemsCount == 0) return@derivedStateOf true
 
-                    // Фильтр по типу
-                    TypeFilterDropdown(
-                        currentFilter = uiState.typeFilter,
-                        onFilterSelected = { viewModel.setTypeFilter(it) }
-                    )
+                // 2. Если первый видимый элемент не первый в списке - скрываем
+                if (firstVisibleItemIndex > 0) return@derivedStateOf false
 
-                    // Фильтр по статусу
-                    StatusFilterDropdown(
-                        currentFilter = uiState.statusFilter,
-                        onFilterSelected = { viewModel.setStatusFilter(it) }
-                    )
-                }
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onNavigateToDeviceEdit(null) },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить прибор")
+                // 3. Для первого элемента проверяем offset
+                // firstVisibleItemScrollOffset - это сколько пикселей ПРОСКРОЛЛИЛИ
+                // Если мы не прокручивали (offset == 0) - показываем
+                if (firstVisibleItemScrollOffset == 0) return@derivedStateOf true
+
+                // 4. Если немного прокрутили - проверяем видимость
+                val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
+                if (firstVisibleItem == null) return@derivedStateOf true
+
+                // Offset первого элемента относительно видимой области
+                // Если >= -5px, считаем что элемент "достаточно виден"
+                firstVisibleItem.offset >= -10
             }
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { paddingValues ->
+        }
+    }
+
+    // ★★★★ КНОПКА "ВВЕРХ" ★★★★
+    val showScrollToTopButton by remember {
+        derivedStateOf {
+            !shouldShowBottomNav
+        }
+    }
+
+    // Обновляем состояние
+    LaunchedEffect(shouldShowBottomNav) {
+        updateBottomNavVisibility(shouldShowBottomNav)
+    }
+
+    // Функция для удаления устройства
+    val deleteDeviceAction: (Device) -> Unit = { device ->
+        scope.launch {
+            val showDialog = deleteViewModel.checkAndShowDialog(device)
+            if (!showDialog) {
+                viewModel.deleteDevice(device)
+                snackbarHostState.showSnackbar("Прибор '${device.getDisplayName()}' удален")
+            }
+        }
+    }
+
+    // ★★★★ ТОЛЬКО СОРТИРОВКА (фильтрация в ViewModel) ★★★★
+    val sortedDevices = remember(
+        devices, // ViewModel УЖЕ отфильтровал устройства
+        sortColumn,
+        sortAscending
+    ) {
+        devices.sortedWith(
+            compareBy<Device> { device ->
+                when (sortColumn) {
+                    SortColumn.TYPE -> device.type
+                    SortColumn.NAME -> device.name ?: ""
+                    SortColumn.INVENTORY_NUMBER -> device.inventoryNumber
+                    SortColumn.MEASUREMENT_LIMIT -> device.measurementLimit ?: ""
+                    SortColumn.LOCATION -> device.location
+                    SortColumn.VALVE_NUMBER -> device.valveNumber ?: ""
+                    SortColumn.STATUS -> device.status
+                }
+            }.let { comparator ->
+                if (!sortAscending) comparator.reversed() else comparator
+            }
+        )
+    }
+
+    // ★★★★ ВСЁ В ОДНОМ Box ★★★★
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(horizontal = 5.dp)
+                .windowInsetsPadding(
+                    WindowInsets.navigationBars
+                        .only(WindowInsetsSides.Bottom)
+                        .add(WindowInsets(bottom = 0.dp))
+                )
         ) {
-            // СТАТИСТИКА
+            // ★★★★ СТАТИСТИКА ★★★★
             DeviceStatistics(
                 devices = devices,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .padding(vertical = 4.dp)
             )
 
-            // Показываем активные фильтры
-            if (uiState.typeFilter != null || uiState.statusFilter != null) {
+            // ★★★★ АКТИВНЫЕ ФИЛЬТРЫ ★★★★
+            if (searchQuery.isNotEmpty() || uiState.locationFilter != null || uiState.statusFilter != null) {
                 ActiveFiltersBadge(
-                    typeFilter = uiState.typeFilter,
+                    searchQuery = searchQuery,
+                    locationFilter = uiState.locationFilter,
                     statusFilter = uiState.statusFilter,
                     onClearFilters = {
-                        viewModel.setTypeFilter(null)
+                        viewModel.setSearchQuery("")
+                        viewModel.setLocationFilter(null)
                         viewModel.setStatusFilter(null)
                     },
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
-            }
-
-            // Быстрая фильтрация по колонке
-            AnimatedVisibility(visible = quickFilterColumn != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Фильтр по ${quickFilterColumn?.displayName ?: ""}:",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = quickFilterText,
-                        onValueChange = { quickFilterText = it },
-                        placeholder = { Text("Введите текст...") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (quickFilterText.isNotEmpty()) {
-                                IconButton(onClick = { quickFilterText = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Очистить")
-                                }
-                            }
-                        }
-                    )
-
-                    IconButton(onClick = {
-                        quickFilterColumn = null
-                        quickFilterText = ""
-                    }) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть фильтр")
-                    }
-                }
-            }
-
-            // Сортированные и отфильтрованные устройства
-            val sortedDevices = remember(devices, sortColumn, sortAscending, quickFilterColumn, quickFilterText) {
-                var result = devices.sortedWith(
-                    compareBy<Device> { device ->
-                        when (sortColumn) {
-                            SortColumn.TYPE -> device.type
-                            SortColumn.NAME -> device.name ?: ""
-                            SortColumn.INVENTORY_NUMBER -> device.inventoryNumber
-                            SortColumn.MEASUREMENT_LIMIT -> device.measurementLimit ?: ""
-                            SortColumn.LOCATION -> device.location
-                            SortColumn.VALVE_NUMBER -> device.valveNumber ?: ""
-                            SortColumn.STATUS -> device.status
-                        }
-                    }.let { comparator ->
-                        if (!sortAscending) comparator.reversed() else comparator
-                    }
-                )
-
-                // Применяем быструю фильтрацию если активна
-                if (quickFilterColumn != null && quickFilterText.isNotEmpty()) {
-                    result = result.filter { device ->
-                        val fieldValue = when (quickFilterColumn) {
-                            SortColumn.TYPE -> device.type
-                            SortColumn.NAME -> device.name ?: ""
-                            SortColumn.INVENTORY_NUMBER -> device.inventoryNumber
-                            SortColumn.MEASUREMENT_LIMIT -> device.measurementLimit ?: ""
-                            SortColumn.LOCATION -> device.location
-                            SortColumn.VALVE_NUMBER -> device.valveNumber ?: ""
-                            SortColumn.STATUS -> device.status
-                            null -> ""
-                        }
-                        fieldValue.contains(quickFilterText, ignoreCase = true)
-                    }
-                }
-
-                result
             }
 
             when {
                 uiState.isLoading -> {
                     LoadingState()
                 }
+
                 sortedDevices.isEmpty() -> {
                     EmptyDevicesState(
                         onAddDevice = { onNavigateToDeviceEdit(null) }
                     )
                 }
+
                 else -> {
-                    // Таблица устройств с горизонтальной прокруткой
-                    DeviceTable(
+                    DeviceTableWithScroll(
                         devices = sortedDevices,
                         searchQuery = searchQuery,
                         sortColumn = sortColumn,
                         sortAscending = sortAscending,
-                        quickFilterColumn = quickFilterColumn,
+                        verticalScrollState = verticalScrollState,
                         onSortColumn = { column ->
                             if (sortColumn == column) {
                                 sortAscending = !sortAscending
@@ -245,25 +189,131 @@ fun DevicesScreen(
                                 sortAscending = true
                             }
                         },
-                        onQuickFilter = { column ->
-                            quickFilterColumn = if (quickFilterColumn == column) null else column
-                            quickFilterText = ""
-                        },
                         onDeviceClick = { device ->
                             onNavigateToDeviceDetail(device.id)
                         },
                         onEditDevice = { device ->
                             onNavigateToDeviceEdit(device.id)
                         },
-                        onDeleteDevice = { device ->
-                            scope.launch {
-                                viewModel.deleteDevice(device)
-                                snackbarHostState.showSnackbar("Прибор удален")
-                            }
-                        }
+                        onDeleteDevice = deleteDeviceAction,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
                     )
                 }
             }
+        }
+
+        // ★★★★ COLUMN ДЛЯ ВЕРТИКАЛЬНОГО РАСПОЛОЖЕНИЯ КНОПОК ★★★★
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 46.dp,
+                    bottom = 30.dp
+                )
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ★★★★ КНОПКА "ВВЕРХ" (появляется когда навигация скрыта) ★★★★
+            AnimatedVisibility(
+                visible = showScrollToTopButton,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            verticalScrollState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ArrowUpward,
+                        contentDescription = "Наверх",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // ★★★★ КНОПКА ДОБАВЛЕНИЯ ПРИБОРА ★★★★
+            FloatingActionButton(
+                onClick = { onNavigateToDeviceEdit(null) },
+                containerColor = Color(0xFF2ECC71), // Зеленый цвет #2ecc71
+                contentColor = Color.White, // Белый цвет для иконки
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Добавить прибор",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // Snackbar
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
+
+        // ★★★★ ДИАЛОГ УДАЛЕНИЯ ★★★★
+        deleteDialogData?.let { dialogData ->
+            DeviceDeleteDialog(
+                device = dialogData.device,
+                scheme = dialogData.scheme,
+                onDismiss = {
+                    deleteViewModel.dismissDialog()
+                },
+                onConfirm = { deleteScheme ->
+                    scope.launch {
+                        try {
+                            // 1. Удаляем устройство
+                            viewModel.deleteDevice(dialogData.device)
+
+                            // 2. Ждем обновления базы данных
+                            delay(50)
+
+                            // 3. Если выбрано - удаляем схему
+                            var success = false
+                            if (deleteScheme) {
+                                success = viewModel.deleteSchemeIfEmpty(dialogData.scheme.name)
+                            }
+
+                            // 4. Закрываем диалог
+                            deleteViewModel.dismissDialog()
+
+                            // 5. Показываем snackbar после закрытия
+                            delay(100)
+
+                            val message = if (deleteScheme) {
+                                if (success) {
+                                    "Прибор и схема '${dialogData.scheme.name}' удалены"
+                                } else {
+                                    "Прибор удален, но схема '${dialogData.scheme.name}' не была удалена (возможно, остались другие приборы)"
+                                }
+                            } else {
+                                "Прибор '${dialogData.device.getDisplayName()}' удален"
+                            }
+
+                            snackbarHostState.showSnackbar(message)
+
+                        } catch (e: Exception) {
+                            // Все равно закрываем диалог при ошибке
+                            deleteViewModel.dismissDialog()
+                            delay(100)
+                            snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
+                        }
+                    }
+                }
+            )
         }
     }
 }
@@ -276,6 +326,61 @@ enum class SortColumn(val displayName: String) {
     LOCATION("Место установки"),
     VALVE_NUMBER("Номер крана"),
     STATUS("Статус")
+}
+
+@Composable
+fun DeviceDeleteDialog(
+    device: Device,
+    scheme: Scheme,
+    onDismiss: () -> Unit,
+    onConfirm: (deleteScheme: Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Удаление устройства")
+        },
+        text = {
+            Column {
+                Text("Вы удаляете устройство:")
+                Text(
+                    text = "${device.getDisplayName()} (${device.inventoryNumber})",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                Text("Это последнее устройство в локации:")
+                Text(
+                    text = "'${scheme.name}'",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                Text("Что делать со схемой этой локации?")
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(true) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Удалить с схемой")
+            }
+        },
+        dismissButton = {
+            Row {
+                Button(
+                    onClick = { onConfirm(false) },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("Только устройство")
+                }
+                Button(onClick = onDismiss) {
+                    Text("Отмена")
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -299,14 +404,14 @@ fun DeviceStatistics(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Всего приборов
             StatItem(
                 count = total,
                 label = "Всего",
-                color = Color(0xFF213CF1),  // Синий
+                color = Color(0xFF213CF1),
                 modifier = Modifier.weight(1f)
             )
 
@@ -314,7 +419,7 @@ fun DeviceStatistics(
             StatItem(
                 count = inWork,
                 label = "В работе",
-                color = DeviceStatusColors.Working, // Используем цвета из единого источника
+                color = DeviceStatusColors.Working,
                 modifier = Modifier.weight(1f)
             )
 
@@ -371,48 +476,125 @@ fun StatItem(
 }
 
 @Composable
-fun DeviceTable(
+fun DeviceTableWithScroll(
     devices: List<Device>,
     searchQuery: String,
     sortColumn: SortColumn,
     sortAscending: Boolean,
-    quickFilterColumn: SortColumn?,
+    verticalScrollState: LazyListState,
     onSortColumn: (SortColumn) -> Unit,
-    onQuickFilter: (SortColumn) -> Unit,
     onDeviceClick: (Device) -> Unit,
     onEditDevice: (Device) -> Unit,
     onDeleteDevice: (Device) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val horizontalScrollState = rememberScrollState()
-    val verticalScrollState = rememberLazyListState()
+    val roundedCornerShape = RoundedCornerShape(12.dp)
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Заголовок таблицы
-        TableHeader(
-            sortColumn = sortColumn,
-            sortAscending = sortAscending,
-            quickFilterColumn = quickFilterColumn,
-            onSortColumn = onSortColumn,
-            onQuickFilter = onQuickFilter,
-            horizontalScrollState = horizontalScrollState
-        )
-
-        // Тело таблицы с LazyColumn для виртуализации
-        LazyColumn(
-            state = verticalScrollState,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(devices, key = { it.id }) { device ->
-                TableRow(
-                    device = device,
-                    searchQuery = searchQuery,
-                    onClick = { onDeviceClick(device) },
-                    onEdit = { onEditDevice(device) },
-                    onDelete = { onDeleteDevice(device) },
-                    horizontalScrollState = horizontalScrollState
+        // Заголовок таблицы с верхними скругленными углами
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 12.dp,
+                        topEnd = 12.dp,
+                        bottomStart = 0.dp,
+                        bottomEnd = 0.dp
+                    )
                 )
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            TableHeader(
+                sortColumn = sortColumn,
+                sortAscending = sortAscending,
+                onSortColumn = onSortColumn,
+                horizontalScrollState = horizontalScrollState,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Тело таблицы с LazyColumn и нижними скругленными углами
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 0.dp,
+                        topEnd = 0.dp,
+                        bottomStart = 12.dp,
+                        bottomEnd = 12.dp
+                    )
+                )
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
+        ) {
+            LazyColumn(
+                state = verticalScrollState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 1.dp)
+            ) {
+                itemsIndexed(devices, key = { _, device -> device.id }) { index, device ->
+                    // Для последнего элемента не добавляем divider
+                    if (index < devices.size - 1) {
+                        TableRowWithDivider(
+                            device = device,
+                            searchQuery = searchQuery,
+                            onClick = { onDeviceClick(device) },
+                            onEdit = { onEditDevice(device) },
+                            onDelete = { onDeleteDevice(device) },
+                            horizontalScrollState = horizontalScrollState,
+                            showDivider = true
+                        )
+                    } else {
+                        TableRowWithDivider(
+                            device = device,
+                            searchQuery = searchQuery,
+                            onClick = { onDeviceClick(device) },
+                            onEdit = { onEditDevice(device) },
+                            onDelete = { onDeleteDevice(device) },
+                            horizontalScrollState = horizontalScrollState,
+                            showDivider = false
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun TableRowWithDivider(
+    device: Device,
+    searchQuery: String,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    horizontalScrollState: ScrollState,
+    showDivider: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        TableRow(
+            device = device,
+            searchQuery = searchQuery,
+            onClick = onClick,
+            onEdit = onEdit,
+            onDelete = onDelete,
+            horizontalScrollState = horizontalScrollState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp) // Уменьшенная высота строки
+        )
+        if (showDivider) {
+            Divider(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+            )
         }
     }
 }
@@ -421,17 +603,17 @@ fun DeviceTable(
 fun TableHeader(
     sortColumn: SortColumn,
     sortAscending: Boolean,
-    quickFilterColumn: SortColumn?,
     onSortColumn: (SortColumn) -> Unit,
-    onQuickFilter: (SortColumn) -> Unit,
     horizontalScrollState: ScrollState,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(40.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .horizontalScroll(horizontalScrollState)
+            .horizontalScroll(horizontalScrollState),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. Тип прибора
         TableHeaderCell(
@@ -439,20 +621,16 @@ fun TableHeader(
             width = 120.dp,
             isSorted = sortColumn == SortColumn.TYPE,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.TYPE,
-            onClick = { onSortColumn(SortColumn.TYPE) },
-            onQuickFilter = { onQuickFilter(SortColumn.TYPE) }
+            onClick = { onSortColumn(SortColumn.TYPE) }
         )
 
-        // 2. Модель (Название)
+        // 2. Модель
         TableHeaderCell(
             title = "Модель",
             width = 150.dp,
             isSorted = sortColumn == SortColumn.NAME,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.NAME,
-            onClick = { onSortColumn(SortColumn.NAME) },
-            onQuickFilter = { onQuickFilter(SortColumn.NAME) }
+            onClick = { onSortColumn(SortColumn.NAME) }
         )
 
         // 3. Инв. №
@@ -461,9 +639,7 @@ fun TableHeader(
             width = 100.dp,
             isSorted = sortColumn == SortColumn.INVENTORY_NUMBER,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.INVENTORY_NUMBER,
-            onClick = { onSortColumn(SortColumn.INVENTORY_NUMBER) },
-            onQuickFilter = { onQuickFilter(SortColumn.INVENTORY_NUMBER) }
+            onClick = { onSortColumn(SortColumn.INVENTORY_NUMBER) }
         )
 
         // 4. Предел измерений
@@ -472,9 +648,7 @@ fun TableHeader(
             width = 120.dp,
             isSorted = sortColumn == SortColumn.MEASUREMENT_LIMIT,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.MEASUREMENT_LIMIT,
-            onClick = { onSortColumn(SortColumn.MEASUREMENT_LIMIT) },
-            onQuickFilter = { onQuickFilter(SortColumn.MEASUREMENT_LIMIT) }
+            onClick = { onSortColumn(SortColumn.MEASUREMENT_LIMIT) }
         )
 
         // 5. Место установки
@@ -483,9 +657,7 @@ fun TableHeader(
             width = 120.dp,
             isSorted = sortColumn == SortColumn.LOCATION,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.LOCATION,
-            onClick = { onSortColumn(SortColumn.LOCATION) },
-            onQuickFilter = { onQuickFilter(SortColumn.LOCATION) }
+            onClick = { onSortColumn(SortColumn.LOCATION) }
         )
 
         // 6. Номер крана
@@ -494,9 +666,7 @@ fun TableHeader(
             width = 100.dp,
             isSorted = sortColumn == SortColumn.VALVE_NUMBER,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.VALVE_NUMBER,
-            onClick = { onSortColumn(SortColumn.VALVE_NUMBER) },
-            onQuickFilter = { onQuickFilter(SortColumn.VALVE_NUMBER) }
+            onClick = { onSortColumn(SortColumn.VALVE_NUMBER) }
         )
 
         // 7. Статус
@@ -505,9 +675,7 @@ fun TableHeader(
             width = 100.dp,
             isSorted = sortColumn == SortColumn.STATUS,
             sortAscending = sortAscending,
-            hasQuickFilter = quickFilterColumn == SortColumn.STATUS,
-            onClick = { onSortColumn(SortColumn.STATUS) },
-            onQuickFilter = { onQuickFilter(SortColumn.STATUS) }
+            onClick = { onSortColumn(SortColumn.STATUS) }
         )
 
         // 8. Действия
@@ -532,58 +700,39 @@ fun TableHeaderCell(
     width: androidx.compose.ui.unit.Dp,
     isSorted: Boolean,
     sortAscending: Boolean,
-    hasQuickFilter: Boolean,
     onClick: () -> Unit,
-    onQuickFilter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .width(width)
-            .padding(vertical = 12.dp),
+            .height(40.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick)
-                    .padding(horizontal = 8.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
 
-                Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-                if (isSorted) {
-                    Icon(
-                        if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                        contentDescription = if (sortAscending) "По возрастанию" else "По убыванию",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            // Кнопка быстрой фильтрации
-            IconButton(
-                onClick = onQuickFilter,
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .size(20.dp)
-            ) {
+            if (isSorted) {
                 Icon(
-                    Icons.Default.FilterList,
-                    contentDescription = "Быстрая фильтрация",
-                    modifier = Modifier.size(14.dp),
-                    tint = if (hasQuickFilter) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                    contentDescription = if (sortAscending) "По возрастанию" else "По убыванию",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -606,16 +755,16 @@ fun TableRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(40.dp)
             .clickable(onClick = onClick)
             .background(
                 color = if (device.id % 2 == 0) {
                     MaterialTheme.colorScheme.surface
                 } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
                 }
             )
-            .horizontalScroll(horizontalScrollState)
-            .padding(vertical = 8.dp),
+            .horizontalScroll(horizontalScrollState),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. Тип прибора
@@ -626,7 +775,7 @@ fun TableRow(
             highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         )
 
-        // 2. Модель (Название)
+        // 2. Модель
         TableCell(
             text = device.name ?: "-",
             width = 150.dp,
@@ -666,7 +815,7 @@ fun TableRow(
             highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         )
 
-        // 7. Статус с цветовым индикатором
+        // 7. Статус
         Box(
             modifier = Modifier
                 .width(100.dp)
@@ -679,7 +828,7 @@ fun TableRow(
         Box(
             modifier = Modifier
                 .width(80.dp)
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = 4.dp)
         ) {
             Box {
                 IconButton(
@@ -689,7 +838,7 @@ fun TableRow(
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = "Меню",
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
@@ -740,17 +889,17 @@ fun TableCell(
     width: androidx.compose.ui.unit.Dp,
     searchQuery: String,
     highlightColor: Color,
-    maxLines: Int = 2,
+    maxLines: Int = 1,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .width(width)
+            .height(40.dp)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         if (searchQuery.isNotEmpty() && text.contains(searchQuery, ignoreCase = true)) {
-            // Подсветка найденного текста
             val annotatedString = buildAnnotatedString {
                 val lowerText = text.lowercase()
                 val lowerQuery = searchQuery.lowercase()
@@ -760,10 +909,7 @@ fun TableCell(
                     val index = lowerText.indexOf(lowerQuery, startIndex)
                     if (index == -1) break
 
-                    // Текст до найденного
                     append(text.substring(startIndex, index))
-
-                    // Найденный текст с подсветкой
                     withStyle(
                         SpanStyle(
                             background = highlightColor,
@@ -772,11 +918,9 @@ fun TableCell(
                     ) {
                         append(text.substring(index, index + searchQuery.length))
                     }
-
                     startIndex = index + searchQuery.length
                 }
 
-                // Остаток текста
                 if (startIndex < text.length) {
                     append(text.substring(startIndex))
                 }
@@ -784,7 +928,7 @@ fun TableCell(
 
             Text(
                 text = annotatedString,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
@@ -792,7 +936,7 @@ fun TableCell(
         } else {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
@@ -808,19 +952,25 @@ fun StatusBadgeCompact(status: String) {
     Surface(
         color = deviceStatus.backgroundColor,
         shape = RoundedCornerShape(4.dp),
-        modifier = Modifier.padding(vertical = 2.dp)
+        modifier = Modifier
+            .height(24.dp) // Уменьшенная высота бейджа
+            .padding(vertical = 2.dp)
     ) {
         Text(
-            text = getCompactStatus(status), // Используем исправленную функцию
+            text = getCompactStatus(status),
             color = deviceStatus.textColor,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+            ),
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
-
 
 private fun getCompactStatus(fullStatus: String): String {
     return when (fullStatus) {
@@ -833,196 +983,13 @@ private fun getCompactStatus(fullStatus: String): String {
 }
 
 @Composable
-fun SearchField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text("Поиск приборов...") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null)
-            },
-            trailingIcon = {
-                if (value.isNotEmpty()) {
-                    IconButton(onClick = { onValueChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = "Очистить")
-                    }
-                }
-            }
-        )
-
-        IconButton(onClick = onClose) {
-            Icon(Icons.Default.Close, contentDescription = "Закрыть поиск")
-        }
-    }
-}
-
-@Composable
-fun TypeFilterDropdown(
-    currentFilter: String?,
-    onFilterSelected: (String?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val deviceTypes = remember {
-        listOf(
-            "Манометр",
-            "Термометр",
-            "Датчик давления",
-            "Вольтметр",
-            "Амперметр",
-            "Расходомер",
-            "Таймер",
-            "Датчик температуры"
-        )
-    }
-
-    Box {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier.size(48.dp)
-        ) {
-            Badge(
-                containerColor = if (currentFilter != null) MaterialTheme.colorScheme.primary
-                else Color.Transparent,
-                modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
-            ) {
-                if (currentFilter != null) {
-                    Text("✓", color = Color.White, fontSize = 10.sp)
-                }
-            }
-            Icon(
-                Icons.Default.FilterAlt,
-                contentDescription = "Фильтр по типу",
-                tint = if (currentFilter != null) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        "Все типы",
-                        fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                onClick = {
-                    onFilterSelected(null)
-                    expanded = false
-                }
-            )
-
-            deviceTypes.forEach { type ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            type,
-                            fontWeight = if (currentFilter == type) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    onClick = {
-                        onFilterSelected(type)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun StatusFilterDropdown(
-    currentFilter: String?,
-    onFilterSelected: (String?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val statuses = DeviceStatus.ALL_STATUSES // Используем единый источник
-
-    Box {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier.size(48.dp)
-        ) {
-            Badge(
-                containerColor = if (currentFilter != null) MaterialTheme.colorScheme.primary
-                else Color.Transparent,
-                modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
-            ) {
-                if (currentFilter != null) {
-                    Text("✓", color = Color.White, fontSize = 10.sp)
-                }
-            }
-            Icon(
-                Icons.Default.FilterList,
-                contentDescription = "Фильтр по статусу",
-                tint = if (currentFilter != null) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        "Все статусы",
-                        fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                onClick = {
-                    onFilterSelected(null)
-                    expanded = false
-                }
-            )
-
-            statuses.forEach { status ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StatusBadgeCompact(status = status)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                status,
-                                fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    },
-                    onClick = {
-                        onFilterSelected(status)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun ActiveFiltersBadge(
-    typeFilter: String?,
+    searchQuery: String,
+    locationFilter: String?,
     statusFilter: String?,
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showFilters by remember { mutableStateOf(false) }
-
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
@@ -1052,68 +1019,42 @@ fun ActiveFiltersBadge(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = buildActiveFiltersText(typeFilter, statusFilter),
+                    text = buildActiveFiltersText(searchQuery, locationFilter, statusFilter),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (showFilters) Int.MAX_VALUE else 1,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                if (!showFilters && (typeFilter != null && statusFilter != null)) {
-                    Text(
-                        text = " (ещё...)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
 
-            Row {
-                if (showFilters) {
-                    IconButton(
-                        onClick = { showFilters = false },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ExpandLess,
-                            contentDescription = "Свернуть",
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                } else if (typeFilter != null && statusFilter != null) {
-                    IconButton(
-                        onClick = { showFilters = true },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ExpandMore,
-                            contentDescription = "Развернуть",
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onClearFilters,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Очистить фильтры",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+            IconButton(
+                onClick = onClearFilters,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Очистить фильтры",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
 }
 
-private fun buildActiveFiltersText(typeFilter: String?, statusFilter: String?): String {
+private fun buildActiveFiltersText(
+    searchQuery: String,
+    locationFilter: String?,
+    statusFilter: String?
+): String {
     val filters = mutableListOf<String>()
 
-    if (typeFilter != null) {
-        filters.add("Тип: $typeFilter")
+    if (searchQuery.isNotEmpty()) {
+        filters.add("Поиск: \"$searchQuery\"")
+    }
+
+    if (locationFilter != null) {
+        filters.add("Место: $locationFilter")
     }
 
     if (statusFilter != null) {
@@ -1197,7 +1138,11 @@ fun EmptyDevicesState(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Добавить прибор")
             }

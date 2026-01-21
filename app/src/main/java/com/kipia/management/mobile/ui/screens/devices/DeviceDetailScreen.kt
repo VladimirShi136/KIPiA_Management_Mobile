@@ -121,24 +121,6 @@ fun DeviceDetailContent(
         modifier = modifier
             .verticalScroll(rememberScrollState())
     ) {
-        // Основное фото
-        device.getMainPhoto()?.let { mainPhoto ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = MaterialTheme.shapes.large
-            ) {
-                AsyncImage(
-                    model = mainPhoto,
-                    contentDescription = "Основное фото прибора",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-
         // Информационная карточка
         Card(
             modifier = Modifier

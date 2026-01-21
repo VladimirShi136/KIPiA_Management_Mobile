@@ -13,8 +13,8 @@ import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF006C4C),
-    secondary = Color(0xFF4A6572),
+    primary = Color(0xFF456381),      // Для шапки
+    secondary = Color(0xFF527091),    // Для bottom navigation
     tertiary = Color(0xFF0057D9),
     background = Color(0xFFFDFDFD),
     surface = Color(0xFFFDFDFD),
@@ -25,8 +25,8 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF6ED5A9),
-    secondary = Color(0xFF95B8C7),
+    primary = Color(0xFF1A237E),      // Темно-синий для шапки
+    secondary = Color(0xFF283593),    // Темно-синий для bottom navigation
     tertiary = Color(0xFF6D9EFF),
     background = Color(0xFF1C1B1F),
     surface = Color(0xFF1C1B1F),

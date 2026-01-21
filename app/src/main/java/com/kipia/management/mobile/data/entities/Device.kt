@@ -1,6 +1,5 @@
 package com.kipia.management.mobile.data.entities
 
-import androidx.compose.ui.graphics.Color
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -61,10 +60,6 @@ data class Device(
     @ColumnInfo(name = "additional_info")
     val additionalInfo: String?,
 
-
-    @ColumnInfo(name = "photo_path")
-    val photoPath: String?,  // Основное фото
-
     @ColumnInfo(name = "photos")
     val photos: String?  // JSON с путями к фото
 ) {
@@ -97,7 +92,6 @@ data class Device(
             valveNumber = null,
             status = "В работе",
             additionalInfo = null,
-            photoPath = null,
             photos = null
         )
     }
@@ -125,66 +119,5 @@ data class Device(
 
     fun getDisplayName(): String {
         return name ?: "$type №$inventoryNumber"
-    }
-
-    fun getMainPhoto(): String? {
-        return photoPath ?: getPhotoList().firstOrNull()
-    }
-
-    fun hasPhotos(): Boolean {
-        return !photoPath.isNullOrBlank() || !photos.isNullOrBlank()
-    }
-
-    fun isValid(): Boolean {
-        return type.isNotBlank() &&
-                inventoryNumber.isNotBlank() &&
-                location.isNotBlank()
-    }
-
-    fun copyWithField(
-        fieldName: String,
-        value: Any?
-    ): Device {
-        return when (fieldName) {
-            "type" -> copy(type = value as String)
-            "name" -> copy(name = value as? String)
-            "manufacturer" -> copy(manufacturer = value as? String)
-            "inventoryNumber" -> copy(inventoryNumber = value as String)
-            "year" -> copy(year = value as? Int)
-            "measurementLimit" -> copy(measurementLimit = value as? String)
-            "accuracyClass" -> copy(accuracyClass = value as? Double)
-            "location" -> copy(location = value as String)
-            "valveNumber" -> copy(valveNumber = value as? String)
-            "status" -> copy(status = value as String)
-            "additionalInfo" -> copy(additionalInfo = value as? String)
-            "photoPath" -> copy(photoPath = value as? String)
-            else -> this
-        }
-    }
-
-    fun getPhotoCount(): Int {
-        return getPhotoList().size + if (photoPath != null) 1 else 0
-    }
-
-    fun getAllPhotos(): List<String> {
-        val allPhotos = mutableListOf<String>()
-
-        photoPath?.let { allPhotos.add(it) }
-        allPhotos.addAll(getPhotoList())
-
-        return allPhotos.distinct() // На случай дублирования
-    }
-
-    fun removePhoto(photoPathToRemove: String): Device {
-        return if (this.photoPath == photoPathToRemove) {
-            // Удаляем основное фото
-            this.copy(photoPath = null)
-        } else {
-            // Удаляем из дополнительных фото
-            val updatedPhotos = getPhotoList().toMutableList().apply {
-                remove(photoPathToRemove)
-            }
-            setPhotoList(updatedPhotos)
-        }
     }
 }

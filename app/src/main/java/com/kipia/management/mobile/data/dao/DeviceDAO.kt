@@ -12,6 +12,9 @@ interface DeviceDao {
     @Query("SELECT * FROM devices WHERE id = :id")
     fun getDeviceById(id: Int): Flow<Device?>
 
+    @Query("SELECT * FROM devices WHERE id = :id")
+    suspend fun getDeviceByIdSync(id: Int): Device?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDevice(device: Device)
 
@@ -35,4 +38,11 @@ interface DeviceDao {
 
     @Query("SELECT * FROM devices")
     suspend fun getAllDevicesSync(): List<Device>
+
+    // ★★★★ ДОБАВЛЯЕМ: Получение уникальных местоположений ★★★★
+    @Query("SELECT DISTINCT location FROM devices WHERE location IS NOT NULL AND location != '' ORDER BY location")
+    fun getAllLocations(): Flow<List<String>>
+
+    @Query("SELECT DISTINCT location FROM devices WHERE location IS NOT NULL AND location != '' ORDER BY location")
+    suspend fun getAllLocationsSync(): List<String>
 }

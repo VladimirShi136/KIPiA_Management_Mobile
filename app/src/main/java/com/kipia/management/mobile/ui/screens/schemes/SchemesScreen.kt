@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -19,7 +20,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.viewmodel.DeleteResult
+import com.kipia.management.mobile.viewmodel.SchemeWithStatus
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,8 +31,13 @@ fun SchemesScreen(
     onNavigateToSchemeEditor: (Int?) -> Unit,
     viewModel: SchemesViewModel = hiltViewModel()
 ) {
-    val schemes by viewModel.schemes.collectAsStateWithLifecycle()
+    val schemesWithStatus by viewModel.getSchemesWithStatus()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    var showDeleteDialog by remember { mutableStateOf<Scheme?>(null) }
+    var showError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -62,7 +71,7 @@ fun SchemesScreen(
             uiState.isLoading -> {
                 LoadingState()
             }
-            schemes.isEmpty() -> {
+            schemesWithStatus.isEmpty() -> {
                 EmptySchemesState(
                     onCreateScheme = { onNavigateToSchemeEditor(null) },
                     modifier = Modifier
@@ -72,16 +81,100 @@ fun SchemesScreen(
             }
             else -> {
                 SchemesList(
-                    schemes = schemes,
+                    schemesWithStatus = schemesWithStatus,
                     searchQuery = uiState.searchQuery,
                     onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
                     onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                    onDeleteScheme = { scheme -> viewModel.deleteScheme(scheme) },
+                    onDeleteScheme = { scheme ->
+                        // ★★★★ ПРОВЕРЯЕМ МОЖНО ЛИ УДАЛИТЬ ★★★★
+                        if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
+                            showDeleteDialog = scheme
+                        } else {
+                            showError = "Нельзя удалить схему '$scheme.name'. " +
+                                    "К ней привязаны приборы."
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 )
             }
+        }
+
+        // Диалог подтверждения удаления
+        if (showDeleteDialog != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = null },
+                title = { Text("Удаление схемы") },
+                text = {
+                    Column {
+                        Text("Вы уверены, что хотите удалить схему:")
+                        Spacer(modifier = Modifier.height(4.dp))
+                        showDeleteDialog?.let { scheme ->
+                            Text(
+                                text = "'${scheme.name}'",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            if (scheme.description?.isNotBlank() == true) {
+                                Text(
+                                    text = "Описание: ${scheme.description}",
+                                    fontStyle = FontStyle.Italic
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Это действие нельзя отменить.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog?.let { scheme ->
+                                scope.launch {
+                                    val result = viewModel.deleteScheme(scheme)
+                                    when (result) {
+                                        is DeleteResult.Success -> {
+                                            // Можно показать Snackbar
+                                        }
+                                        is DeleteResult.Error -> {
+                                            showError = result.message
+                                        }
+                                    }
+                                }
+                            }
+                            showDeleteDialog = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Удалить")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = null }) {
+                        Text("Отмена")
+                    }
+                }
+            )
+        }
+
+        // Ошибка
+        if (showError != null) {
+            AlertDialog(
+                onDismissRequest = { showError = null },
+                title = { Text("Нельзя удалить схему") },
+                text = { Text(showError!!) },
+                confirmButton = {
+                    TextButton(onClick = { showError = null }) {
+                        Text("OK")
+                    }
+                }
+            )
         }
     }
 }
@@ -109,11 +202,9 @@ fun SortMenu(
                     expanded = false
                 },
                 leadingIcon = {
-                    // Альтернативный подход: показываем/скрываем иконку
                     if (currentSort == SortBy.NAME_ASC) {
                         Icon(Icons.Default.Check, contentDescription = null)
                     } else {
-                        // Пустая иконка с тем же размером
                         Spacer(modifier = Modifier.size(24.dp))
                     }
                 }
@@ -176,7 +267,7 @@ fun SearchField(
 
 @Composable
 fun SchemesList(
-    schemes: List<Scheme>,
+    schemesWithStatus: List<SchemeWithStatus>,
     searchQuery: String,
     onSchemeClick: (Scheme) -> Unit,
     onEditScheme: (Scheme) -> Unit,
@@ -184,11 +275,11 @@ fun SchemesList(
     modifier: Modifier = Modifier
 ) {
     val filteredSchemes = if (searchQuery.isBlank()) {
-        schemes
+        schemesWithStatus
     } else {
-        schemes.filter { scheme ->
-            scheme.name.contains(searchQuery, ignoreCase = true) ||
-                    scheme.description?.contains(searchQuery, ignoreCase = true) == true
+        schemesWithStatus.filter { item ->
+            item.scheme.name.contains(searchQuery, ignoreCase = true) ||
+                    item.scheme.description?.contains(searchQuery, ignoreCase = true) == true
         }
     }
 
@@ -197,12 +288,14 @@ fun SchemesList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
-        items(filteredSchemes, key = { it.id }) { scheme ->
+        items(filteredSchemes, key = { it.scheme.id }) { item ->
             SchemeCard(
-                scheme = scheme,
-                onClick = { onSchemeClick(scheme) },
-                onEdit = { onEditScheme(scheme) },
-                onDelete = { onDeleteScheme(scheme) }
+                scheme = item.scheme,
+                deviceCount = item.deviceCount,
+                canDelete = item.canDelete,
+                onClick = { onSchemeClick(item.scheme) },
+                onEdit = { onEditScheme(item.scheme) },
+                onDelete = { onDeleteScheme(item.scheme) }
             )
         }
     }
@@ -212,6 +305,8 @@ fun SchemesList(
 @Composable
 fun SchemeCard(
     scheme: Scheme,
+    deviceCount: Int,
+    canDelete: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -240,13 +335,23 @@ fun SchemeCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = scheme.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = scheme.name,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // Показываем количество приборов
+                    if (deviceCount > 0) {
+                        Text(
+                            text = "$deviceCount приборов привязано к локации",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
                 Box {
                     IconButton(
@@ -278,10 +383,21 @@ fun SchemeCard(
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.Delete, contentDescription = null)
-                            }
+                            },
+                            enabled = canDelete
                         )
                     }
                 }
+            }
+
+            // Индикатор если нельзя удалить
+            if (!canDelete && deviceCount > 0) {
+                Text(
+                    text = "⚠️ Нельзя удалить: используется $deviceCount прибором(ами)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
 
             // Информация о схеме
@@ -297,7 +413,7 @@ fun SchemeCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "${schemeData.devices.size} приборов",
+                    text = "${schemeData.devices.size} приборов на схеме",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -348,31 +464,6 @@ fun SchemeCard(
                     )
                 }
             }
-
-            // Если у схемы есть даты, показываем их
-            // Пока убираем даты, так как их нет в сущности Scheme
-            // Можно добавить поля createdAt и updatedAt в Scheme если нужно
-            /*
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Создано: ${formatDate(scheme.createdAt)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (scheme.updatedAt > scheme.createdAt) {
-                    Text(
-                        text = "Изменено: ${formatDate(scheme.updatedAt)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            */
         }
     }
 }
@@ -437,13 +528,6 @@ fun EmptySchemesState(
         }
     }
 }
-
-/*
-private fun formatDate(timestamp: Long): String {
-    val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-    return dateFormat.format(Date(timestamp))
-}
-*/
 
 enum class SortBy {
     NAME_ASC, NAME_DESC

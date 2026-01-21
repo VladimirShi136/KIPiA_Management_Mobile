@@ -57,8 +57,6 @@ data class Scheme(
         val json = Gson().toJson(schemeData)
         return this.copy(data = json)
     }
-
-    fun isValid(): Boolean = name.isNotBlank()
 }
 
 data class SchemeData(

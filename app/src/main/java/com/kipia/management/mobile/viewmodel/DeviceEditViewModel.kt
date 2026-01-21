@@ -1,14 +1,19 @@
 package com.kipia.management.mobile.viewmodel
 
+import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.utils.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -16,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DeviceEditViewModel @Inject constructor(
     private val repository: DeviceRepository,
-    private val photoManager: PhotoManager
+    private val photoManager: PhotoManager,
+    private val schemeSyncUseCase: SchemeSyncUseCase
 ) : ViewModel() {
 
     private val _device = MutableStateFlow(Device.createEmpty())
@@ -24,6 +30,10 @@ class DeviceEditViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DeviceEditUiState())
     val uiState: StateFlow<DeviceEditUiState> = _uiState
+
+    // ★★★★ ИСПРАВЛЯЕМ: Используем MutableStateFlow вместо mutableStateOf ★★★★
+    private val _isLocationDropdownExpanded = MutableStateFlow(false)
+    val isLocationDropdownExpanded: StateFlow<Boolean> = _isLocationDropdownExpanded.asStateFlow()
 
     fun loadDevice(deviceId: Int) {
         viewModelScope.launch {
@@ -34,7 +44,6 @@ class DeviceEditViewModel @Inject constructor(
                         _device.value = it
                         validateForm()
                     }
-                    // Сброс isLoading после получения первого значения
                     _uiState.update { it.copy(isLoading = false) }
                 }
             } catch (e: Exception) {
@@ -61,7 +70,6 @@ class DeviceEditViewModel @Inject constructor(
             try {
                 val currentDevice = _device.value
 
-                // Валидация статуса
                 if (!isValidStatus(currentDevice.status)) {
                     _uiState.update {
                         it.copy(
@@ -72,12 +80,13 @@ class DeviceEditViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Если у устройства есть ID - обновляем, иначе создаем новое
                 if (currentDevice.id > 0) {
                     repository.updateDevice(currentDevice)
                 } else {
                     repository.insertDevice(currentDevice)
                 }
+
+                schemeSyncUseCase.syncSchemeOnDeviceSave(currentDevice)
 
                 _uiState.update { it.copy(isSuccess = true) }
             } catch (e: Exception) {
@@ -88,7 +97,6 @@ class DeviceEditViewModel @Inject constructor(
         }
     }
 
-    // Проверка корректности статуса
     private fun isValidStatus(status: String): Boolean {
         return DeviceStatus.ALL_STATUSES.contains(status)
     }
@@ -111,7 +119,6 @@ class DeviceEditViewModel @Inject constructor(
         val currentDevice = _device.value
         val errors = mutableListOf<String>()
 
-        // Проверка обязательных полей
         if (currentDevice.type.isBlank()) {
             errors.add("type")
             _uiState.update { it.copy(typeError = "Укажите тип прибора") }
@@ -133,7 +140,6 @@ class DeviceEditViewModel @Inject constructor(
             _uiState.update { it.copy(locationError = null) }
         }
 
-        // Валидация статуса
         if (!isValidStatus(currentDevice.status)) {
             errors.add("status")
             _uiState.update { it.copy(statusError = "Некорректный статус") }
@@ -153,9 +159,25 @@ class DeviceEditViewModel @Inject constructor(
         _uiState.update { it.copy(error = null, statusError = null) }
     }
 
-    // Добавьте методы для работы с фото
     suspend fun savePhotoFromUri(uri: android.net.Uri): String? {
         return photoManager.savePhotoFromUri(uri)
+    }
+
+    // ★★★★ ДОБАВЛЯЕМ: Список всех местоположений ★★★★
+    val allLocations = repository.getAllLocations()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // ★★★★ ДОБАВЛЯЕМ: Методы для управления выпадающим списком ★★★★
+    fun expandLocationDropdown() {
+        _isLocationDropdownExpanded.value = true
+    }
+
+    fun collapseLocationDropdown() {
+        _isLocationDropdownExpanded.value = false
     }
 }
 
@@ -165,10 +187,8 @@ data class DeviceEditUiState(
     val error: String? = null,
     val isFormValid: Boolean = false,
     val validationErrors: List<String> = emptyList(),
-    val isTypeExpanded: Boolean = false,
-    val isStatusExpanded: Boolean = false,
     val typeError: String? = null,
     val inventoryNumberError: String? = null,
     val locationError: String? = null,
-    val statusError: String? = null // ← Добавляем поле для ошибки статуса
+    val statusError: String? = null
 )

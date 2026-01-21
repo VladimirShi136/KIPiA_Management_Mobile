@@ -10,4 +10,5 @@ interface SchemeRepository {
     suspend fun updateScheme(scheme: Scheme)
     suspend fun deleteScheme(scheme: Scheme)
     suspend fun deleteSchemeById(id: Int)
+    suspend fun getSchemeByName(name: String): Scheme?
 }

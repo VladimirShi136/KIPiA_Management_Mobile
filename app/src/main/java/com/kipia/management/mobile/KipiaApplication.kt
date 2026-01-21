@@ -3,6 +3,9 @@ package com.kipia.management.mobile
 import android.app.Application
 import com.kipia.management.mobile.data.DatabaseInitializer
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -23,6 +26,8 @@ class KipiaApplication : Application() {
         Timber.d("KipiaApplication created")
 
         // Инициализируем базу тестовыми данными
-        databaseInitializer.initialize()
+        CoroutineScope(Dispatchers.IO).launch {
+            databaseInitializer.initialize()
+        }
     }
 }

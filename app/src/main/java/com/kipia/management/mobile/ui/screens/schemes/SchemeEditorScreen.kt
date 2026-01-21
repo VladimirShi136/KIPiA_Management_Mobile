@@ -32,9 +32,11 @@ fun SchemeEditorScreen(
     viewModel: SchemeEditorViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val devices by viewModel.devices.collectAsStateWithLifecycle()
     val editorMode by viewModel.editorMode.collectAsStateWithLifecycle()
+    val schemeLocation = uiState.scheme.name
     val scope = rememberCoroutineScope()
+    val devicesForScheme by viewModel.getDevicesForCurrentScheme()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Состояние интерфейса
     var showShapeProperties by remember { mutableStateOf(false) }
@@ -87,7 +89,7 @@ fun SchemeEditorScreen(
             // Основной холст
             SchemeCanvas(
                 schemeData = uiState.schemeData,
-                devices = devices,
+                devices = devicesForScheme,
                 schemeDevices = uiState.schemeData.devices,
                 shapes = uiState.schemeData.shapes.map { it.toComposeShape() },
                 editorMode = editorMode,
@@ -183,12 +185,13 @@ fun SchemeEditorScreen(
         // Диалог добавления устройства
         if (showAddDeviceDialog) {
             // Фильтруем устройства, которые еще не добавлены на схему
-            val availableDevices = devices.filter { device ->
+            val availableDevices = devicesForScheme.filter { device ->
                 uiState.schemeData.devices.none { it.deviceId == device.id }
             }
 
             AddDeviceDialog(
                 devices = availableDevices,
+                schemeLocation = schemeLocation, // ★★★★ ПЕРЕДАЕМ ЛОКАЦИЮ ★★★★
                 onDeviceSelected = { device ->
                     // Добавляем устройство в центр холста
                     val centerX = uiState.schemeData.width / 2f
@@ -541,82 +544,54 @@ fun ExitConfirmationDialog(
 @Composable
 fun AddDeviceDialog(
     devices: List<Device>,
+    schemeLocation: String,
     onDeviceSelected: (Device) -> Unit,
     onDismiss: () -> Unit
 ) {
+
+    // ★★★★ ФИЛЬТРУЕМ ПРИБОРЫ ПО ЛОКАЦИИ СХЕМЫ ★★★★
+    val filteredDevices = remember(devices, schemeLocation) {
+        devices.filter { it.location == schemeLocation }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Добавить прибор") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (devices.isEmpty()) {
-                    Text("Все доступные приборы уже добавлены на схему")
+                // ★★★★ ПОКАЗЫВАЕМ ЛОКАЦИЮ СХЕМЫ ★★★★
+                Text(
+                    text = "Схема: $schemeLocation",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                if (filteredDevices.isEmpty()) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Нет приборов для этой локации")
+                        Text(
+                            text = "Добавьте приборы с локацией '$schemeLocation'",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 } else {
-                    devices.forEach { device ->
-                        Card(
-                            onClick = { onDeviceSelected(device) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = when (device.type) {
-                                        "Теплосчетчик" -> Icons.Default.Thermostat
-                                        "Водосчетчик" -> Icons.Default.WaterDrop
-                                        "Электросчетчик" -> Icons.Default.FlashOn
-                                        "Газосчетчик" -> Icons.Default.GasMeter
-                                        "Датчик" -> Icons.Default.Sensors
-                                        "Регулятор" -> Icons.Default.Tune
-                                        else -> Icons.Default.Devices
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(32.dp)
-                                )
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = device.name ?: device.type,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = "${device.type} • Инв. №${device.inventoryNumber}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
-                                }
-
-                                // Статус устройства
-                                Surface(
-                                    color = when (device.status) {
-                                        "В работе" -> Color(0xFFE8F5E9)
-                                        "На ремонте" -> Color(0xFFFFF3E0)
-                                        "Списан" -> Color(0xFFFFEBEE)
-                                        "В резерве" -> Color(0xFFF5F5F5)
-                                        else -> Color(0xFFF5F5F5)
-                                    },
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Text(
-                                        text = device.status,
-                                        color = when (device.status) {
-                                            "В работе" -> Color(0xFF2E7D32)
-                                            "На ремонте" -> Color(0xFFEF6C00)
-                                            "Списан" -> Color(0xFFC62828)
-                                            "В резерве" -> Color(0xFF616161)
-                                            else -> Color(0xFF616161)
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
+                    filteredDevices.forEach { device ->
+                        DeviceSelectionCard(
+                            device = device,
+                            schemeLocation = schemeLocation, // ★ передаем для проверки
+                            onClick = { onDeviceSelected(device) }
+                        )
                     }
                 }
             }
@@ -627,4 +602,117 @@ fun AddDeviceDialog(
             }
         }
     )
+}
+
+@Composable
+fun DeviceSelectionCard(
+    device: Device,
+    schemeLocation: String,
+    onClick: () -> Unit
+) {
+    val isCorrectLocation = device.location == schemeLocation
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCorrectLocation) MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        ),
+        border = if (!isCorrectLocation) CardDefaults.outlinedCardBorder() else null
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Иконка устройства
+            Icon(
+                imageVector = when (device.type) {
+                    "Манометр", "Термометр", "Датчик давления" -> Icons.Default.Sensors
+                    "Счетчик" -> Icons.Default.Speed
+                    "Клапан", "Задвижка" -> Icons.Default.Tune
+                    "Датчик" -> Icons.Default.Sensors
+                    "Преобразователь" -> Icons.Default.ElectricBolt
+                    "Регулятор" -> Icons.Default.Thermostat
+                    else -> Icons.Default.Devices
+                },
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = if (isCorrectLocation) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.error
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                // Название и инвентарный номер
+                Text(
+                    text = device.name ?: device.type,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1
+                )
+                Text(
+                    text = "${device.type} • Инв. №${device.inventoryNumber}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+
+                // ★★★★ ЛОКАЦИЯ С ПРОВЕРКОЙ ★★★★
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (isCorrectLocation) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = device.location,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isCorrectLocation) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            // Статус устройства
+            Surface(
+                color = when (device.status) {
+                    "В работе" -> Color(0xFFE8F5E9)
+                    "Хранение" -> Color(0xFFE3F2FD)
+                    "Утерян" -> Color(0xFFFFEBEE)
+                    "Испорчен" -> Color(0xFFFFF3E0)
+                    else -> Color(0xFFF5F5F5)
+                },
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = device.status,
+                    color = when (device.status) {
+                        "В работе" -> Color(0xFF2E7D32)
+                        "Хранение" -> Color(0xFF1976D2)
+                        "Утерян" -> Color(0xFFC62828)
+                        "Испорчен" -> Color(0xFFEF6C00)
+                        else -> Color(0xFF616161)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            // ★★★★ ИНДИКАТОР СООТВЕТСТВИЯ ★★★★
+            if (!isCorrectLocation) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = "Локация не совпадает",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
 }
