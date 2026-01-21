@@ -148,7 +148,10 @@ fun KIPiANavHost(
 
         // Экран настроек
         composable("settings") {
-            SettingsScreen(navController = navController)
+            SettingsScreen(
+                navController = navController,
+                updateBottomNavVisibility = updateBottomNavVisibility // ← ПЕРЕДАЕМ ЗДЕСЬ
+            )
         }
     }
 }

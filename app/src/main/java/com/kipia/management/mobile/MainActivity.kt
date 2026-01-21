@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
 import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
@@ -70,8 +70,10 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var deviceRepository: DeviceRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         // Устанавливаем тему Material 3
         setTheme(R.style.Theme_KipiaManagement)
         WindowCompat.setDecorFitsSystemWindows(window, false)

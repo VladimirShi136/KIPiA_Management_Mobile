@@ -1,13 +1,12 @@
 package com.kipia.management.mobile.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -17,7 +16,7 @@ class ThemeViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
-    // Состояние темы как StateFlow
+    // Состояние темы
     val themeMode = preferencesRepository.themeMode
         .stateIn(
             scope = viewModelScope,
@@ -33,35 +32,11 @@ class ThemeViewModel @Inject constructor(
             initialValue = false
         )
 
-    // Для вычисления текущей темы (true = dark, false = light)
-    var isDarkTheme by mutableStateOf(false)
-        private set
+    // Проверка поддержки Dynamic Colors (Android 12+)
+    val supportsDynamicColors: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    init {
-        // Инициализируем тему при создании ViewModel
-        viewModelScope.launch {
-            preferencesRepository.themeMode.collect { mode ->
-                updateDarkTheme(mode)
-            }
-        }
-    }
-
-    // Обновить тему на основе режима
-    private fun updateDarkTheme(mode: Int) {
-        // TODO: Здесь нужно учитывать системную тему, но пока просто по режиму
-        isDarkTheme = when (mode) {
-            PreferencesRepository.THEME_LIGHT -> false
-            PreferencesRepository.THEME_DARK -> true
-            PreferencesRepository.THEME_FOLLOW_SYSTEM -> {
-                // Для тестирования можно временно вернуть false
-                // В реальном приложении здесь будет isSystemInDarkTheme()
-                false
-            }
-            else -> false
-        }
-    }
-
-    // Переключить тему (циклично: Системная → Светлая → Темная → Системная)
+    // Добавьте этот метод для ThemeToggleButton
     fun toggleTheme() {
         viewModelScope.launch {
             val currentMode = themeMode.value
@@ -84,9 +59,16 @@ class ThemeViewModel @Inject constructor(
 
     // Переключить динамические цвета
     fun toggleDynamicColors() {
+        if (!supportsDynamicColors) return
+
         viewModelScope.launch {
             val current = dynamicColors.value
             preferencesRepository.setDynamicColors(!current)
         }
+    }
+
+    // Получить тему для не-Compose кода (например, для Activity)
+    suspend fun getCurrentTheme(): Int {
+        return themeMode.value
     }
 }

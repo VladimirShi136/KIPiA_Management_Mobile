@@ -16,17 +16,36 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.kipia.management.mobile.R
+import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 
+
+/**
+ * Экран с настройками
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
-    themeViewModel: ThemeViewModel = hiltViewModel()
+    themeViewModel: ThemeViewModel = hiltViewModel(),
+    updateBottomNavVisibility: (Boolean) -> Unit = {} // ← НОВЫЙ ПАРАМЕТР
 ) {
-    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()  // ← ИСПРАВЛЕНО
-    val dynamicColors by themeViewModel.dynamicColors.collectAsStateWithLifecycle()  // ← ИСПРАВЛЕНО
+    // ★★★★ ОТКЛЮЧАЕМ BOTTOM NAVIGATION ★★★★
+    LaunchedEffect(Unit) {
+        updateBottomNavVisibility(false)
+    }
+
+    // ★★★★ ВОССТАНАВЛИВАЕМ ПРИ ВЫХОДЕ ★★★★
+    DisposableEffect(Unit) {
+        onDispose {
+            updateBottomNavVisibility(true)
+        }
+    }
+
+    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
+    val dynamicColors by themeViewModel.dynamicColors.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    val supportsDynamicColors = themeViewModel.supportsDynamicColors
 
     Scaffold(
         topBar = {
@@ -64,7 +83,7 @@ fun SettingsScreen(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Выбор темы
+                    // Выбор темы (оставляем как есть)
                     Text(
                         text = "Тема приложения",
                         style = MaterialTheme.typography.bodyMedium,
@@ -78,10 +97,17 @@ fun SettingsScreen(
                     ) {
                         // Кнопка "Системная"
                         FilterChip(
-                            selected = themeMode == 0,
-                            onClick = { themeViewModel.setTheme(0) },
+                            selected = themeMode == PreferencesRepository.THEME_FOLLOW_SYSTEM,
+                            onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_FOLLOW_SYSTEM) },
                             label = { Text("Системная") },
-                            leadingIcon = if (themeMode == 0) {
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.SettingsBrightness, // ← Та же иконка
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            },
+                            trailingIcon = if (themeMode == PreferencesRepository.THEME_FOLLOW_SYSTEM) {
                                 { Icon(Icons.Filled.Check, null) }
                             } else null,
                             modifier = Modifier.weight(1f)
@@ -89,10 +115,17 @@ fun SettingsScreen(
 
                         // Кнопка "Светлая"
                         FilterChip(
-                            selected = themeMode == 1,
-                            onClick = { themeViewModel.setTheme(1) },
+                            selected = themeMode == PreferencesRepository.THEME_LIGHT,
+                            onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_LIGHT) },
                             label = { Text("Светлая") },
-                            leadingIcon = if (themeMode == 1) {
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.LightMode,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            },
+                            trailingIcon = if (themeMode == PreferencesRepository.THEME_LIGHT) {
                                 { Icon(Icons.Filled.Check, null) }
                             } else null,
                             modifier = Modifier.weight(1f)
@@ -100,10 +133,17 @@ fun SettingsScreen(
 
                         // Кнопка "Темная"
                         FilterChip(
-                            selected = themeMode == 2,
-                            onClick = { themeViewModel.setTheme(2) },
+                            selected = themeMode == PreferencesRepository.THEME_DARK,
+                            onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_DARK) },
                             label = { Text("Темная") },
-                            leadingIcon = if (themeMode == 2) {
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.DarkMode,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            },
+                            trailingIcon = if (themeMode == PreferencesRepository.THEME_DARK) {
                                 { Icon(Icons.Filled.Check, null) }
                             } else null,
                             modifier = Modifier.weight(1f)
@@ -112,7 +152,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Динамические цвета (Material You)
+                    // динамические цвета
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -124,56 +164,69 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "Использовать цвета обоев системы",
+                                text = if (supportsDynamicColors) {
+                                    "Использовать цвета обоев системы"
+                                } else {
+                                    "Доступно на Android 12 и выше"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (supportsDynamicColors) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                }
                             )
                         }
 
                         Switch(
-                            checked = dynamicColors,
-                            onCheckedChange = { themeViewModel.toggleDynamicColors() }
+                            checked = dynamicColors && supportsDynamicColors,
+                            onCheckedChange = {
+                                if (supportsDynamicColors) {
+                                    themeViewModel.toggleDynamicColors()
+                                }
+                            },
+                            enabled = supportsDynamicColors
                         )
                     }
                 }
-            }
 
-            // Информация о приложении
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
+                // Информация о приложении
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    Text(
-                        text = "О приложении",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "О приложении",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
 
-                    ListItem(
-                        leadingContent = {
-                            Icon(
-                                Icons.Filled.Info,
-                                contentDescription = null
-                            )
-                        },
-                        headlineContent = { Text("Версия") },
-                        supportingContent = { Text("1.0.0") }
-                    )
+                        ListItem(
+                            leadingContent = {
+                                Icon(
+                                    Icons.Filled.Info,
+                                    contentDescription = null
+                                )
+                            },
+                            headlineContent = { Text("Версия") },
+                            supportingContent = { Text("1.0.0") }
+                        )
 
-                    ListItem(
-                        leadingContent = {
-                            Icon(
-                                Icons.Filled.Code,
-                                contentDescription = null
-                            )
-                        },
-                        headlineContent = { Text("Разработчик") },
-                        supportingContent = { Text("KIPiA Management") }
-                    )
+                        ListItem(
+                            leadingContent = {
+                                Icon(
+                                    Icons.Filled.Code,
+                                    contentDescription = null
+                                )
+                            },
+                            headlineContent = { Text("Разработчик") },
+                            supportingContent = { Text("KIPiA Management") }
+                        )
+                    }
                 }
             }
         }
