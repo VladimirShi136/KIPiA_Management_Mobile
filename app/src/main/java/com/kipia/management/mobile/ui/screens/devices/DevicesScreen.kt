@@ -132,7 +132,7 @@ fun DevicesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 5.dp)
+                .padding(horizontal = 4.dp)
                 .windowInsetsPadding(
                     WindowInsets.navigationBars
                         .only(WindowInsetsSides.Bottom)
@@ -489,7 +489,6 @@ fun DeviceTableWithScroll(
     modifier: Modifier = Modifier
 ) {
     val horizontalScrollState = rememberScrollState()
-    val roundedCornerShape = RoundedCornerShape(12.dp)
 
     Column(modifier = modifier.fillMaxSize()) {
         // Заголовок таблицы с верхними скругленными углами
@@ -536,28 +535,16 @@ fun DeviceTableWithScroll(
                 contentPadding = PaddingValues(bottom = 1.dp)
             ) {
                 itemsIndexed(devices, key = { _, device -> device.id }) { index, device ->
-                    // Для последнего элемента не добавляем divider
-                    if (index < devices.size - 1) {
-                        TableRowWithDivider(
-                            device = device,
-                            searchQuery = searchQuery,
-                            onClick = { onDeviceClick(device) },
-                            onEdit = { onEditDevice(device) },
-                            onDelete = { onDeleteDevice(device) },
-                            horizontalScrollState = horizontalScrollState,
-                            showDivider = true
-                        )
-                    } else {
-                        TableRowWithDivider(
-                            device = device,
-                            searchQuery = searchQuery,
-                            onClick = { onDeviceClick(device) },
-                            onEdit = { onEditDevice(device) },
-                            onDelete = { onDeleteDevice(device) },
-                            horizontalScrollState = horizontalScrollState,
-                            showDivider = false
-                        )
-                    }
+                    TableRowWithDivider(
+                        device = device,
+                        index = index, // ← ВАЖНО: передаем индекс из itemsIndexed
+                        searchQuery = searchQuery,
+                        onClick = { onDeviceClick(device) },
+                        onEdit = { onEditDevice(device) },
+                        onDelete = { onDeleteDevice(device) },
+                        horizontalScrollState = horizontalScrollState,
+                        showDivider = index < devices.size - 1 // ← Упрощенная логика
+                    )
                 }
             }
         }
@@ -567,6 +554,7 @@ fun DeviceTableWithScroll(
 @Composable
 fun TableRowWithDivider(
     device: Device,
+    index: Int,
     searchQuery: String,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -578,6 +566,7 @@ fun TableRowWithDivider(
     Column(modifier = modifier) {
         TableRow(
             device = device,
+            index = index,
             searchQuery = searchQuery,
             onClick = onClick,
             onEdit = onEdit,
@@ -588,7 +577,7 @@ fun TableRowWithDivider(
                 .height(40.dp) // Уменьшенная высота строки
         )
         if (showDivider) {
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
@@ -743,6 +732,7 @@ fun TableHeaderCell(
 @Composable
 fun TableRow(
     device: Device,
+    index: Int,
     searchQuery: String,
     onClick: () -> Unit,
     onEdit: () -> Unit,
@@ -758,7 +748,7 @@ fun TableRow(
             .height(40.dp)
             .clickable(onClick = onClick)
             .background(
-                color = if (device.id % 2 == 0) {
+                color = if (index % 2 == 0) {
                     MaterialTheme.colorScheme.surface
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)

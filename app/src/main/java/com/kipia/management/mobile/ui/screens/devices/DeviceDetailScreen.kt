@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,11 +26,24 @@ fun DeviceDetailScreen(
     deviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
+    updateBottomNavVisibility: (Boolean) -> Unit = {},
     viewModel: DeviceDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
     val photos by viewModel.photos.collectAsStateWithLifecycle(initialValue = emptyList()) // ← ВОТ ОНО!
+
+    // ★★★★ ОТКЛЮЧАЕМ BOTTOM NAVIGATION ★★★★
+    LaunchedEffect(Unit) {
+        updateBottomNavVisibility(false)
+    }
+
+    // ★★★★ ВОССТАНАВЛИВАЕМ ПРИ ВЫХОДЕ ★★★★
+    DisposableEffect(Unit) {
+        onDispose {
+            updateBottomNavVisibility(true)
+        }
+    }
 
     // Загружаем устройство при входе на экран
     LaunchedEffect(deviceId) {
@@ -40,71 +52,40 @@ fun DeviceDetailScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Детали прибора") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { onNavigateToEdit(deviceId) }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.toggleFavorite() }
-                    ) {
-                        Icon(
-                            if (uiState.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "В избранное",
-                            tint = if (uiState.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
+    when {
+        uiState.isLoading -> {
+            DeviceDetailLoadingState()
+        }
+        uiState.error != null -> {
+            DeviceDetailErrorState(
+                error = uiState.error ?: "Неизвестная ошибка",
+                onRetry = { viewModel.loadDevice(deviceId) },
+                modifier = Modifier.fillMaxSize()
             )
         }
-    ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                DeviceDetailLoadingState()
-            }
-            uiState.error != null -> {
-                DeviceDetailErrorState(
-                    error = uiState.error ?: "Неизвестная ошибка",
-                    onRetry = { viewModel.loadDevice(deviceId) },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            device != null -> {
-                DeviceDetailContent(
-                    device = device!!,
-                    photos = photos, // ← Используем photos из отдельного StateFlow
-                    onPhotoClick = { index ->
-                        // TODO: Открыть полноэкранный просмотр
-                        println("Нажато фото с индексом: $index")
-                    },
-                    onShare = { viewModel.shareDeviceInfo() },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            else -> {
-                DeviceDetailEmptyState(
-                    onNavigateBack = onNavigateBack,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
+        device != null -> {
+            DeviceDetailContent(
+                device = device!!,
+                photos = photos,
+                isFavorite = uiState.isFavorite,
+                onPhotoClick = { index ->
+                    // TODO: Открыть полноэкранный просмотр
+                    println("Нажато фото с индексом: $index")
+                },
+                onShare = { viewModel.shareDeviceInfo() },
+                onToggleFavorite = { viewModel.toggleFavorite() },
+                onNavigateToEdit = { onNavigateToEdit(deviceId) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 16.dp) // ← Добавляем отступ сверху
+            )
+        }
+        else -> {
+            DeviceDetailEmptyState(
+                onNavigateBack = onNavigateBack,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
@@ -113,13 +94,15 @@ fun DeviceDetailScreen(
 fun DeviceDetailContent(
     device: Device,
     photos: List<String>,
+    isFavorite: Boolean,
     onPhotoClick: (Int) -> Unit,
     onShare: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onNavigateToEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .verticalScroll(rememberScrollState())
     ) {
         // Информационная карточка
         Card(
@@ -221,6 +204,41 @@ fun DeviceDetailContent(
                         value = valve
                     )
                 }
+
+                // ★★★★ ДОБАВИМ КНОПКИ ДЕЙСТВИЙ ВНУТРИ КАРТОЧКИ ★★★★
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Кнопка "Редактировать"
+                    OutlinedButton(
+                        onClick = onNavigateToEdit,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("Редактировать")
+                    }
+
+                    // Кнопка "В избранное"
+                    OutlinedButton(
+                        onClick = onToggleFavorite,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp),
+                            tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(if (isFavorite) "В избранном" else "В избранное")
+                    }
+                }
             }
         }
 
@@ -270,7 +288,7 @@ fun DeviceDetailContent(
             }
         }
 
-        // Кнопки действий
+        // Кнопки действий внизу
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -283,7 +301,7 @@ fun DeviceDetailContent(
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(
-                    Icons.Default.Share,
+                    Icons.Filled.Share,
                     contentDescription = null,
                     modifier = Modifier.padding(end = 8.dp)
                 )
@@ -296,7 +314,7 @@ fun DeviceDetailContent(
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(
-                    Icons.Default.QrCode,
+                    Icons.Filled.QrCode,
                     contentDescription = null,
                     modifier = Modifier.padding(end = 8.dp)
                 )
@@ -434,7 +452,7 @@ fun DeviceDetailErrorState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            Icons.Default.Error,
+            Icons.Filled.Error,
             contentDescription = "Ошибка",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
@@ -477,7 +495,7 @@ fun DeviceDetailEmptyState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            Icons.Default.SearchOff,
+            Icons.Filled.SearchOff,
             contentDescription = "Не найдено",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant

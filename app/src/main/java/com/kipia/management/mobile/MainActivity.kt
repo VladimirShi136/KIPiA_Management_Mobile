@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,18 +45,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kipia.management.mobile.repository.DeviceRepository
-import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
 import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
+import com.kipia.management.mobile.ui.components.topappbar.rememberTopAppBarController
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
 import com.kipia.management.mobile.ui.navigation.KIPiANavHost
 import com.kipia.management.mobile.ui.theme.KIPiATheme
@@ -65,6 +66,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -107,27 +112,75 @@ fun KIPiAApp() {
             color = MaterialTheme.colorScheme.background
         ) {
             val navController = rememberNavController()
-            val themeViewModel: ThemeViewModel = hiltViewModel()
             var showBottomNav by remember { mutableStateOf(true) }
 
-            // Получаем ViewModel для фильтров
-            val devicesViewModel: DevicesViewModel = hiltViewModel()
+            // ★★★★ ИСПОЛЬЗУЕМ TopAppBarController ★★★★
+            val topAppBarController = rememberTopAppBarController()
+            val topAppBarState = topAppBarController.state.value
 
-            // ★★★★ ИСПРАВЛЕНИЕ: получаем фильтры напрямую из StateFlow ★★★★
-            val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
-            val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
+            // ★★★★ ОБНОВЛЯЕМ СОСТОЯНИЕ ПРИ ИЗМЕНЕНИИ МАРШРУТА ★★★★
+            val currentBackStackEntry by navController.currentBackStackEntryAsState()
+            LaunchedEffect(currentBackStackEntry) {
+                val currentRoute = currentBackStackEntry?.destination?.route
+                val arguments = currentBackStackEntry?.arguments
 
-            // Получаем текущие значения фильтров
-            val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
-            val locationFilter = uiState.locationFilter
-            val statusFilter = uiState.statusFilter
+                // Извлекаем параметры из аргументов
+                val params = mutableMapOf<String, Any>()
+
+                when {
+                    currentRoute?.startsWith("device_detail/") == true -> {
+                        val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
+                        params["deviceName"] = "Прибор #$deviceId"
+                        params["onEdit"] = {
+                            navController.navigate("device_edit/$deviceId")
+                        }
+                        topAppBarController.setForScreen("device_detail", params)
+                        showBottomNav = false
+                    }
+
+                    currentRoute?.startsWith("device_edit") == true -> {
+                        val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
+                        params["isNew"] = deviceId == null
+                        params["onSave"] = {
+                            // TODO: Вызвать сохранение устройства
+                            navController.popBackStack()
+                        }
+                        topAppBarController.setForScreen("device_edit", params)
+                        showBottomNav = false
+                    }
+
+                    currentRoute == "settings" -> {
+                        topAppBarController.setForScreen("settings")
+                        showBottomNav = false
+                    }
+
+                    currentRoute == "photos" -> {
+                        params["onAddPhoto"] = {
+                            // TODO: Открыть выбор фото
+                        }
+                        topAppBarController.setForScreen("photos", params)
+                        showBottomNav = false
+                    }
+
+                    // Главные табы
+                    currentRoute in listOf("devices", "schemes", "reports") -> {
+                        topAppBarController.resetToDefault()
+                        showBottomNav = true
+                    }
+
+                    else -> {
+                        topAppBarController.resetToDefault()
+                        showBottomNav = true
+                    }
+                }
+            }
 
             Scaffold(
                 topBar = {
                     TopAppBar(
                         title = {
                             Text(
-                                text = stringResource(R.string.app_name),
+                                text = topAppBarState.title,
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 modifier = Modifier
@@ -145,30 +198,99 @@ fun KIPiAApp() {
                             navigationIconContentColor = Color.White,
                             actionIconContentColor = Color.White
                         ),
-                        actions = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                DeviceFilterMenu(
-                                    searchQuery = searchQuery,
-                                    onSearchQueryChange = { devicesViewModel.setSearchQuery(it) },
-                                    locationFilter = locationFilter,
-                                    locations = allLocations,
-                                    onLocationFilterChange = { devicesViewModel.setLocationFilter(it) },
-                                    statusFilter = statusFilter,
-                                    onStatusFilterChange = { devicesViewModel.setStatusFilter(it) },
-                                    modifier = Modifier.padding(end = 4.dp)
-                                )
-                                ThemeToggleButton()
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(onClick = {
-                                    navController.navigate("settings")
-                                }) {
+                        navigationIcon = {
+                            // ВАЖНО: navigationIcon должен быть non-nullable
+                            if (topAppBarState.showBackButton) {
+                                IconButton(onClick = { navController.navigateUp() }) {
                                     Icon(
-                                        Icons.Filled.Settings,
-                                        contentDescription = "Настройки",
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Назад",
                                         tint = Color.White
                                     )
+                                }
+                            }
+                            // Если showBackButton = false, ничего не рисуем
+                        },
+                        actions = {
+                            // Действия по умолчанию для главного экрана
+                            if (!topAppBarState.showBackButton) {
+                                val themeViewModel: ThemeViewModel = hiltViewModel()
+                                val devicesViewModel: DevicesViewModel = hiltViewModel()
+
+                                val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
+                                val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
+                                val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
+                                val locationFilter = uiState.locationFilter
+                                val statusFilter = uiState.statusFilter
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    DeviceFilterMenu(
+                                        searchQuery = searchQuery,
+                                        onSearchQueryChange = { devicesViewModel.setSearchQuery(it) },
+                                        locationFilter = locationFilter,
+                                        locations = allLocations,
+                                        onLocationFilterChange = { devicesViewModel.setLocationFilter(it) },
+                                        statusFilter = statusFilter,
+                                        onStatusFilterChange = { devicesViewModel.setStatusFilter(it) },
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                    ThemeToggleButton()
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    IconButton(onClick = {
+                                        navController.navigate("settings")
+                                    }) {
+                                        Icon(
+                                            Icons.Filled.Settings,
+                                            contentDescription = "Настройки",
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Пользовательские действия для других экранов
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (topAppBarState.showEditButton) {
+                                        IconButton(
+                                            onClick = { topAppBarState.onEditClick?.invoke() },
+                                            enabled = topAppBarState.onEditClick != null
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Edit,
+                                                contentDescription = "Редактировать",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
+
+                                    if (topAppBarState.showSaveButton) {
+                                        IconButton(
+                                            onClick = { topAppBarState.onSaveClick?.invoke() },
+                                            enabled = topAppBarState.onSaveClick != null
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Save,
+                                                contentDescription = "Сохранить",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
+
+                                    if (topAppBarState.showAddButton) {
+                                        IconButton(
+                                            onClick = { topAppBarState.onAddClick?.invoke() },
+                                            enabled = topAppBarState.onAddClick != null
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Add,
+                                                contentDescription = "Добавить",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -180,11 +302,11 @@ fun KIPiAApp() {
                     AnimatedVisibility(
                         visible = showBottomNav,
                         enter = slideInVertically(
-                            initialOffsetY = { fullHeight -> fullHeight }, // Выезжает снизу
+                            initialOffsetY = { fullHeight -> fullHeight },
                             animationSpec = tween(durationMillis = 300)
                         ) + fadeIn(animationSpec = tween(durationMillis = 200)),
                         exit = slideOutVertically(
-                            targetOffsetY = { fullHeight -> fullHeight }, // Уезжает вниз
+                            targetOffsetY = { fullHeight -> fullHeight },
                             animationSpec = tween(durationMillis = 300)
                         ) + fadeOut(animationSpec = tween(durationMillis = 200)),
                         modifier = Modifier.background(MaterialTheme.colorScheme.secondary)
@@ -205,7 +327,8 @@ fun KIPiAApp() {
                 KIPiANavHost(
                     navController = navController,
                     updateBottomNavVisibility = { showBottomNav = it },
-                    devicesViewModel = devicesViewModel,
+                    devicesViewModel = hiltViewModel(),
+                    topAppBarController = topAppBarController,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
