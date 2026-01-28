@@ -11,37 +11,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.add
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,7 +26,6 @@ import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
@@ -66,15 +40,18 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.shared.NotificationManager
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var deviceRepository: DeviceRepository
+
+    @Inject
+    lateinit var notificationManager: NotificationManager // ★★★★ ДОБАВЛЕНО ★★★★
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,96 +64,171 @@ class MainActivity : ComponentActivity() {
         // Тест базы данных
         lifecycleScope.launch {
             try {
-                Timber.d("ТЕСТ: Пытаемся получить устройства...")
-                val devices = deviceRepository.getAllDevicesSync()
-                Timber.d("ТЕСТ: Успех! В базе ${devices.size} устройств")
+                val count = deviceRepository.getDeviceCount()
+                Timber.d("ТЕСТ: В базе $count устройств")
+
+                // Тест вставки
+                val testDevice = Device.createEmpty().copy(
+                    type = "Тест",
+                    inventoryNumber = "TEST-001",
+                    location = "Тестовая"
+                )
+                val newId = deviceRepository.insertDevice(testDevice)
+                Timber.d("ТЕСТ: Вставлено устройство с ID: $newId")
+
+                // Обновляем счет
+                val newCount = deviceRepository.getDeviceCount()
+                Timber.d("ТЕСТ: Теперь в базе $newCount устройств")
             } catch (e: Exception) {
-                Timber.e("ТЕСТ: Ошибка базы данных: ${e.message}")
-                e.printStackTrace()
+                Timber.e("ТЕСТ: Ошибка базы: ${e.message}")
             }
         }
 
         setContent {
             Timber.d("Compose начал рендеринг")
-            KIPiAApp()
+            KIPiAApp(notificationManager) // ★★★★ ПЕРЕДАЕМ notificationManager ★★★★
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KIPiAApp() {
+fun KIPiAApp(
+    notificationManager: NotificationManager // ★★★★ ПАРАМЕТР ★★★★
+) {
     KIPiATheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             val navController = rememberNavController()
-            var showBottomNav by remember { mutableStateOf(true) }
-
-            // ★★★★ ИСПОЛЬЗУЕМ TopAppBarController ★★★★
+            var showBottomNav by rememberSaveable { mutableStateOf(true) }
             val topAppBarController = rememberTopAppBarController()
+
+            // ★★★★ ПОЛУЧАЕМ ЗНАЧЕНИЕ STATE ПРЯМО ★★★★
             val topAppBarState = topAppBarController.state.value
 
-            // ★★★★ ОБНОВЛЯЕМ СОСТОЯНИЕ ПРИ ИЗМЕНЕНИИ МАРШРУТА ★★★★
-            val currentBackStackEntry by navController.currentBackStackEntryAsState()
-            LaunchedEffect(currentBackStackEntry) {
-                val currentRoute = currentBackStackEntry?.destination?.route
-                val arguments = currentBackStackEntry?.arguments
+            // ★★★★ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ BOTTOM NAV ★★★★
+            val updateBottomNavVisibility: (Boolean) -> Unit = { isVisible ->
+                Timber.d("updateBottomNavVisibility вызван: $isVisible")
+                showBottomNav = isVisible
+            }
 
-                // Извлекаем параметры из аргументов
-                val params = mutableMapOf<String, Any>()
+            // ★★★★ ИСПОЛЬЗУЕМ OnDestinationChangedListener ДЛЯ НАВИГАЦИИ ★★★★
+            LaunchedEffect(navController) {
+                navController.addOnDestinationChangedListener { _, destination, arguments ->
+                    val route = destination.route
+                    Timber.d("═══════════════════════════════════════════")
+                    Timber.d("Навигация: Маршрут = $route")
+                    Timber.d("Аргументы: $arguments")
 
-                when {
-                    currentRoute?.startsWith("device_detail/") == true -> {
-                        val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
-                        params["deviceName"] = "Прибор #$deviceId"
-                        params["onEdit"] = {
-                            navController.navigate("device_edit/$deviceId")
+                    // ★★★★ ОБРАБОТКА BOTTOM NAV - ТОЛЬКО ПРИ СМЕНЕ МАРШРУТА ★★★★
+                    // При смене маршрута устанавливаем дефолтное состояние,
+                    // а затем DevicesScreen сам будет управлять скрытием при скролле
+                    when {
+                        route?.startsWith("device_edit") == true -> {
+                            Timber.d("BottomNav: Скрыт для device_edit")
+                            showBottomNav = false
                         }
-                        topAppBarController.setForScreen("device_detail", params)
-                        showBottomNav = false
-                    }
 
-                    currentRoute?.startsWith("device_edit") == true -> {
-                        val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
-                        params["isNew"] = deviceId == null
-                        params["onSave"] = {
-                            // TODO: Вызвать сохранение устройства
-                            navController.popBackStack()
+                        route?.startsWith("device_detail") == true -> {
+                            Timber.d("BottomNav: Скрыт для device_detail")
+                            showBottomNav = false
                         }
-                        topAppBarController.setForScreen("device_edit", params)
-                        showBottomNav = false
-                    }
 
-                    currentRoute == "settings" -> {
-                        topAppBarController.setForScreen("settings")
-                        showBottomNav = false
-                    }
-
-                    currentRoute == "photos" -> {
-                        params["onAddPhoto"] = {
-                            // TODO: Открыть выбор фото
+                        route == "settings" -> {
+                            Timber.d("BottomNav: Скрыт для settings")
+                            showBottomNav = false
                         }
-                        topAppBarController.setForScreen("photos", params)
-                        showBottomNav = false
+
+                        route?.startsWith("fullscreen_photo") == true -> {
+                            Timber.d("BottomNav: Скрыт для fullscreen_photo")
+                            showBottomNav = false
+                        }
+
+                        route?.startsWith("scheme_editor") == true -> {
+                            Timber.d("BottomNav: Скрыт для scheme_editor")
+                            showBottomNav = false
+                        }
+
+                        // Для главного экрана приборов показываем по умолчанию
+                        // (DevicesScreen будет управлять скрытием при скролле)
+                        route == "devices" -> {
+                            Timber.d("BottomNav: Показан для devices (по умолчанию)")
+                            showBottomNav = true
+                        }
+
+                        // Другие главные табы - всегда показываем
+                        route in listOf("schemes", "reports", "photos") -> {
+                            Timber.d("BottomNav: Показан для $route")
+                            showBottomNav = true
+                        }
+
+                        else -> {
+                            Timber.d("BottomNav: По умолчанию показан")
+                            showBottomNav = true
+                        }
                     }
 
-                    // Главные табы
-                    currentRoute in listOf("devices", "schemes", "reports") -> {
-                        topAppBarController.resetToDefault()
-                        showBottomNav = true
-                    }
+                    // ОБРАБОТКА TOP APP BAR (оставляем без изменений)
+                    when {
+                        route?.startsWith("device_edit") == true -> {
+                            val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
+                            val isNew = deviceId == null
+                            topAppBarController.setForScreen("device_edit", mapOf("isNew" to isNew))
+                            Timber.d("TopAppBar: Установлен для device_edit, isNew=$isNew")
+                        }
 
-                    else -> {
-                        topAppBarController.resetToDefault()
-                        showBottomNav = true
+                        route?.startsWith("device_detail") == true -> {
+                            val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
+                            Timber.d("TopAppBar: Установка для device_detail, deviceId=$deviceId")
+
+                            val params = mutableMapOf<String, Any>()
+                            params["deviceName"] = "Прибор #${deviceId ?: "?"}"
+                            params["onEdit"] = {
+                                Timber.d("Колбэк onEdit: Переход к редактированию устройства $deviceId")
+                                navController.navigate("device_edit/$deviceId")
+                            }
+
+                            topAppBarController.setForScreen("device_detail", params)
+                            Timber.d("TopAppBar: Установлен для device_detail")
+                        }
+
+                        route == "settings" -> {
+                            topAppBarController.setForScreen("settings")
+                            Timber.d("TopAppBar: Установлен для settings")
+                        }
+
+                        route == "photos" -> {
+                            topAppBarController.setForScreen("photos")
+                            Timber.d("TopAppBar: Установлен для photos")
+                        }
+
+                        // Главные табы
+                        route in listOf("devices", "schemes", "reports") -> {
+                            topAppBarController.resetToDefault()
+                            Timber.d("TopAppBar: Сброшен к дефолту (главный экран)")
+                        }
+
+                        else -> {
+                            topAppBarController.resetToDefault()
+                            Timber.d("TopAppBar: Сброшен к дефолту (неизвестный маршрут)")
+                        }
                     }
+                    Timber.d("═══════════════════════════════════════════")
                 }
             }
 
             Scaffold(
                 topBar = {
+                    Timber.d("═══════════════════════════════════════════")
+                    Timber.d("Рендеринг TopAppBar:")
+                    Timber.d("  Заголовок: '${topAppBarState.title}'")
+                    Timber.d("  Кнопка Назад: ${topAppBarState.showBackButton}")
+                    Timber.d("  Кнопка Редактировать: ${topAppBarState.showEditButton}")
+                    Timber.d("  onEditClick доступен: ${topAppBarState.onEditClick != null}")
+                    Timber.d("═══════════════════════════════════════════")
+
                     TopAppBar(
                         title = {
                             Text(
@@ -199,9 +251,11 @@ fun KIPiAApp() {
                             actionIconContentColor = Color.White
                         ),
                         navigationIcon = {
-                            // ВАЖНО: navigationIcon должен быть non-nullable
                             if (topAppBarState.showBackButton) {
-                                IconButton(onClick = { navController.navigateUp() }) {
+                                IconButton(onClick = {
+                                    Timber.d("Нажата кнопка 'Назад'")
+                                    navController.navigateUp()
+                                }) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Назад",
@@ -209,11 +263,13 @@ fun KIPiAApp() {
                                     )
                                 }
                             }
-                            // Если showBackButton = false, ничего не рисуем
                         },
                         actions = {
-                            // Действия по умолчанию для главного экрана
+                            // ★★★★ ОТЛАДОЧНАЯ ИНФОРМАЦИЯ О ТЕКУЩЕМ СОСТОЯНИИ ★★★★
+                            Timber.d("Actions: showBackButton=${topAppBarState.showBackButton}")
+
                             if (!topAppBarState.showBackButton) {
+                                // ★★★★ ДЕЙСТВИЯ ДЛЯ ГЛАВНОГО ЭКРАНА ★★★★
                                 val themeViewModel: ThemeViewModel = hiltViewModel()
                                 val devicesViewModel: DevicesViewModel = hiltViewModel()
 
@@ -231,7 +287,9 @@ fun KIPiAApp() {
                                         onSearchQueryChange = { devicesViewModel.setSearchQuery(it) },
                                         locationFilter = locationFilter,
                                         locations = allLocations,
-                                        onLocationFilterChange = { devicesViewModel.setLocationFilter(it) },
+                                        onLocationFilterChange = {
+                                            devicesViewModel.setLocationFilter(it)
+                                        },
                                         statusFilter = statusFilter,
                                         onStatusFilterChange = { devicesViewModel.setStatusFilter(it) },
                                         modifier = Modifier.padding(end = 4.dp)
@@ -249,13 +307,18 @@ fun KIPiAApp() {
                                     }
                                 }
                             } else {
-                                // Пользовательские действия для других экранов
+                                // ★★★★ ПОЛЬЗОВАТЕЛЬСКИЕ ДЕЙСТВИЯ ДЛЯ ДРУГИХ ЭКРАНОВ ★★★★
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 4.dp)
                                 ) {
+                                    // ★★★★ КНОПКА РЕДАКТИРОВАНИЯ ★★★★
                                     if (topAppBarState.showEditButton) {
                                         IconButton(
-                                            onClick = { topAppBarState.onEditClick?.invoke() },
+                                            onClick = {
+                                                Timber.d("Кнопка редактирования нажата")
+                                                topAppBarState.onEditClick?.invoke()
+                                            },
                                             enabled = topAppBarState.onEditClick != null
                                         ) {
                                             Icon(
@@ -266,9 +329,13 @@ fun KIPiAApp() {
                                         }
                                     }
 
+                                    // ★★★★ КНОПКА СОХРАНЕНИЯ ★★★★
                                     if (topAppBarState.showSaveButton) {
                                         IconButton(
-                                            onClick = { topAppBarState.onSaveClick?.invoke() },
+                                            onClick = {
+                                                Timber.d("Кнопка сохранения нажата")
+                                                topAppBarState.onSaveClick?.invoke()
+                                            },
                                             enabled = topAppBarState.onSaveClick != null
                                         ) {
                                             Icon(
@@ -279,9 +346,30 @@ fun KIPiAApp() {
                                         }
                                     }
 
+                                    // ★★★★ КНОПКА УДАЛЕНИЯ ★★★★
+                                    if (topAppBarState.showDeleteButton) {
+                                        IconButton(
+                                            onClick = {
+                                                Timber.d("Кнопка удаления нажата")
+                                                topAppBarState.onDeleteClick?.invoke()
+                                            },
+                                            enabled = topAppBarState.onDeleteClick != null
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Delete,
+                                                contentDescription = "Удалить",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
+
+                                    // ★★★★ КНОПКА ДОБАВЛЕНИЯ ★★★★
                                     if (topAppBarState.showAddButton) {
                                         IconButton(
-                                            onClick = { topAppBarState.onAddClick?.invoke() },
+                                            onClick = {
+                                                Timber.d("Кнопка добавления нажата")
+                                                topAppBarState.onAddClick?.invoke()
+                                            },
                                             enabled = topAppBarState.onAddClick != null
                                         ) {
                                             Icon(
@@ -294,8 +382,7 @@ fun KIPiAApp() {
                                 }
                             }
                         },
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                        modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
                     )
                 },
                 bottomBar = {
@@ -326,9 +413,10 @@ fun KIPiAApp() {
             ) { innerPadding ->
                 KIPiANavHost(
                     navController = navController,
-                    updateBottomNavVisibility = { showBottomNav = it },
                     devicesViewModel = hiltViewModel(),
                     topAppBarController = topAppBarController,
+                    notificationManager = notificationManager, // ★★★★ ПЕРЕДАЕМ notificationManager ★★★★
+                    updateBottomNavVisibility = updateBottomNavVisibility,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)

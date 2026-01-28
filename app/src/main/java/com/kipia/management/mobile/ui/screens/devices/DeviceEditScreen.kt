@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,145 +21,150 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.DeviceEditViewModel
+import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceEditScreen(
     deviceId: Int?,
     onNavigateBack: () -> Unit,
-    onSaveSuccess: () -> Unit,
-    viewModel: DeviceEditViewModel = hiltViewModel()
+    topAppBarController: TopAppBarController,
+    viewModel: DeviceEditViewModel = hiltViewModel(),
+    notificationManager: NotificationManager,
+    deleteViewModel: DeviceDeleteViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Инициализация при загрузке
-    LaunchedEffect(key1 = deviceId) {
-        if (deviceId != null && deviceId > 0) {
-            viewModel.loadDevice(deviceId)
-        }
+    // Устанавливаем колбэки для TopAppBar
+    LaunchedEffect(viewModel) {
+        topAppBarController.updateState(
+            topAppBarController.state.value.copy(
+                onSaveClick = {
+                    println("DEBUG: Сохранение вызвано из TopAppBar")
+                    viewModel.saveDevice()
+                },
+                onDeleteClick = {
+                    println("DEBUG: Удаление вызвано из TopAppBar")
+                    // ★★★★ ВСЕГДА ПОКАЗЫВАЕМ ДИАЛОГ — НИКАКИХ УСЛОВИЙ! ★★★★
+                    scope.launch {
+                        deleteViewModel.checkAndShowDialog(device)
+                    }
+                }
+            )
+        )
     }
 
-    // Обработка результатов
+    // ★★★★ УПРОЩЕННЫЙ ОБРАБОТЧИК ★★★★
     LaunchedEffect(uiState) {
         when {
-            uiState.isSuccess -> {
-                onSaveSuccess()
+            uiState.isSaved -> {
+                println("DEBUG: Устройство сохранено - возвращаемся назад")
+                onNavigateBack()
             }
+
+            uiState.isDeleted -> {
+                println("DEBUG: Устройство удалено")
+                onNavigateBack()
+            }
+
             uiState.error != null -> {
-                snackbarHostState.showSnackbar(uiState.error ?: "Неизвестная ошибка")
+                scope.launch {
+                    snackbarHostState.showSnackbar("Ошибка: ${uiState.error}")
+                }
                 viewModel.clearError()
             }
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (deviceId == null) "Новый прибор" else "Редактирование"
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад"
-                        )
-                    }
-                },
-                actions = {
-                    if (deviceId != null) {
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    viewModel.deleteDevice()
-                                    onSaveSuccess()
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Удалить")
-                        }
-                    }
-                }
+    // Сбрасываем колбэки при выходе
+    DisposableEffect(Unit) {
+        onDispose {
+            topAppBarController.updateState(
+                topAppBarController.state.value.copy(
+                    onSaveClick = null,
+                    onDeleteClick = null
+                )
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.saveDevice() },
-                modifier = Modifier.padding(bottom = 80.dp),
-                containerColor = if (uiState.isFormValid && !uiState.isLoading)
-                    MaterialTheme.colorScheme.primaryContainer
-                else
-                    MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (uiState.isFormValid && !uiState.isLoading)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Save,
-                            contentDescription = "Сохранить",
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text("Сохранить")
-                    }
-                }
+        }
+    }
+
+    // Инициализация
+    LaunchedEffect(key1 = deviceId) {
+        println("DEBUG DeviceEditScreen: инициализация, deviceId=$deviceId")
+        if (deviceId != null && deviceId > 0) {
+            viewModel.loadDevice(deviceId)
+        } else {
+            // Для нового устройства
+            viewModel.updateDevice {
+                Device.createEmpty().copy(
+                    type = "Манометр",
+                    status = "В работе"
+                )
             }
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { paddingValues ->
+        }
+    }
+
+    // Диалог удаления из deleteViewModel
+    val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
+
+    // UI
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Форма редактирования
         DeviceEditForm(
             device = device,
             uiState = uiState,
             onTypeChanged = { type ->
+                println("DEBUG: onTypeChanged called with: '$type'")
                 viewModel.updateDevice { it.copy(type = type) }
             },
             onNameChanged = { name ->
+                println("DEBUG: onNameChanged called with: '$name'")
                 viewModel.updateDevice { it.copy(name = name) }
             },
             onManufacturerChanged = { manufacturer ->
+                println("DEBUG: onManufacturerChanged called with: '$manufacturer'")
                 viewModel.updateDevice { it.copy(manufacturer = manufacturer) }
             },
             onInventoryNumberChanged = { inventoryNumber ->
+                println("DEBUG: onInventoryNumberChanged called with: '$inventoryNumber'")
                 viewModel.updateDevice { it.copy(inventoryNumber = inventoryNumber) }
             },
             onYearChanged = { yearStr ->
+                println("DEBUG: onYearChanged called with: '$yearStr'")
                 val year = yearStr.takeIf { it.isNotBlank() }?.toIntOrNull()
                 viewModel.updateDevice { it.copy(year = year) }
             },
             onMeasurementLimitChanged = { measurementLimit ->
+                println("DEBUG: onMeasurementLimitChanged called with: '$measurementLimit'")
                 viewModel.updateDevice { it.copy(measurementLimit = measurementLimit) }
             },
             onAccuracyClassChanged = { accuracyStr ->
+                println("DEBUG: onAccuracyClassChanged called with: '$accuracyStr'")
                 val accuracy = accuracyStr.takeIf { it.isNotBlank() }?.toDoubleOrNull()
                 viewModel.updateDevice { it.copy(accuracyClass = accuracy) }
             },
             onLocationChanged = { location ->
+                println("DEBUG: onLocationChanged called with: '$location'")
                 viewModel.updateDevice { it.copy(location = location) }
             },
             onValveNumberChanged = { valveNumber ->
+                println("DEBUG: onValveNumberChanged called with: '$valveNumber'")
                 viewModel.updateDevice { it.copy(valveNumber = valveNumber) }
             },
             onStatusChanged = { status ->
+                println("DEBUG: onStatusChanged called with: '$status'")
                 viewModel.updateDevice { it.copy(status = status) }
             },
             onAdditionalInfoChanged = { additionalInfo ->
+                println("DEBUG: onAdditionalInfoChanged called with: '$additionalInfo'")
                 viewModel.updateDevice { it.copy(additionalInfo = additionalInfo) }
             },
             onPhotoSelected = { uri ->
@@ -188,8 +192,48 @@ fun DeviceEditScreen(
             },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
+                .padding(top = 16.dp, bottom = 80.dp)
+        )
+
+        // ★★★★ ДИАЛОГ УДАЛЕНИЯ ИЗ deleteViewModel ★★★★
+        deleteDialogData?.let { dialogData ->
+            DeviceDeleteDialog(
+                device = dialogData.device,
+                scheme = dialogData.scheme,
+                deviceCountInLocation = dialogData.deviceCountInLocation,
+                isLastInLocation = dialogData.isLastInLocation,
+                onDismiss = {
+                    deleteViewModel.dismissDialog()
+                },
+                onConfirm = { deleteScheme ->
+                    scope.launch {
+                        try {
+                            val deviceName = dialogData.device.getDisplayName()
+
+                            // ★★★★ ИСПРАВЛЕНИЕ: передаем параметр deleteScheme ★★★★
+                            viewModel.deleteDevice(deleteScheme) // ← было без параметра
+                            deleteViewModel.dismissDialog()
+
+                            // Навигация произойдет в обработчике uiState.isDeleted
+
+                        } catch (e: Exception) {
+                            deleteViewModel.dismissDialog()
+                            snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
+                        }
+                    }
+                }
+            )
+        }
+
+
+
+        // Snackbar для уведомлений
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp)
         )
     }
 }
@@ -218,7 +262,7 @@ fun DeviceEditForm(
     var isTypeExpanded by remember { mutableStateOf(false) }
     var isStatusExpanded by remember { mutableStateOf(false) }
 
-    // ★★★★ ИСПРАВЛЯЕМ: Используем StateFlow из ViewModel ★★★★
+    // Используем StateFlow из ViewModel
     val isLocationDropdownExpanded by viewModel.isLocationDropdownExpanded.collectAsStateWithLifecycle()
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
 
@@ -226,6 +270,34 @@ fun DeviceEditForm(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let(onPhotoSelected)
+    }
+
+    // ★★★★ ДОБАВЛЕНО: локальные состояния для полей ввода ★★★★
+    var typeText by remember { mutableStateOf(device.type) }
+    var inventoryNumberText by remember { mutableStateOf(device.inventoryNumber) }
+    var locationText by remember { mutableStateOf(device.location) }
+    var nameText by remember { mutableStateOf(device.name ?: "") }
+    var manufacturerText by remember { mutableStateOf(device.manufacturer ?: "") }
+    var yearText by remember { mutableStateOf(device.year?.toString() ?: "") }
+    var measurementLimitText by remember { mutableStateOf(device.measurementLimit ?: "") }
+    var accuracyClassText by remember { mutableStateOf(device.accuracyClass?.toString() ?: "") }
+    var valveNumberText by remember { mutableStateOf(device.valveNumber ?: "") }
+    var statusText by remember { mutableStateOf(device.status) }
+    var additionalInfoText by remember { mutableStateOf(device.additionalInfo ?: "") }
+
+    // ★★★★ ОБНОВЛЯЕМ локальные состояния при изменении device ★★★★
+    LaunchedEffect(device) {
+        typeText = device.type
+        inventoryNumberText = device.inventoryNumber
+        locationText = device.location
+        nameText = device.name ?: ""
+        manufacturerText = device.manufacturer ?: ""
+        yearText = device.year?.toString() ?: ""
+        measurementLimitText = device.measurementLimit ?: ""
+        accuracyClassText = device.accuracyClass?.toString() ?: ""
+        valveNumberText = device.valveNumber ?: ""
+        statusText = device.status
+        additionalInfoText = device.additionalInfo ?: ""
     }
 
     Column(
@@ -252,13 +324,15 @@ fun DeviceEditForm(
             onExpandedChange = { isTypeExpanded = it }
         ) {
             OutlinedTextField(
-                value = device.type,
-                onValueChange = { }, // Не меняем напрямую, только через меню
+                value = typeText,
+                onValueChange = { newValue ->
+                    typeText = newValue
+                    onTypeChanged(newValue)
+                },
                 label = { Text("Тип прибора *") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor(),
-                readOnly = true,
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = isTypeExpanded
@@ -275,6 +349,7 @@ fun DeviceEditForm(
                     DropdownMenuItem(
                         text = { Text(type) },
                         onClick = {
+                            typeText = type
                             onTypeChanged(type)
                             isTypeExpanded = false
                         }
@@ -293,24 +368,33 @@ fun DeviceEditForm(
         }
 
         OutlinedTextField(
-            value = device.name ?: "",
-            onValueChange = onNameChanged,
+            value = nameText,
+            onValueChange = { newValue ->
+                nameText = newValue
+                onNameChanged(newValue)
+            },
             label = { Text("Наименование") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
 
         OutlinedTextField(
-            value = device.manufacturer ?: "",
-            onValueChange = onManufacturerChanged,
+            value = manufacturerText,
+            onValueChange = { newValue ->
+                manufacturerText = newValue
+                onManufacturerChanged(newValue)
+            },
             label = { Text("Производитель") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
 
         OutlinedTextField(
-            value = device.inventoryNumber,
-            onValueChange = onInventoryNumberChanged,
+            value = inventoryNumberText,
+            onValueChange = { newValue ->
+                inventoryNumberText = newValue
+                onInventoryNumberChanged(newValue)
+            },
             label = { Text("Инвентарный номер *") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -331,8 +415,11 @@ fun DeviceEditForm(
             modifier = Modifier.fillMaxWidth()
         ) {
             OutlinedTextField(
-                value = device.year?.toString() ?: "",
-                onValueChange = onYearChanged,
+                value = yearText,
+                onValueChange = { newValue ->
+                    yearText = newValue
+                    onYearChanged(newValue)
+                },
                 label = { Text("Год выпуска") },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions.Default.copy(
@@ -342,8 +429,11 @@ fun DeviceEditForm(
             )
 
             OutlinedTextField(
-                value = device.measurementLimit ?: "",
-                onValueChange = onMeasurementLimitChanged,
+                value = measurementLimitText,
+                onValueChange = { newValue ->
+                    measurementLimitText = newValue
+                    onMeasurementLimitChanged(newValue)
+                },
                 label = { Text("Предел измерений") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
@@ -355,8 +445,11 @@ fun DeviceEditForm(
             modifier = Modifier.fillMaxWidth()
         ) {
             OutlinedTextField(
-                value = device.accuracyClass?.toString() ?: "",
-                onValueChange = onAccuracyClassChanged,
+                value = accuracyClassText,
+                onValueChange = { newValue ->
+                    accuracyClassText = newValue
+                    onAccuracyClassChanged(newValue)
+                },
                 label = { Text("Класс точности") },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions.Default.copy(
@@ -366,8 +459,11 @@ fun DeviceEditForm(
             )
 
             OutlinedTextField(
-                value = device.valveNumber ?: "",
-                onValueChange = onValveNumberChanged,
+                value = valveNumberText,
+                onValueChange = { newValue ->
+                    valveNumberText = newValue
+                    onValveNumberChanged(newValue)
+                },
                 label = { Text("Номер вентиля") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
@@ -377,7 +473,7 @@ fun DeviceEditForm(
         // Место установки и статус
         DeviceEditSectionTitle("Место и статус")
 
-        // ★★★★ ОБНОВЛЯЕМ: Поле местоположения с выпадающим списком ★★★★
+        // Поле местоположения с выпадающим списком
         ExposedDropdownMenuBox(
             expanded = isLocationDropdownExpanded,
             onExpandedChange = { expanded ->
@@ -389,8 +485,9 @@ fun DeviceEditForm(
             }
         ) {
             OutlinedTextField(
-                value = device.location,
+                value = locationText,
                 onValueChange = { newValue ->
+                    locationText = newValue
                     onLocationChanged(newValue)
                 },
                 label = { Text("Место установки *") },
@@ -418,6 +515,7 @@ fun DeviceEditForm(
                     DropdownMenuItem(
                         text = { Text(location) },
                         onClick = {
+                            locationText = location
                             onLocationChanged(location)
                             viewModel.collapseLocationDropdown()
                         }
@@ -441,13 +539,15 @@ fun DeviceEditForm(
             onExpandedChange = { isStatusExpanded = it }
         ) {
             OutlinedTextField(
-                value = device.status,
-                onValueChange = { }, // Не меняем напрямую
+                value = statusText,
+                onValueChange = { newValue ->
+                    statusText = newValue
+                    onStatusChanged(newValue)
+                },
                 label = { Text("Статус") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor(),
-                readOnly = true,
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = isStatusExpanded
@@ -459,10 +559,11 @@ fun DeviceEditForm(
                 expanded = isStatusExpanded,
                 onDismissRequest = { isStatusExpanded = false }
             ) {
-                Device.STATUSES.forEach { status -> // Используем Device.STATUSES, который теперь ссылается на DeviceStatus.ALL_STATUSES
+                Device.STATUSES.forEach { status ->
                     DropdownMenuItem(
                         text = { Text(status) },
                         onClick = {
+                            statusText = status
                             onStatusChanged(status)
                             isStatusExpanded = false
                         }
@@ -486,8 +587,11 @@ fun DeviceEditForm(
         // Дополнительная информация
         DeviceEditSectionTitle("Дополнительная информация")
         OutlinedTextField(
-            value = device.additionalInfo ?: "",
-            onValueChange = onAdditionalInfoChanged,
+            value = additionalInfoText,
+            onValueChange = { newValue ->
+                additionalInfoText = newValue
+                onAdditionalInfoChanged(newValue)
+            },
             label = { Text("Примечания") },
             modifier = Modifier
                 .fillMaxWidth()
@@ -497,7 +601,7 @@ fun DeviceEditForm(
         )
 
         // Валидация формы
-        if (!uiState.isFormValid) {
+        if (!uiState.isFormValid && uiState.validationErrors.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -515,7 +619,15 @@ fun DeviceEditForm(
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
-                        text = "Заполните обязательные поля (отмечены *)",
+                        text = "Заполните обязательные поля (отмечены *): " +
+                                uiState.validationErrors.joinToString(", ") {
+                                    when (it) {
+                                        "type" -> "Тип прибора"
+                                        "inventoryNumber" -> "Инвентарный номер"
+                                        "location" -> "Место установки"
+                                        else -> it
+                                    }
+                                },
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
@@ -536,10 +648,10 @@ fun DeviceEditSectionTitle(text: String) {
 
 @Composable
 fun DeviceEditMainPhotoSection(
-    photos: List<String>, // Принимаем список фото
+    photos: List<String>,
     onSelectPhoto: () -> Unit
 ) {
-    val mainPhoto = photos.firstOrNull() // Первое фото - основное
+    val mainPhoto = photos.firstOrNull()
 
     Card(
         modifier = Modifier

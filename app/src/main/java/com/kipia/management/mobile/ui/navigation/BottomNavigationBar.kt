@@ -72,32 +72,52 @@ fun BottomNavigationBar(
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
 
+    // Определяем, активен ли таб devices
+    val isDevicesTabActive = when {
+        currentRoute == "devices" -> true
+        currentRoute?.startsWith("device_") == true -> true
+        else -> false
+    }
+
+    val isSchemesTabActive = when {
+        currentRoute == "schemes" -> true
+        currentRoute?.startsWith("scheme_") == true -> true
+        else -> false
+    }
+
+    val isPhotosTabActive = currentRoute == "photos" || currentRoute?.startsWith("fullscreen_photo") == true
+
+    val isReportsTabActive = currentRoute == "reports"
+
     // Используем Row вместо NavigationBar для кастомного дизайна
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(60.dp)
-            .background(MaterialTheme.colorScheme.secondary) // Фон всей панели
+            .background(MaterialTheme.colorScheme.secondary)
             .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         bottomNavItems.forEach { item ->
-            val isSelected = when (item.route) {
-                "devices" -> currentRoute == "devices" || currentRoute?.startsWith("device_") == true
-                "schemes" -> currentRoute == "schemes" || currentRoute?.startsWith("scheme_") == true
-                "photos" -> currentRoute == "photos" || currentRoute?.startsWith("fullscreen_photo") == true
-                else -> currentRoute == item.route
+            val isSelected = when (item) {
+                is BottomNavItem.Devices -> isDevicesTabActive
+                is BottomNavItem.Schemes -> isSchemesTabActive
+                is BottomNavItem.Photos -> isPhotosTabActive
+                is BottomNavItem.Reports -> isReportsTabActive
+                else -> false
             }
 
             // Текстовая кнопка в рамке
             TextButton(
                 onClick = {
-                    resetToTabRoot(navController, item.route)
+                    if (!isSelected) {
+                        resetToTabRoot(navController, item.route)
+                    }
                 },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 4.dp)
-                    .height(44.dp) // Высота кнопки
+                    .height(44.dp)
                     .border(
                         width = if (isSelected) 2.dp else 1.dp,
                         color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
@@ -109,15 +129,15 @@ fun BottomNavigationBar(
                     ),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent, // Прозрачный, т.к. фон задаем через background
+                    containerColor = Color.Transparent,
                     contentColor = Color.White
                 ),
-                contentPadding = PaddingValues(0.dp) // Убираем стандартные отступы
+                contentPadding = PaddingValues(0.dp)
             ) {
                 Text(
                     text = stringResource(id = item.titleResId),
                     color = Color.White,
-                    fontSize = 12.sp, // Меньший размер текста
+                    fontSize = 12.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     maxLines = 1,

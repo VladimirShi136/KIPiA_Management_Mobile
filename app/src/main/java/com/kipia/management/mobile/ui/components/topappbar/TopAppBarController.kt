@@ -56,7 +56,9 @@ class TopAppBarController {
                     showThemeToggle = false,
                     showFilterMenu = false,
                     showSaveButton = true,
-                    onSaveClick = additionalParams["onSave"] as? () -> Unit
+                    showDeleteButton = !isNew,
+                    onSaveClick = additionalParams["onSave"] as? () -> Unit,
+                    onDeleteClick = additionalParams["onDelete"] as? () -> Unit
                 )
             }
 
@@ -91,9 +93,11 @@ data class TopAppBarData(
     val showFilterMenu: Boolean = true,
     val showEditButton: Boolean = false,
     val showSaveButton: Boolean = false,
+    val showDeleteButton: Boolean = false,
     val showAddButton: Boolean = false,
     val onEditClick: (() -> Unit)? = null,
     val onSaveClick: (() -> Unit)? = null,
+    val onDeleteClick: (() -> Unit)? = null,
     val onAddClick: (() -> Unit)? = null
 ) {
     companion object {
@@ -106,6 +110,7 @@ data class TopAppBarData(
                 showFilterMenu = true,
                 showEditButton = false,
                 showSaveButton = false,
+                showDeleteButton = false,
                 showAddButton = false
             )
         }

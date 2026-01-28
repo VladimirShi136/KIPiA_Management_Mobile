@@ -26,24 +26,11 @@ fun DeviceDetailScreen(
     deviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
-    updateBottomNavVisibility: (Boolean) -> Unit = {},
     viewModel: DeviceDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
     val photos by viewModel.photos.collectAsStateWithLifecycle(initialValue = emptyList()) // ← ВОТ ОНО!
-
-    // ★★★★ ОТКЛЮЧАЕМ BOTTOM NAVIGATION ★★★★
-    LaunchedEffect(Unit) {
-        updateBottomNavVisibility(false)
-    }
-
-    // ★★★★ ВОССТАНАВЛИВАЕМ ПРИ ВЫХОДЕ ★★★★
-    DisposableEffect(Unit) {
-        onDispose {
-            updateBottomNavVisibility(true)
-        }
-    }
 
     // Загружаем устройство при входе на экран
     LaunchedEffect(deviceId) {
@@ -74,11 +61,14 @@ fun DeviceDetailScreen(
                 },
                 onShare = { viewModel.shareDeviceInfo() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
-                onNavigateToEdit = { onNavigateToEdit(deviceId) },
+                onNavigateToEdit = {
+                    // ★★★★ ВЫЗЫВАЕМ КОЛБЭК С deviceId ★★★★
+                    onNavigateToEdit(deviceId)
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(top = 16.dp) // ← Добавляем отступ сверху
+                    .padding(6.dp)
             )
         }
         else -> {
@@ -108,13 +98,13 @@ fun DeviceDetailContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(bottom = 6.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
             Column(
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(10.dp)
             ) {
                 // Заголовок с инвентарным номером
                 Text(
@@ -151,10 +141,10 @@ fun DeviceDetailContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(bottom = 6.dp),
         ) {
             Column(
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(10.dp)
             ) {
                 DeviceDetailSectionTitle("Основная информация")
 
@@ -204,41 +194,6 @@ fun DeviceDetailContent(
                         value = valve
                     )
                 }
-
-                // ★★★★ ДОБАВИМ КНОПКИ ДЕЙСТВИЙ ВНУТРИ КАРТОЧКИ ★★★★
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Кнопка "Редактировать"
-                    OutlinedButton(
-                        onClick = onNavigateToEdit,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            Icons.Filled.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                        Text("Редактировать")
-                    }
-
-                    // Кнопка "В избранное"
-                    OutlinedButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp),
-                            tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(if (isFavorite) "В избранном" else "В избранное")
-                    }
-                }
             }
         }
 
@@ -247,10 +202,10 @@ fun DeviceDetailContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 6.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(10.dp)
                 ) {
                     DeviceDetailSectionTitle("Дополнительная информация")
 
@@ -291,8 +246,7 @@ fun DeviceDetailContent(
         // Кнопки действий внизу
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Кнопка "Поделиться"
@@ -321,8 +275,6 @@ fun DeviceDetailContent(
                 Text("QR код")
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

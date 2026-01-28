@@ -16,13 +16,13 @@ interface DeviceDao {
     suspend fun getDeviceByIdSync(id: Int): Device?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertDevice(device: Device)
+    suspend fun insertDevice(device: Device): Long  // ← ДОБАВЛЕНО: возвращаем Long
 
     @Delete
-    suspend fun deleteDevice(device: Device)
+    suspend fun deleteDevice(device: Device): Int  // ← ДОБАВЛЕНО: возвращаем Int
 
     @Update
-    suspend fun updateDevice(device: Device)
+    suspend fun updateDevice(device: Device): Int  // ← ДОБАВЛЕНО: возвращаем Int
 
     @Query("SELECT * FROM devices WHERE type LIKE :type ORDER BY inventory_number")
     fun getDevicesByType(type: String): Flow<List<Device>>
@@ -45,4 +45,7 @@ interface DeviceDao {
 
     @Query("SELECT DISTINCT location FROM devices WHERE location IS NOT NULL AND location != '' ORDER BY location")
     suspend fun getAllLocationsSync(): List<String>
+
+    @Query("SELECT COUNT(*) FROM devices WHERE location = :location")
+    suspend fun countDevicesByLocation(location: String): Int
 }

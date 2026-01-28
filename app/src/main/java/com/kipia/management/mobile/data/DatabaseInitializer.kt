@@ -16,20 +16,22 @@ class DatabaseInitializer @Inject constructor(
     private val schemeSyncUseCase: SchemeSyncUseCase
 ) {
 
-    suspend fun initialize() {
+    fun initialize() {  // ← УБЕРИТЕ suspend
         CoroutineScope(Dispatchers.IO).launch {
             val deviceDao = database.deviceDao()
 
             // Проверяем, пустая ли база устройств
             if (deviceDao.getAllDevicesSync().isEmpty()) {
+                Timber.d("DatabaseInitializer: База пустая, создаем тестовые устройства")
                 // Добавляем тестовые устройства
                 val testDevices = createTestDevices()
                 testDevices.forEach { device ->
-                    // ★★★★ СОХРАНЯЕМ И СИНХРОНИЗИРУЕМ ★★★★
                     deviceDao.insertDevice(device)
                     schemeSyncUseCase.syncSchemeOnDeviceSave(device)
                 }
                 Timber.d("DatabaseInitializer: создано ${testDevices.size} тестовых устройств")
+            } else {
+                Timber.d("DatabaseInitializer: В базе уже есть устройства")
             }
         }
     }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DevicesViewModel @Inject constructor(
     private val repository: DeviceRepository,
+    private val notificationManager: NotificationManager,
     private val schemeSyncUseCase: SchemeSyncUseCase,
 ) : ViewModel() {
 
@@ -32,22 +34,16 @@ class DevicesViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
-    // === Источник данных: Сырой список устройств (обновляется при изменении в БД) ===
-    private val _rawDevices = MutableStateFlow<List<Device>>(emptyList())
+    // === ИСТОЧНИК ДАННЫХ: Используем Flow напрямую из репозитория ===
+    private val _rawDevices = repository.getAllDevices()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000), // ← КРИТИЧНО ВАЖНО!
+            initialValue = emptyList()
+        )
 
-    // === Обновляем rawDevices при каждом изменении из репозитория ===
-    init {
-        viewModelScope.launch {
-            repository.getAllDevices().collect { devices ->
-                _rawDevices.value = devices
-                Timber.d("REPOSITORY: Получено ${devices.size} устройств для фильтрации")
-            }
-        }
-    }
-
-    // === АЛТЕРНАТИВА: если вы хотите, чтобы фильтрация срабатывала при каждом изменении фильтра — используйте combine с rawDevices ===
     val devices = combine(
-        _rawDevices, // ← теперь это реагирует на изменения!
+        _rawDevices, // ← теперь это Flow, который реагирует на изменения БД
         _searchQuery,
         _locationFilter,
         _statusFilter
@@ -95,7 +91,7 @@ class DevicesViewModel @Inject constructor(
         filtered
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5000), // ← Тоже важно
         initialValue = emptyList()
     )
 
@@ -146,23 +142,29 @@ class DevicesViewModel @Inject constructor(
         Timber.d("setStatusFilter: установлено, теперь = ${_statusFilter.value}")
     }
 
-    fun deleteDevice(device: Device) {
+    fun deleteDevice(device: Device, deleteScheme: Boolean = false) {
         viewModelScope.launch {
             try {
-                _isLoading.value = true
+                // ★★★★ ИСПРАВЛЕНИЕ: Сначала удаляем устройство ★★★★
                 repository.deleteDevice(device)
-                _error.value = null
+
+                // ★★★★ Затем проверяем схему (если нужно) ★★★★
+                val schemeWasDeleted = if (deleteScheme) {
+                    schemeSyncUseCase.deleteSchemeIfEmpty(device.location)
+                } else {
+                    false
+                }
+
+                // ★★★★ Отправляем уведомление с правильным флагом ★★★★
+                notificationManager.notifyDeviceDeleted(
+                    deviceName = device.getDisplayName(),
+                    withScheme = schemeWasDeleted
+                )
+
             } catch (e: Exception) {
-                _error.value = "Ошибка удаления: ${e.message}"
-                Timber.e(e, "Ошибка удаления устройства")
-            } finally {
-                _isLoading.value = false
+                notificationManager.notifyError(e.message ?: "Ошибка удаления")
             }
         }
-    }
-
-    suspend fun deleteSchemeIfEmpty(schemeName: String): Boolean {
-        return schemeSyncUseCase.deleteSchemeIfEmpty(schemeName)
     }
 }
 

@@ -2,7 +2,6 @@ package com.kipia.management.mobile.ui.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -19,15 +18,17 @@ import com.kipia.management.mobile.ui.screens.reports.ReportsScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
 import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 
 @Composable
 fun KIPiANavHost(
     navController: NavHostController = rememberNavController(),
-    updateBottomNavVisibility: (Boolean) -> Unit = {},
     devicesViewModel: DevicesViewModel,
     topAppBarController: TopAppBarController,
+    notificationManager: NotificationManager, // ★★★★ ДОБАВЛЕНО ★★★★
+    updateBottomNavVisibility: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     startDestination: String = BottomNavItem.Devices.route
 ) {
@@ -39,6 +40,7 @@ fun KIPiANavHost(
         // Экран устройств — ✅
         composable(BottomNavItem.Devices.route) {
             DevicesScreen(
+                // ★★★★ ПЕРЕДАЕМ ФУНКЦИЮ ★★★★
                 updateBottomNavVisibility = updateBottomNavVisibility,
                 onNavigateToDeviceDetail = { deviceId ->
                     navController.navigate("device_detail/$deviceId")
@@ -52,7 +54,8 @@ fun KIPiANavHost(
                     navController.navigate(route)
                 },
                 viewModel = devicesViewModel,
-                deleteViewModel = hiltViewModel()
+                deleteViewModel = hiltViewModel(),
+                notificationManager = notificationManager // ★★★★ ДОБАВЛЕНО ★★★★
             )
         }
 
@@ -63,35 +66,38 @@ fun KIPiANavHost(
                 DeviceDetailScreen(
                     deviceId = deviceId,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToEdit = { navController.navigate("device_edit/$deviceId") },
-                    updateBottomNavVisibility = updateBottomNavVisibility // ← передаем
+                    onNavigateToEdit = { navController.navigate("device_edit/$deviceId") }
+                    // Убираем updateBottomNavVisibility
                 )
             }
         }
 
-        // Экран редактирования устройства (новый прибор — без ID)
-        composable("device_edit") {
-            LaunchedEffect(Unit) {
-                topAppBarController.setForScreen("device_edit", mapOf(
-                    "isNew" to true,
-                    "onSave" to { navController.popBackStack() }
-                ))
-            }
-
-            DeviceEditScreen(
-                deviceId = null,
-                onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
-            )
-        }
-
-        // Экран редактирования существующего прибора (с ID)
         composable("device_edit/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
             DeviceEditScreen(
                 deviceId = deviceId,
+                onNavigateBack = {
+                    navController.popBackStack("devices", false)
+                    if (!navController.popBackStack()) {
+                        navController.navigate("devices") {
+                            popUpTo(0) { saveState = false }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                topAppBarController = topAppBarController, // Оставляем только это
+                viewModel = hiltViewModel(),
+                notificationManager = notificationManager // ★★★★ ДОБАВЛЕНО ★★★★
+            )
+        }
+
+        composable("device_edit") {
+            DeviceEditScreen(
+                deviceId = null,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
+                topAppBarController = topAppBarController, // Оставляем только это
+                viewModel = hiltViewModel(),
+                notificationManager = notificationManager // ★★★★ ДОБАВЛЕНО ★★★★
             )
         }
 
@@ -158,7 +164,6 @@ fun KIPiANavHost(
         composable("settings") {
             SettingsScreen(
                 navController = navController,
-                updateBottomNavVisibility = updateBottomNavVisibility
             )
         }
     }

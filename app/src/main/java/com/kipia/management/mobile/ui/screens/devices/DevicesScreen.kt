@@ -26,12 +26,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Основной экран для отображения и управления приборами
@@ -43,7 +45,8 @@ fun DevicesScreen(
     onNavigateToDeviceDetail: (Int) -> Unit,
     onNavigateToDeviceEdit: (Int?) -> Unit,
     viewModel: DevicesViewModel,
-    deleteViewModel: DeviceDeleteViewModel = hiltViewModel()
+    deleteViewModel: DeviceDeleteViewModel = hiltViewModel(),
+    notificationManager: NotificationManager
 ) {
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -55,30 +58,20 @@ fun DevicesScreen(
     val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
     val verticalScrollState = rememberLazyListState()
 
-    // Логика для bottom navigation
+    // ★★★★ УПРОЩЕННАЯ ЛОГИКА СКРЫТИЯ BOTTOM NAV ★★★★
     val shouldShowBottomNav by remember {
         derivedStateOf {
             with(verticalScrollState) {
-                // 1. Если список пустой - показываем навигацию
-                if (layoutInfo.totalItemsCount == 0) return@derivedStateOf true
-
-                // 2. Если первый видимый элемент не первый в списке - скрываем
-                if (firstVisibleItemIndex > 0) return@derivedStateOf false
-
-                // 3. Для первого элемента проверяем offset
-                // firstVisibleItemScrollOffset - это сколько пикселей ПРОСКРОЛЛИЛИ
-                // Если мы не прокручивали (offset == 0) - показываем
-                if (firstVisibleItemScrollOffset == 0) return@derivedStateOf true
-
-                // 4. Если немного прокрутили - проверяем видимость
-                val firstVisibleItem = layoutInfo.visibleItemsInfo.firstOrNull()
-                if (firstVisibleItem == null) return@derivedStateOf true
-
-                // Offset первого элемента относительно видимой области
-                // Если >= -5px, считаем что элемент "достаточно виден"
-                firstVisibleItem.offset >= -10
+                // Если мы в самом верху списка (первый элемент и не было скролла)
+                firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
             }
         }
+    }
+
+    // Обновляем состояние BottomNav
+    LaunchedEffect(shouldShowBottomNav) {
+        Timber.d("DevicesScreen: Обновление BottomNav видимости: $shouldShowBottomNav")
+        updateBottomNavVisibility(shouldShowBottomNav)
     }
 
     // ★★★★ КНОПКА "ВВЕРХ" ★★★★
@@ -88,18 +81,57 @@ fun DevicesScreen(
         }
     }
 
-    // Обновляем состояние
-    LaunchedEffect(shouldShowBottomNav) {
-        updateBottomNavVisibility(shouldShowBottomNav)
-    }
-
     // Функция для удаления устройства
     val deleteDeviceAction: (Device) -> Unit = { device ->
         scope.launch {
-            val showDialog = deleteViewModel.checkAndShowDialog(device)
-            if (!showDialog) {
-                viewModel.deleteDevice(device)
-                snackbarHostState.showSnackbar("Прибор '${device.getDisplayName()}' удален")
+            deleteViewModel.checkAndShowDialog(device)
+        }
+    }
+
+    // ★★★★ ОБРАБОТКА УВЕДОМЛЕНИЙ ★★★★
+    LaunchedEffect(Unit) {
+        notificationManager.notification.collect { notification ->
+            // Пропускаем пустые уведомления
+            if (notification is NotificationManager.Notification.None) {
+                println("DEBUG DevicesScreen: Получено пустое уведомление - пропускаем")
+                return@collect
+            }
+
+            println("DEBUG DevicesScreen: Получено уведомление: $notification")
+
+            val message = when (notification) {
+                is NotificationManager.Notification.DeviceSaved -> {
+                    println("DEBUG DevicesScreen: Показываем уведомление о сохранении")
+                    "Прибор '${notification.deviceName}' сохранен"
+                }
+
+                is NotificationManager.Notification.DeviceDeleted -> {
+                    println("DEBUG DevicesScreen: Показываем уведомление об удалении")
+                    if (notification.withScheme) {
+                        "Прибор '${notification.deviceName}' и схема удалены"
+                    } else {
+                        "Прибор '${notification.deviceName}' удален"
+                    }
+                }
+
+                is NotificationManager.Notification.Error -> {
+                    println("DEBUG DevicesScreen: Показываем уведомление об ошибке")
+                    "Ошибка: ${notification.message}"
+                }
+
+                NotificationManager.Notification.None -> return@collect
+            }
+
+            scope.launch {
+                println("DEBUG DevicesScreen: Показываем snackbar: $message")
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    duration = SnackbarDuration.Short
+                )
+
+                // ★★★★ ВАЖНО: Очищаем replay cache после показа ★★★★
+                delay(100) // Небольшая задержка для гарантии показа
+                notificationManager.clearLastNotification()
             }
         }
     }
@@ -132,7 +164,7 @@ fun DevicesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp)
+                .padding(6.dp)
                 .windowInsetsPadding(
                     WindowInsets.navigationBars
                         .only(WindowInsetsSides.Bottom)
@@ -145,7 +177,7 @@ fun DevicesScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp)
-                    .padding(vertical = 4.dp)
+                    .padding(bottom = 6.dp)
             )
 
             // ★★★★ АКТИВНЫЕ ФИЛЬТРЫ ★★★★
@@ -269,46 +301,22 @@ fun DevicesScreen(
             DeviceDeleteDialog(
                 device = dialogData.device,
                 scheme = dialogData.scheme,
+                deviceCountInLocation = dialogData.deviceCountInLocation,
+                isLastInLocation = dialogData.isLastInLocation,
                 onDismiss = {
                     deleteViewModel.dismissDialog()
                 },
                 onConfirm = { deleteScheme ->
                     scope.launch {
                         try {
-                            // 1. Удаляем устройство
-                            viewModel.deleteDevice(dialogData.device)
+                            // ★★★★ Передаем флаг deleteScheme в ViewModel ★★★★
+                            // ViewModel сам решит, удалять ли схему
+                            viewModel.deleteDevice(dialogData.device, deleteScheme)
 
-                            // 2. Ждем обновления базы данных
-                            delay(50)
-
-                            // 3. Если выбрано - удаляем схему
-                            var success = false
-                            if (deleteScheme) {
-                                success = viewModel.deleteSchemeIfEmpty(dialogData.scheme.name)
-                            }
-
-                            // 4. Закрываем диалог
                             deleteViewModel.dismissDialog()
-
-                            // 5. Показываем snackbar после закрытия
-                            delay(100)
-
-                            val message = if (deleteScheme) {
-                                if (success) {
-                                    "Прибор и схема '${dialogData.scheme.name}' удалены"
-                                } else {
-                                    "Прибор удален, но схема '${dialogData.scheme.name}' не была удалена (возможно, остались другие приборы)"
-                                }
-                            } else {
-                                "Прибор '${dialogData.device.getDisplayName()}' удален"
-                            }
-
-                            snackbarHostState.showSnackbar(message)
 
                         } catch (e: Exception) {
-                            // Все равно закрываем диалог при ошибке
                             deleteViewModel.dismissDialog()
-                            delay(100)
                             snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
                         }
                     }
@@ -331,52 +339,159 @@ enum class SortColumn(val displayName: String) {
 @Composable
 fun DeviceDeleteDialog(
     device: Device,
-    scheme: Scheme,
+    scheme: Scheme?,
+    deviceCountInLocation: Int,
+    isLastInLocation: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (deleteScheme: Boolean) -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("Удаление устройства")
-        },
-        text = {
-            Column {
-                Text("Вы удаляете устройство:")
+    val messageContent = @Composable {
+        Column(
+            modifier = Modifier
+                .padding(16.dp) // ← ВСЕГДА фиксированный padding — НЕ fillMaxWidth!
+                .heightIn(max = 200.dp) // ← Ограничиваем высоту, чтобы не "вылазил"
+        ) {
+            if (isLastInLocation) {
+                Text(
+                    text = "Вы удаляете устройство:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Text(
                     text = "${device.getDisplayName()} (${device.inventoryNumber})",
                     fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
-                Text("Это последнее устройство в локации:")
+
+                if (scheme != null) {
+                    Text(
+                        text = "Это последнее устройство в локации:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "'${scheme.name}'",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                    Text(
+                        text = "Что делать со схемой этой локации?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    Text(
+                        text = "Это последнее устройство в локации '${device.location}'.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Схема не привязана.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
                 Text(
-                    text = "'${scheme.name}'",
+                    text = "Вы уверены, что хотите удалить устройство?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${device.getDisplayName()} (${device.inventoryNumber})",
                     fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
-                Text("Что делать со схемой этой локации?")
+                Text(
+                    text = "В локации '${device.location}' останется ещё ${deviceCountInLocation - 1} приборов.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Схема останется без изменений.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (isLastInLocation) "Удаление устройства" else "Подтверждение удаления",
+                style = MaterialTheme.typography.titleMedium
+            )
         },
+        text = { messageContent() }, // ← Передаём как lambda
         confirmButton = {
             Button(
-                onClick = { onConfirm(true) },
+                onClick = {
+                    if (isLastInLocation && scheme != null) {
+                        onConfirm(true) // "Удалить с схемой"
+                    } else {
+                        onConfirm(false) // "Удалить устройство"
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error
-                )
+                ),
+                modifier = Modifier.padding(end = 8.dp)
             ) {
-                Text("Удалить с схемой")
+                Text(
+                    text = if (isLastInLocation && scheme != null) {
+                        "Удалить с схемой"
+                    } else {
+                        "Удалить устройство"
+                    },
+                    color = Color.White
+                )
             }
         },
         dismissButton = {
-            Row {
-                Button(
-                    onClick = { onConfirm(false) },
-                    modifier = Modifier.padding(end = 8.dp)
-                ) {
-                    Text("Только устройство")
-                }
-                Button(onClick = onDismiss) {
-                    Text("Отмена")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                when {
+                    // Случай 1: Последний прибор с привязанной схемой (3 кнопки)
+                    isLastInLocation && scheme != null -> {
+                        // Кнопка "Только устройство"
+                        Button(
+                            onClick = { onConfirm(false) }, // Удалить только устройство
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("Только устройство")
+                        }
+
+                        // Кнопка "Отмена"
+                        Button(onClick = onDismiss) {
+                            Text("Отмена")
+                        }
+                    }
+
+                    // Случай 2: НЕ последний прибор или нет схемы (2 кнопки)
+                    else -> {
+                        // Кнопка "Отмена" - просто закрывает диалог
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("Отмена")
+                        }
+                    }
                 }
             }
         }
@@ -860,7 +975,8 @@ fun TableRow(
                         text = { Text("Удалить") },
                         onClick = {
                             showMenu = false
-                            onDelete()
+                            onDelete() // ← ВАЖНО: вызывается ли этот колбэк?
+                            println("DEBUG: Кнопка 'Удалить' нажата для устройства ${device.id}")
                         },
                         leadingIcon = {
                             Icon(Icons.Default.Delete, contentDescription = null)
