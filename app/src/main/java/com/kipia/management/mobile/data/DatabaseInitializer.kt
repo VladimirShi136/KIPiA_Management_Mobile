@@ -10,6 +10,9 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Класс инициализации БД
+ */
 @Singleton
 class DatabaseInitializer @Inject constructor(
     private val database: AppDatabase,

@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.ui.screens.devices
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -110,6 +111,7 @@ fun DeviceDetailContent(
                 Text(
                     text = device.getDisplayName(),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
@@ -214,6 +216,7 @@ fun DeviceDetailContent(
                     Text(
                         text = info,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -259,7 +262,8 @@ fun DeviceDetailContent(
                     contentDescription = null,
                     modifier = Modifier.padding(end = 8.dp)
                 )
-                Text("Поделиться")
+                Text("Поделиться",
+                color = MaterialTheme.colorScheme.primary)
             }
 
             // Кнопка "QR код"
@@ -272,7 +276,8 @@ fun DeviceDetailContent(
                     contentDescription = null,
                     modifier = Modifier.padding(end = 8.dp)
                 )
-                Text("QR код")
+                Text("QR код",
+                color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -283,9 +288,13 @@ fun StatusBadge(status: String) {
     val deviceStatus = DeviceStatus.fromString(status)
 
     Surface(
-        color = deviceStatus.backgroundColor,
+        color = deviceStatus.containerColor, // ИЗМЕНЕНИЕ: используем containerColor
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.padding(horizontal = 8.dp)
+        modifier = Modifier.padding(horizontal = 8.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = deviceStatus.color.copy(alpha = 0.3f) // Тонкая рамка цвета статуса
+        )
     ) {
         Text(
             text = status,
@@ -317,6 +326,7 @@ fun DeviceDetailRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface, // ДОБАВЛЕНО
             modifier = Modifier.weight(1f)
         )
     }
@@ -385,9 +395,16 @@ fun DeviceDetailLoadingState() {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator()
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary, // ДОБАВЛЕНО
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(48.dp)
+            )
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Загрузка...")
+            Text(
+                "Загрузка...",
+                color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+            )
         }
     }
 }

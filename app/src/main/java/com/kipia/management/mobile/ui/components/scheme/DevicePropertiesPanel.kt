@@ -53,10 +53,16 @@ fun DevicePropertiesPanel(
             ) {
                 Text(
                     text = "Свойства прибора",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
-                IconButton(onClick = onClose) {
+                IconButton(
+                    onClick = onClose,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
                     Icon(Icons.Default.Close, contentDescription = "Закрыть")
                 }
             }
@@ -64,12 +70,14 @@ fun DevicePropertiesPanel(
             // Информация о приборе
             DeviceInfoSection(device)
 
-            HorizontalDivider()  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
 
             // Положение
             Text(
                 text = "Положение",
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+
             )
 
             Row(
@@ -84,9 +92,19 @@ fun DevicePropertiesPanel(
                             onUpdatePosition(x, schemeDevice.y)
                         }
                     },
-                    label = { Text("X") },
+                    label = {
+                        Text(
+                            "X",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    )
                 )
 
                 OutlinedTextField(
@@ -97,18 +115,29 @@ fun DevicePropertiesPanel(
                             onUpdatePosition(schemeDevice.x, y)
                         }
                     },
-                    label = { Text("Y") },
+                    label = {
+                        Text(
+                            "Y",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    )
                 )
             }
 
-            HorizontalDivider()  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
 
             // Вращение
             Text(
                 text = "Вращение",
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Slider(
@@ -118,24 +147,39 @@ fun DevicePropertiesPanel(
                     onUpdateRotation(it)
                 },
                 valueRange = 0f..360f,
-                steps = 359
+                steps = 359,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                )
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("0°")
-                Text("${rotation.toInt()}°")
-                Text("360°")
+                Text(
+                    "0°",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                )
+                Text(
+                    "${rotation.toInt()}°",
+                    color = MaterialTheme.colorScheme.primary // ДОБАВЛЕНО
+                )
+                Text(
+                    "360°",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                )
             }
 
-            HorizontalDivider()  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
 
             // Масштаб
             Text(
                 text = "Масштаб",
-                style = MaterialTheme.typography.labelLarge
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Slider(
@@ -145,16 +189,30 @@ fun DevicePropertiesPanel(
                     onUpdateScale(it)
                 },
                 valueRange = 0.5f..2f,
-                steps = 15
+                steps = 15,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.secondary,
+                    activeTrackColor = MaterialTheme.colorScheme.secondary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                )
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("50%")
-                Text("${(scale * 100).toInt()}%")
-                Text("200%")
+                Text(
+                    "50%",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                )
+                Text(
+                    "${(scale * 100).toInt()}%",
+                    color = MaterialTheme.colorScheme.secondary // ДОБАВЛЕНО
+                )
+                Text(
+                    "200%",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -172,7 +230,10 @@ fun DevicePropertiesPanel(
                         onUpdateRotation(0f)
                         onUpdateScale(1f)
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
                 ) {
                     Text("Сброс")
                 }
@@ -180,11 +241,16 @@ fun DevicePropertiesPanel(
                 Button(
                     onClick = onRemoveDevice,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
                     ),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onError // ДОБАВЛЕНО
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Удалить")
                 }
@@ -213,7 +279,8 @@ fun DeviceInfoSection(device: Device) {
                     else -> Icons.Default.Devices
                 },
                 contentDescription = null,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -227,7 +294,8 @@ fun DeviceInfoSection(device: Device) {
 
             Text(
                 text = displayName,
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
 
@@ -238,17 +306,20 @@ fun DeviceInfoSection(device: Device) {
             // Статус - используем DeviceStatus
             val deviceStatus = DeviceStatus.fromString(device.status)
 
+            // ★★★★ ИСПРАВЛЕННЫЙ ВАРИАНТ AssistChip ★★★★
             AssistChip(
                 onClick = {},
                 label = {
                     Text(
                         device.status.uppercase(),
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        color = deviceStatus.textColor
                     )
                 },
                 colors = AssistChipDefaults.assistChipColors(
-                    containerColor = deviceStatus.backgroundColor
-                )
+                    containerColor = deviceStatus.containerColor, // containerColor вместо backgroundColor
+                    labelColor = deviceStatus.textColor
+                ),
             )
 
             // Тип прибора - используем InputChip или FilterChip вместо SuggestionChip
@@ -258,11 +329,13 @@ fun DeviceInfoSection(device: Device) {
                 label = {
                     Text(
                         device.type,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
@@ -316,7 +389,8 @@ fun DeviceInfoSection(device: Device) {
                 if (limit.isNotBlank()) {
                     Text(
                         text = "Предел: $limit",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
                     )
                 }
             }
@@ -324,7 +398,8 @@ fun DeviceInfoSection(device: Device) {
             device.accuracyClass?.let { accuracy ->
                 Text(
                     text = "Класс: $accuracy",
-                    style = MaterialTheme.typography.labelSmall
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
                 )
             }
         }

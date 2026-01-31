@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -14,9 +15,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -115,7 +116,8 @@ fun DeviceEditScreen(
 
     // UI
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
     ) {
         // Форма редактирования
         DeviceEditForm(
@@ -193,7 +195,6 @@ fun DeviceEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 16.dp, bottom = 80.dp)
         )
 
         // ★★★★ ДИАЛОГ УДАЛЕНИЯ ИЗ deleteViewModel ★★★★
@@ -209,14 +210,9 @@ fun DeviceEditScreen(
                 onConfirm = { deleteScheme ->
                     scope.launch {
                         try {
-                            val deviceName = dialogData.device.getDisplayName()
-
                             // ★★★★ ИСПРАВЛЕНИЕ: передаем параметр deleteScheme ★★★★
                             viewModel.deleteDevice(deleteScheme) // ← было без параметра
                             deleteViewModel.dismissDialog()
-
-                            // Навигация произойдет в обработчике uiState.isDeleted
-
                         } catch (e: Exception) {
                             deleteViewModel.dismissDialog()
                             snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
@@ -225,9 +221,6 @@ fun DeviceEditScreen(
                 }
             )
         }
-
-
-
         // Snackbar для уведомлений
         SnackbarHost(
             hostState = snackbarHostState,
@@ -301,8 +294,8 @@ fun DeviceEditForm(
     }
 
     Column(
-        modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Основное фото
         DeviceEditSectionTitle("Основное фото")
@@ -329,10 +322,16 @@ fun DeviceEditForm(
                     typeText = newValue
                     onTypeChanged(newValue)
                 },
-                label = { Text("Тип прибора *") },
+                label = {
+                    Text(
+                        "Тип прибора *",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor(),
+                    .menuAnchor()
+                    .padding(vertical = 4.dp),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = isTypeExpanded
@@ -347,7 +346,7 @@ fun DeviceEditForm(
             ) {
                 Device.TYPES.forEach { type ->
                     DropdownMenuItem(
-                        text = { Text(type) },
+                        text = { Text(type, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         onClick = {
                             typeText = type
                             onTypeChanged(type)
@@ -373,8 +372,10 @@ fun DeviceEditForm(
                 nameText = newValue
                 onNameChanged(newValue)
             },
-            label = { Text("Наименование") },
-            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Наименование", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
             singleLine = true
         )
 
@@ -385,7 +386,9 @@ fun DeviceEditForm(
                 onManufacturerChanged(newValue)
             },
             label = { Text("Производитель") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
             singleLine = true
         )
 
@@ -396,7 +399,9 @@ fun DeviceEditForm(
                 onInventoryNumberChanged(newValue)
             },
             label = { Text("Инвентарный номер *") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
             singleLine = true,
             isError = uiState.inventoryNumberError != null
         )
@@ -410,65 +415,75 @@ fun DeviceEditForm(
             )
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = yearText,
-                onValueChange = { newValue ->
-                    yearText = newValue
-                    onYearChanged(newValue)
-                },
-                label = { Text("Год выпуска") },
-                modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Number
-                ),
-                singleLine = true
-            )
+        OutlinedTextField(
+            value = yearText,
+            onValueChange = { newValue ->
+                yearText = newValue
+                onYearChanged(newValue)
+            },
+            label = {
+                Text(
+                    "Год выпуска",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(
+                keyboardType = KeyboardType.Number
+            ),
+            singleLine = true
+        )
 
-            OutlinedTextField(
-                value = measurementLimitText,
-                onValueChange = { newValue ->
-                    measurementLimitText = newValue
-                    onMeasurementLimitChanged(newValue)
-                },
-                label = { Text("Предел измерений") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-        }
+        OutlinedTextField(
+            value = measurementLimitText,
+            onValueChange = { newValue ->
+                measurementLimitText = newValue
+                onMeasurementLimitChanged(newValue)
+            },
+            label = {
+                Text(
+                    "Предел измерений",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = accuracyClassText,
-                onValueChange = { newValue ->
-                    accuracyClassText = newValue
-                    onAccuracyClassChanged(newValue)
-                },
-                label = { Text("Класс точности") },
-                modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Number
-                ),
-                singleLine = true
-            )
+        OutlinedTextField(
+            value = accuracyClassText,
+            onValueChange = { newValue ->
+                accuracyClassText = newValue
+                onAccuracyClassChanged(newValue)
+            },
+            label = {
+                Text(
+                    "Класс точности",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(
+                keyboardType = KeyboardType.Number
+            ),
+            singleLine = true
+        )
 
-            OutlinedTextField(
-                value = valveNumberText,
-                onValueChange = { newValue ->
-                    valveNumberText = newValue
-                    onValveNumberChanged(newValue)
-                },
-                label = { Text("Номер вентиля") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-        }
+        OutlinedTextField(
+            value = valveNumberText,
+            onValueChange = { newValue ->
+                valveNumberText = newValue
+                onValveNumberChanged(newValue)
+            },
+            label = {
+                Text(
+                    "Номер крана",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
 
         // Место установки и статус
         DeviceEditSectionTitle("Место и статус")
@@ -493,7 +508,8 @@ fun DeviceEditForm(
                 label = { Text("Место установки *") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor(),
+                    .menuAnchor()
+                    .padding(vertical = 4.dp),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = isLocationDropdownExpanded
@@ -513,7 +529,12 @@ fun DeviceEditForm(
             ) {
                 allLocations.forEach { location ->
                     DropdownMenuItem(
-                        text = { Text(location) },
+                        text = {
+                            Text(
+                                location,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         onClick = {
                             locationText = location
                             onLocationChanged(location)
@@ -547,7 +568,8 @@ fun DeviceEditForm(
                 label = { Text("Статус") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor(),
+                    .menuAnchor()
+                    .padding(vertical = 4.dp),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(
                         expanded = isStatusExpanded
@@ -561,7 +583,7 @@ fun DeviceEditForm(
             ) {
                 Device.STATUSES.forEach { status ->
                     DropdownMenuItem(
-                        text = { Text(status) },
+                        text = { Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         onClick = {
                             statusText = status
                             onStatusChanged(status)
@@ -595,7 +617,8 @@ fun DeviceEditForm(
             label = { Text("Примечания") },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
+                .height(100.dp)
+                .padding(vertical = 4.dp),
             singleLine = false,
             maxLines = 5
         )
@@ -605,9 +628,13 @@ fun DeviceEditForm(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                )
+                    containerColor = MaterialTheme.colorScheme.errorContainer, // Уже OK
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer // Уже OK
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                ) // ★★★★ ДОБАВЛЕНО ★★★★
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
@@ -616,7 +643,8 @@ fun DeviceEditForm(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = "Ошибка",
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 8.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer // ★★★★ ДОБАВЛЕНО ★★★★
                     )
                     Text(
                         text = "Заполните обязательные поля (отмечены *): " +
@@ -628,7 +656,8 @@ fun DeviceEditForm(
                                         else -> it
                                     }
                                 },
-                        style = MaterialTheme.typography.labelMedium
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer // Уже OK
                     )
                 }
             }
@@ -657,7 +686,12 @@ fun DeviceEditMainPhotoSection(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp),
-        shape = MaterialTheme.shapes.medium
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors( // ★★★★ ДОБАВЛЕНО ★★★★
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (mainPhoto != null) {
@@ -694,12 +728,16 @@ fun DeviceEditMainPhotoSection(
                 onClick = onSelectPhoto,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(8.dp)
+                    .padding(8.dp),
+                colors = IconButtonDefaults.iconButtonColors( // ★★★★ ДОБАВЛЕНО ★★★★
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             ) {
                 Icon(
                     if (mainPhoto != null) Icons.Default.Edit else Icons.Default.Add,
                     contentDescription = if (mainPhoto != null) "Изменить фото" else "Добавить фото",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -719,7 +757,12 @@ fun DeviceEditPhotoGallerySection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors( // ★★★★ ДОБАВЛЕНО ★★★★
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -749,25 +792,36 @@ fun DeviceEditPhotoGallerySection(
             ) {
                 photos.forEachIndexed { index, photoPath ->
                     Box(modifier = Modifier.weight(1f)) {
-                        AsyncImage(
-                            model = photoPath,
-                            contentDescription = "Фото $index",
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .clip(MaterialTheme.shapes.medium)
-                        )
+                        Card( // ★★★★ ОБЕРНУТЬ В Card ДЛЯ КОНСИСТЕНТНОСТИ ★★★★
+                            modifier = Modifier.aspectRatio(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            border = BorderStroke(
+                                0.5.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            AsyncImage(
+                                model = photoPath,
+                                contentDescription = "Фото $index",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
 
                         // Кнопка удаления фото
                         IconButton(
                             onClick = { onDeletePhoto(index) },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(24.dp)
+                                .size(24.dp),
+                            colors = IconButtonDefaults.iconButtonColors( // ★★★★ ДОБАВЛЕНО ★★★★
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Удалить фото",
-                                tint = MaterialTheme.colorScheme.error
+                                tint = MaterialTheme.colorScheme.onErrorContainer // ★★★★ ИЗМЕНЕНИЕ ★★★★
                             )
                         }
                     }
@@ -780,7 +834,15 @@ fun DeviceEditPhotoGallerySection(
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f),
-                        shape = MaterialTheme.shapes.medium
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors( // ★★★★ ДОБАВЛЕНО ★★★★
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        )
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -790,7 +852,7 @@ fun DeviceEditPhotoGallerySection(
                                 Icons.Default.Add,
                                 contentDescription = "Добавить фото",
                                 modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer // ★★★★ ИЗМЕНЕНИЕ ★★★★
                             )
                         }
                     }
@@ -800,7 +862,7 @@ fun DeviceEditPhotoGallerySection(
             Text(
                 text = "Фото: ${photos.size}/10",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, // Уже OK
                 modifier = Modifier.padding(top = 4.dp)
             )
         }

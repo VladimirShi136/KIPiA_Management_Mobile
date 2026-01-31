@@ -8,6 +8,11 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Класс для синхронизации схемы с устройством при:
+ * 1. Сохранении/обновлении устройства
+ * 2. Удалении устройства
+ */
 @Singleton
 class SchemeSyncUseCase @Inject constructor(
     private val schemeRepository: SchemeRepository,

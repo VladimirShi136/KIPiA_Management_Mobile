@@ -261,7 +261,7 @@ fun DevicesScreen(
                         }
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier
                         .size(48.dp)
                 ) {
@@ -276,8 +276,8 @@ fun DevicesScreen(
             // ★★★★ КНОПКА ДОБАВЛЕНИЯ ПРИБОРА ★★★★
             FloatingActionButton(
                 onClick = { onNavigateToDeviceEdit(null) },
-                containerColor = Color(0xFF2ECC71), // Зеленый цвет #2ecc71
-                contentColor = Color.White, // Белый цвет для иконки
+                containerColor = MaterialTheme.colorScheme.tertiary, // Используем tertiary
+                contentColor = MaterialTheme.colorScheme.onTertiary, // Используем onTertiary
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -451,7 +451,7 @@ fun DeviceDeleteDialog(
                     } else {
                         "Удалить устройство"
                     },
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onError
                 )
             }
         },
@@ -526,7 +526,7 @@ fun DeviceStatistics(
             StatItem(
                 count = total,
                 label = "Всего",
-                color = Color(0xFF213CF1),
+                color = DeviceStatusColors.Total,
                 modifier = Modifier.weight(1f)
             )
 
@@ -697,7 +697,7 @@ fun TableRowWithDivider(
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             )
         }
     }
@@ -1037,6 +1037,7 @@ fun TableCell(
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface, // ИЗМЕНЕНИЕ
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
@@ -1045,6 +1046,7 @@ fun TableCell(
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface, // ИЗМЕНЕНИЕ
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -1056,7 +1058,7 @@ fun StatusBadgeCompact(status: String) {
     val deviceStatus = DeviceStatus.fromString(status)
 
     Surface(
-        color = deviceStatus.backgroundColor,
+        color = deviceStatus.containerColor,
         shape = RoundedCornerShape(4.dp),
         modifier = Modifier
             .height(24.dp) // Уменьшенная высота бейджа

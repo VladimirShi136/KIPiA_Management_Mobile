@@ -1,6 +1,7 @@
 package com.kipia.management.mobile.ui.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -22,6 +23,9 @@ import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 
+/**
+ * Навигационный хост
+ */
 @Composable
 fun KIPiANavHost(
     navController: NavHostController = rememberNavController(),
@@ -36,6 +40,7 @@ fun KIPiANavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier
+            .fillMaxSize()
     ) {
         // Экран устройств — ✅
         composable(BottomNavItem.Devices.route) {
@@ -59,7 +64,7 @@ fun KIPiANavHost(
             )
         }
 
-        // Детальный экран устройства
+        // Детальный экран устройства — ✅
         composable("device_detail/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
             if (deviceId != null) {
@@ -72,6 +77,7 @@ fun KIPiANavHost(
             }
         }
 
+        // Экран редактирования прибора — ✅
         composable("device_edit/{deviceId}") { backStackEntry ->
             val deviceId = backStackEntry.arguments?.getString("deviceId")?.toIntOrNull()
             DeviceEditScreen(
@@ -91,6 +97,7 @@ fun KIPiANavHost(
             )
         }
 
+        // Экран создания прибора — ✅
         composable("device_edit") {
             DeviceEditScreen(
                 deviceId = null,

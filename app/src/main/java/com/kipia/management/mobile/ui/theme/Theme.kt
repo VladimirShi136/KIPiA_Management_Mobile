@@ -11,29 +11,100 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 
-// Кастомные цветовые схемы
+/**
+ * Настройки для светлой / темной темы
+ */
+// ===== LIGHT COLOR SCHEME (на основе вашей иконки) =====
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF456381),
-    secondary = Color(0xFF527091),
-    tertiary = Color(0xFF0057D9),
-    background = Color(0xFFFDFDFD),
-    surface = Color(0xFFFDFDFD),
+    // Primary colors
+    primary = AppColors.Coral,
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F)
+    primaryContainer = AppColors.CoralLight,
+    onPrimaryContainer = AppColors.CoralDark,
+
+    // Secondary colors
+    secondary = AppColors.Peach,
+    onSecondary = Color.Black,
+    secondaryContainer = AppColors.PeachLight,
+    onSecondaryContainer = AppColors.CoralDark,
+
+    // Tertiary colors
+    tertiary = AppColors.IceBlue,
+    onTertiary = AppColors.DarkBlue,
+
+    // Background & Surface
+    background = Color.White,
+    onBackground = AppColors.DarkBlue,          // #465261
+
+    surface = Color.White,
+    onSurface = AppColors.DarkBlue,             // #465261
+    surfaceVariant = AppColors.LightGrayBlue.copy(alpha = 0.2f),
+    onSurfaceVariant = AppColors.MediumDarkGray, // #6C7884
+
+    outline = AppColors.MediumDarkGray.copy(alpha = 0.3f),
+    outlineVariant = AppColors.LightGrayBlue.copy(alpha = 0.1f),
+
+    // Error
+    error = Color(0xFFBA1A1A),
+    errorContainer = Color(0xFFFFDAD6),
+    onError = Color.White,
+    onErrorContainer = Color(0xFF410002),
+
+    // Neutral colors
+    scrim = Color.Black.copy(alpha = 0.5f),
+    surfaceTint = AppColors.Coral,
+
+    // Inverse colors (для контрастных элементов)
+    inversePrimary = AppColors.CoralLight,
+    inverseSurface = AppColors.DarkBlue,
+    inverseOnSurface = Color.White
 )
 
+// ===== DARK COLOR SCHEME =====
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF1A237E),
-    secondary = Color(0xFF283593),
-    tertiary = Color(0xFF6D9EFF),
-    background = Color(0xFF1C1B1F),
-    surface = Color(0xFF1C1B1F),
+    // Primary colors (в темной теме делаем светлее)
+    primary = AppColors.CoralLight,
     onPrimary = Color.Black,
+    primaryContainer = AppColors.CoralDark,
+    onPrimaryContainer = Color.White,
+
+    // Secondary colors
+    secondary = AppColors.PeachLight,
     onSecondary = Color.Black,
+    secondaryContainer = AppColors.CoralDark,
+    onSecondaryContainer = AppColors.PeachLight,
+
+    // Tertiary colors
+    tertiary = AppColors.DarkBlue.copy(alpha = 0.3f),
+    onTertiary = Color.White,
+
+    // Background & Surface
+    background = Color(0xFF121212),
     onBackground = Color(0xFFE6E1E5),
-    onSurface = Color(0xFFE6E1E5)
+
+    surface = Color(0xFF1C1B1F),
+    onSurface = Color(0xFFE6E1E5),
+    surfaceVariant = Color(0xFF49454F),
+    onSurfaceVariant = Color(0xFFCAC4D0),
+
+    // Outline
+    outline = Color(0xFF938F99),
+    outlineVariant = Color(0xFF49454F),
+
+    // Error
+    error = Color(0xFFFFB4AB),
+    errorContainer = Color(0xFF93000A),
+    onError = Color(0xFF690005),
+    onErrorContainer = Color(0xFFFFDAD6),
+
+    // Neutral colors
+    scrim = Color.Black.copy(alpha = 0.7f),
+    surfaceTint = AppColors.CoralLight,
+
+    // Inverse colors
+    inversePrimary = AppColors.CoralDark,
+    inverseSurface = Color(0xFFE6E1E5),
+    inverseOnSurface = Color(0xFF1C1B1F)
 )
 
 @Composable
@@ -45,24 +116,20 @@ fun KIPiATheme(
     val dynamicColors by themeViewModel.dynamicColors.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Определяем, темная ли тема
     val isDarkTheme = when (themeMode) {
-        PreferencesRepository.THEME_LIGHT -> false // Светлая
-        PreferencesRepository.THEME_DARK -> true   // Темная
-        else -> isSystemInDarkTheme()              // Системная
+        PreferencesRepository.THEME_LIGHT -> false
+        PreferencesRepository.THEME_DARK -> true
+        else -> isSystemInDarkTheme()
     }
 
-    // Выбираем цветовую схему
     val colorScheme = remember(isDarkTheme, dynamicColors) {
         if (dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Используем динамические цвета если включены и поддерживаются
             if (isDarkTheme) {
                 dynamicDarkColorScheme(context)
             } else {
                 dynamicLightColorScheme(context)
             }
         } else {
-            // Используем кастомные цвета
             if (isDarkTheme) DarkColorScheme else LightColorScheme
         }
     }
