@@ -27,11 +27,12 @@ fun DeviceDetailScreen(
     deviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
+    onNavigateToPhotos: (Int, Device) -> Unit,
     viewModel: DeviceDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
-    val photos by viewModel.photos.collectAsStateWithLifecycle(initialValue = emptyList()) // ← ВОТ ОНО!
+    val photos by viewModel.photos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Загружаем устройство при входе на экран
     LaunchedEffect(deviceId) {
@@ -57,8 +58,8 @@ fun DeviceDetailScreen(
                 photos = photos,
                 isFavorite = uiState.isFavorite,
                 onPhotoClick = { index ->
-                    // TODO: Открыть полноэкранный просмотр
-                    println("Нажато фото с индексом: $index")
+                    // 🆕 Теперь передаем индекс фото и Device
+                    onNavigateToPhotos(index, device!!)
                 },
                 onShare = { viewModel.shareDeviceInfo() },
                 onToggleFavorite = { viewModel.toggleFavorite() },

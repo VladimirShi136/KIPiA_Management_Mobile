@@ -3,7 +3,6 @@ package com.kipia.management.mobile.data.entities
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.google.gson.Gson
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 
 
@@ -61,24 +60,11 @@ data class Device(
     val additionalInfo: String?,
 
     @ColumnInfo(name = "photos")
-    val photos: String?  // JSON с путями к фото
+    val photos: List<String> = emptyList()  // Room сам конвертирует через TypeConverter
 ) {
     companion object {
         // Статусы из единого источника
         val STATUSES = DeviceStatus.ALL_STATUSES
-
-        // Типы приборов из вашего кода
-        val TYPES = listOf(
-            "Манометр",
-            "Термометр",
-            "Счетчик",
-            "Клапан",
-            "Задвижка",
-            "Датчик",
-            "Преобразователь",
-            "Регулятор",
-            "Другое"
-        )
 
         fun createEmpty(): Device = Device(
             type = "",
@@ -92,32 +78,19 @@ data class Device(
             valveNumber = null,
             status = "В работе",
             additionalInfo = null,
-            photos = null
+            photos = emptyList()
         )
-    }
-
-    fun getPhotoList(): List<String> {
-        return if (photos.isNullOrBlank()) {
-            emptyList()
-        } else {
-            try {
-                Gson().fromJson(photos, Array<String>::class.java).toList()
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }
-    }
-
-    fun setPhotoList(photoList: List<String>): Device {
-        val json = if (photoList.isNotEmpty()) {
-            Gson().toJson(photoList)
-        } else {
-            null
-        }
-        return this.copy(photos = json)
     }
 
     fun getDisplayName(): String {
         return name ?: "$type №$inventoryNumber"
+    }
+
+    fun addPhoto(fileName: String): Device {
+        return this.copy(photos = photos + fileName)
+    }
+
+    fun removePhoto(fileName: String): Device {
+        return this.copy(photos = photos - fileName)
     }
 }

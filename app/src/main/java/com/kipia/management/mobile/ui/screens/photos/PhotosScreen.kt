@@ -1,10 +1,18 @@
 package com.kipia.management.mobile.ui.screens.photos
 
+import com.kipia.management.mobile.ui.components.photos.DisplayMode
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,183 +32,408 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.components.photos.PhotoItem
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
+import com.kipia.management.mobile.viewmodel.LocationPhotoGroup
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
+import timber.log.Timber
 
+/**
+ * Экран галереи фото
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PhotosScreen(
-    onNavigateToFullScreenPhoto: (String, String) -> Unit, // photoPath, deviceName
-    viewModel: PhotosViewModel = hiltViewModel()
+    onNavigateToFullScreenPhoto: (String, Device) -> Unit,
+    viewModel: PhotosViewModel = hiltViewModel(),
+    topAppBarController: TopAppBarController? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val photos by viewModel.photos.collectAsStateWithLifecycle()
     val devices by viewModel.devices.collectAsStateWithLifecycle()
+    val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
+    val groupedByLocation by viewModel.groupedByLocation.collectAsStateWithLifecycle()
+    val expandedGroups by viewModel.expandedGroups.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Фотографии") },
-                actions = {
-                    // Фильтр по устройству
-                    DeviceFilterDropdown(
-                        devices = devices,
-                        selectedDeviceId = uiState.selectedDeviceId,
-                        onDeviceSelected = { deviceId ->
-                            viewModel.selectDevice(deviceId)
-                        }
-                    )
-
-                    // Переключение вида (сетка/список)
-                    IconButton(
-                        onClick = { viewModel.toggleViewMode() }
-                    ) {
-                        Icon(
-                            if (uiState.isGridView) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
-                            contentDescription = if (uiState.isGridView) "Список" else "Сетка"
-                        )
-                    }
+    // ★ ОБНОВЛЯЕМ: Управление TopAppBar
+    LaunchedEffect(topAppBarController, uiState.isGridView, uiState.displayMode) {
+        topAppBarController?.setForScreen("photos", buildMap {
+            put("isGridView", uiState.isGridView)
+            put("displayMode", uiState.displayMode)
+            put("locations", allLocations)
+            put("devices", devices)
+            put("onLocationFilterChange", { location: String? ->
+                viewModel.selectLocation(location)
+            })
+            put("onDeviceFilterChange", { deviceId: Int? ->
+                viewModel.selectDevice(deviceId)
+            })
+            put("onSortClick", {
+                Timber.d("Сортировка фото")
+            })
+            put("onViewModeClick", {
+                viewModel.toggleViewMode()
+            })
+            put("onGroupModeClick", {
+                // ★ НОВАЯ КНОПКА: переключение режима отображения
+                val newMode = if (uiState.displayMode == DisplayMode.GROUPED) {
+                    DisplayMode.FLAT
+                } else {
+                    DisplayMode.GROUPED
                 }
+                viewModel.updateDisplayMode(newMode)
+            })
+            put("onExpandAllClick", {
+                // ★ НОВАЯ КНОПКА: раскрыть все группы
+                viewModel.toggleAllGroups(true)
+            })
+            put("onCollapseAllClick", {
+                // ★ НОВАЯ КНОПКА: свернуть все группы
+                viewModel.toggleAllGroups(false)
+            })
+        })
+    }
+
+    val photoItems = remember(photos) {
+        photos.map { (fileName, fullPath, device) ->
+            PhotoItem(
+                fileName = fileName,
+                fullPath = fullPath,
+                device = device
             )
         }
-    ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                LoadingState()
-            }
-            uiState.error != null -> {
-                ErrorState(
-                    error = uiState.error ?: "Неизвестная ошибка", // Явное извлечение
-                    onRetry = { viewModel.loadPhotos() },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            photos.isEmpty() -> {
-                EmptyPhotosState(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            else -> {
-                PhotosGallery(
-                    photos = photos,
-                    viewMode = uiState.viewMode,
-                    selectedDeviceId = uiState.selectedDeviceId,
-                    onPhotoClick = { photoPath, device ->
-                        onNavigateToFullScreenPhoto(photoPath, device.getDisplayName())
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                // ★ ОБНОВЛЯЕМ: Кнопки FAB
+                // 1. Кнопка переключения вида (grid/list)
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.toggleViewMode()
                     },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
+                    modifier = Modifier.size(56.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Icon(
+                        if (uiState.isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                        contentDescription = if (uiState.isGridView) "Список" else "Сетка"
+                    )
+                }
+
+                // 2. ★ НОВАЯ КНОПКА: Переключение режима группировки
+                FloatingActionButton(
+                    onClick = {
+                        val newMode = if (uiState.displayMode == DisplayMode.GROUPED) {
+                            DisplayMode.FLAT
+                        } else {
+                            DisplayMode.GROUPED
+                        }
+                        viewModel.updateDisplayMode(newMode)
+                    },
+                    modifier = Modifier.size(56.dp),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Icon(
+                        if (uiState.displayMode == DisplayMode.GROUPED)
+                            Icons.Default.ViewDay
+                        else
+                            Icons.Default.Folder,
+                        contentDescription = if (uiState.displayMode == DisplayMode.GROUPED)
+                            "Плоский вид"
+                        else "Группировка по папкам"
+                    )
+                }
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // ★ ГАЛЕРЕЯ С ГРУППИРОВКОЙ ★
+            when {
+                uiState.isLoading -> {
+                    PhotosLoadingState()
+                }
+
+                uiState.error != null -> {
+                    PhotosErrorState(
+                        error = uiState.error ?: "Неизвестная ошибка",
+                        onRetry = { viewModel.loadPhotos() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                groupedByLocation.isEmpty() && photos.isEmpty() -> {
+                    PhotosEmptyState(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                uiState.displayMode == DisplayMode.GROUPED -> {
+                    // ★ НОВЫЙ РЕЖИМ: СГРУППИРОВАННЫЙ ПО ЛОКАЦИЯМ
+                    GroupedPhotosGallery(
+                        groups = groupedByLocation,
+                        viewMode = uiState.viewMode,
+                        onGroupToggle = { location ->
+                            viewModel.toggleLocationGroup(location)
+                        },
+                        onPhotoClick = { photoItem ->
+                            onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                else -> {
+                    // ★ СТАРЫЙ РЕЖИМ: ПЛОСКИЙ СПИСОК (как было)
+                    PhotosGallery(
+                        photos = photos.map { (fileName, fullPath, device) ->
+                            PhotoItem(
+                                fileName = fileName,
+                                fullPath = fullPath,
+                                device = device
+                            )
+                        },
+                        viewMode = uiState.viewMode,
+                        selectedDeviceId = uiState.selectedDeviceId,
+                        selectedLocation = uiState.selectedLocation,
+                        onPhotoClick = { photoItem ->
+                            onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ★ НОВЫЙ КОМПОЗАБЛ: Галерея с группировкой по локациям
+@Composable
+fun GroupedPhotosGallery(
+    groups: List<LocationPhotoGroup>,
+    viewMode: ViewMode,
+    onGroupToggle: (String) -> Unit,
+    onPhotoClick: (PhotoItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+    ) {
+        groups.forEach { group ->
+            item {
+                LocationGroupCard(
+                    group = group,
+                    viewMode = viewMode,
+                    onToggle = { onGroupToggle(group.location) },
+                    onPhotoClick = onPhotoClick
                 )
             }
         }
     }
 }
 
+// ★ НОВЫЙ КОМПОЗАБЛ: Карточка группы (локации)
 @Composable
-fun DeviceFilterDropdown(
-    devices: List<Device>,
-    selectedDeviceId: Int?,
-    onDeviceSelected: (Int?) -> Unit
+fun LocationGroupCard(
+    group: LocationPhotoGroup,
+    viewMode: ViewMode,
+    onToggle: () -> Unit,
+    onPhotoClick: (PhotoItem) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier.padding(horizontal = 4.dp)
-        ) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            // ★ ЗАГОЛОВОК ГРУППЫ (кликабельный)
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(Icons.Default.FilterAlt, contentDescription = "Фильтр по прибору")
-
-                if (selectedDeviceId != null) {
-                    Badge(
-                        modifier = Modifier
-                            .offset(x = (-8).dp, y = (-8).dp)
-                            .size(8.dp)
+                Column {
+                    Text(
+                        text = group.location,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "${group.photos.size} фото",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = if (group.isExpanded)
+                        Icons.Filled.ExpandLess
+                    else
+                        Icons.Filled.ExpandMore,
+                    contentDescription = if (group.isExpanded)
+                        "Свернуть"
+                    else "Развернуть",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // ★ ФОТОГРАФИИ В ГРУППЕ (раскрывающаяся часть)
+            AnimatedVisibility(
+                visible = group.isExpanded,
+                enter = expandVertically(
+                    animationSpec = tween(durationMillis = 300)
+                ),
+                exit = shrinkVertically(
+                    animationSpec = tween(durationMillis = 300)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    when (viewMode) {
+                        ViewMode.GRID -> {
+                            // Сетка внутри группы
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(group.photos) { photoItem ->
+                                    PhotoThumbnailCard(
+                                        photoItem = photoItem,
+                                        onClick = { onPhotoClick(photoItem) }
+                                    )
+                                }
+                            }
+                        }
+
+                        ViewMode.LIST -> {
+                            // Список внутри группы
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                group.photos.forEach { photoItem ->
+                                    PhotoListItem(
+                                        photoItem = photoItem,
+                                        onClick = { onPhotoClick(photoItem) }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("Все приборы") },
-                onClick = {
-                    onDeviceSelected(null)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.AllInclusive, contentDescription = null)
-                }
+// ★ НОВЫЙ КОМПОЗАБЛ: Миниатюрная карточка фото для горизонтального ряда
+@Composable
+fun PhotoThumbnailCard(
+    photoItem: PhotoItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .width(120.dp)
+            .height(150.dp),
+        shape = RoundedCornerShape(8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = rememberAsyncImagePainter(model = photoItem.fullPath),
+                contentDescription = "Фото прибора",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
 
-            HorizontalDivider()
-
-            devices.forEach { device ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            device.getDisplayName(),
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            // Накладка с информацией
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
                         )
-                    },
-                    onClick = {
-                        onDeviceSelected(device.id)
-                        expanded = false
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Devices, contentDescription = null)
-                    }
-                )
-            }
+                    )
+            )
+
+            // Имя файла
+            Text(
+                text = photoItem.fileName.substringBeforeLast("."),
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 6.dp, bottom = 6.dp)
+            )
         }
     }
 }
 
 @Composable
 fun PhotosGallery(
-    photos: List<Pair<String, Device>>,
+    photos: List<PhotoItem>,
     viewMode: ViewMode,
     selectedDeviceId: Int?,
-    onPhotoClick: (String, Device) -> Unit,
+    selectedLocation: String?,
+    onPhotoClick: (PhotoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val filteredPhotos = if (selectedDeviceId != null) {
-        photos.filter { (_, device) -> device.id == selectedDeviceId }
-    } else {
-        photos
+
+    // Фильтрация по устройству И местоположению
+    val filteredPhotos = remember(photos, selectedDeviceId, selectedLocation) {
+        photos.filter { photoItem ->
+            (selectedDeviceId == null || photoItem.device.id == selectedDeviceId) &&
+                    (selectedLocation == null || photoItem.device.location == selectedLocation)
+        }
     }
 
     Column(modifier = modifier) {
-        // Статистика
+        // ★ ИСПРАВЛЕННЫЙ ВЫЗОВ: добавьте selectedLocation = null
         PhotosStats(
             totalPhotos = photos.size,
             filteredPhotos = filteredPhotos.size,
+            selectedLocation = selectedLocation,
             selectedDeviceId = selectedDeviceId,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 6.dp, vertical = 6.dp)
         )
 
-        // Галерея
         when (viewMode) {
             ViewMode.GRID -> {
                 PhotosGrid(
                     photos = filteredPhotos,
                     onPhotoClick = onPhotoClick,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp)
                 )
             }
+
             ViewMode.LIST -> {
                 PhotosList(
                     photos = filteredPhotos,
@@ -215,8 +448,8 @@ fun PhotosGallery(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhotosGrid(
-    photos: List<Pair<String, Device>>,
-    onPhotoClick: (String, Device) -> Unit,
+    photos: List<PhotoItem>, // ✅ ИЗМЕНЕНО
+    onPhotoClick: (PhotoItem) -> Unit, // ✅ ИЗМЕНЕНО
     modifier: Modifier = Modifier
 ) {
     LazyVerticalStaggeredGrid(
@@ -226,12 +459,11 @@ fun PhotosGrid(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         contentPadding = PaddingValues(4.dp)
     ) {
-        items(photos.size, key = { index -> photos[index].first }) { index ->
-            val (photoPath, device) = photos[index]
+        items(photos.size, key = { index -> photos[index].fileName }) { index ->
+            val photoItem = photos[index]
             PhotoGridItem(
-                photoPath = photoPath,
-                device = device,
-                onClick = { onPhotoClick(photoPath, device) }
+                photoItem = photoItem,
+                onClick = { onPhotoClick(photoItem) }
             )
         }
     }
@@ -239,8 +471,7 @@ fun PhotosGrid(
 
 @Composable
 fun PhotoGridItem(
-    photoPath: String,
-    device: Device,
+    photoItem: PhotoItem, // ✅ ИЗМЕНЕНО
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -254,13 +485,13 @@ fun PhotoGridItem(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Image(
-                painter = rememberAsyncImagePainter(model = photoPath),
+                painter = rememberAsyncImagePainter(model = photoItem.fullPath),
                 contentDescription = "Фото прибора",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Накладка с информацией об устройстве
+            // Накладка с информацией
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -280,7 +511,7 @@ fun PhotoGridItem(
                     .padding(8.dp)
             ) {
                 Text(
-                    text = device.getDisplayName(),
+                    text = photoItem.device.getDisplayName(),
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
@@ -288,7 +519,7 @@ fun PhotoGridItem(
                 )
 
                 Text(
-                    text = device.inventoryNumber,
+                    text = photoItem.device.inventoryNumber,
                     color = Color.White.copy(alpha = 0.8f),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
@@ -301,8 +532,8 @@ fun PhotoGridItem(
 
 @Composable
 fun PhotosList(
-    photos: List<Pair<String, Device>>,
-    onPhotoClick: (String, Device) -> Unit,
+    photos: List<PhotoItem>, // ✅ ИЗМЕНЕНО
+    onPhotoClick: (PhotoItem) -> Unit, // ✅ ИЗМЕНЕНО
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -310,12 +541,11 @@ fun PhotosList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
-        items(photos.size, key = { index -> photos[index].first }) { index ->
-            val (photoPath, device) = photos[index]
+        items(photos.size, key = { index -> photos[index].fileName }) { index ->
+            val photoItem = photos[index]
             PhotoListItem(
-                photoPath = photoPath,
-                device = device,
-                onClick = { onPhotoClick(photoPath, device) }
+                photoItem = photoItem,
+                onClick = { onPhotoClick(photoItem) }
             )
         }
     }
@@ -323,8 +553,7 @@ fun PhotosList(
 
 @Composable
 fun PhotoListItem(
-    photoPath: String,
-    device: Device,
+    photoItem: PhotoItem, // ✅ ИЗМЕНЕНО
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -337,17 +566,19 @@ fun PhotoListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(120.dp)
         ) {
             // Миниатюра фото
             Image(
-                painter = rememberAsyncImagePainter(model = photoPath),
+                painter = rememberAsyncImagePainter(model = photoItem.fullPath),
                 contentDescription = "Фото прибора",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(100.dp)
+                    .width(110.dp)
+                    //.height(110.dp)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                    //.clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                    .padding(15.dp)
             )
 
             // Информация об устройстве
@@ -358,7 +589,7 @@ fun PhotoListItem(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = device.getDisplayName(),
+                    text = photoItem.device.getDisplayName(),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -367,7 +598,7 @@ fun PhotoListItem(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Инв. №: ${device.inventoryNumber}",
+                    text = "Инв. №: ${photoItem.device.inventoryNumber}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -377,17 +608,12 @@ fun PhotoListItem(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Место: ${device.location}",
+                    text = "Место: ${photoItem.device.location}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Статус
-                StatusChip(status = device.status)
             }
 
             // Иконка перехода
@@ -404,79 +630,53 @@ fun PhotoListItem(
 }
 
 @Composable
-fun StatusChip(status: String) {
-    val (backgroundColor, textColor) = when (status) {
-        "В работе" -> Pair(Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        "На ремонте" -> Pair(Color(0xFFFFF3E0), Color(0xFFEF6C00))
-        "Списан" -> Pair(Color(0xFFFFEBEE), Color(0xFFC62828))
-        "В резерве" -> Pair(Color(0xFFF5F5F5), Color(0xFF616161))
-        else -> Pair(Color(0xFFF5F5F5), Color(0xFF616161))
-    }
-
-    Surface(
-        color = backgroundColor,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Text(
-            text = status,
-            color = textColor,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-        )
-    }
-}
-
-@Composable
 fun PhotosStats(
     totalPhotos: Int,
     filteredPhotos: Int,
+    selectedLocation: String?,
     selectedDeviceId: Int?,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(12.dp)
         ) {
-            Column {
+            Text(
+                text = "Фотографии: $filteredPhotos из $totalPhotos",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            if (selectedLocation != null || selectedDeviceId != null) {
                 Text(
-                    text = if (selectedDeviceId == null) {
-                        "Все фото: $totalPhotos"
-                    } else {
-                        "Отфильтровано: $filteredPhotos из $totalPhotos"
+                    text = buildString {
+                        if (selectedLocation != null) {
+                            append("Место: $selectedLocation")
+                        }
+                        if (selectedDeviceId != null && selectedLocation != null) {
+                            append(", ")
+                        }
+                        if (selectedDeviceId != null) {
+                            append("Прибор: #$selectedDeviceId")
+                        }
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                if (selectedDeviceId != null) {
-                    Text(
-                        text = "Показаны фото только выбранного прибора",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (selectedDeviceId != null) {
-                AssistChip(
-                    onClick = { /* Фильтр сбросится через ViewModel */ },
-                    label = { Text("Сбросить фильтр") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+            } else {
+                Text(
+                    text = "Все фото",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -484,9 +684,9 @@ fun PhotosStats(
 }
 
 @Composable
-fun LoadingState() {
+fun PhotosLoadingState(modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -500,7 +700,7 @@ fun LoadingState() {
 }
 
 @Composable
-fun ErrorState(
+fun PhotosErrorState(
     error: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
@@ -544,7 +744,7 @@ fun ErrorState(
 }
 
 @Composable
-fun EmptyPhotosState(
+fun PhotosEmptyState(
     modifier: Modifier = Modifier
 ) {
     Column(

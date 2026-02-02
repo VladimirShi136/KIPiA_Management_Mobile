@@ -54,7 +54,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "КШ-12",
                 status = "В работе",
                 additionalInfo = "Установлен на паровом котле. Последняя поверка: 15.01.2024",
-                photos = null
+                photos = emptyList()
             ),
             Device(
                 type = "Манометр",
@@ -68,7 +68,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "ВК-7",
                 status = "Испорчен",
                 additionalInfo = "Требуется замена контактной группы. В ремонте с 10.01.2024",
-                photos = null
+                photos = emptyList()
             ),
 
             // Термометры
@@ -84,7 +84,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "В работе",
                 additionalInfo = "Контроль температуры в реакторе полимеризации",
-                photos = null
+                photos = emptyList()
             ),
             Device(
                 type = "Термометр",
@@ -98,7 +98,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "Хранение",
                 additionalInfo = "Запасной термометр. Поверен до 12.2025",
-                photos = null
+                photos = emptyList()
             ),
 
             // Счетчики
@@ -114,7 +114,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "ГЗ-4",
                 status = "В работе",
                 additionalInfo = "Учет газа на технологические нужды. Пломбирован 05.12.2023",
-                photos = null
+                photos = emptyList()
             ),
             Device(
                 type = "Счетчик",
@@ -128,7 +128,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "ВВ-8",
                 status = "Утерян",
                 additionalInfo = "Вышел из строя после гидроудара. Списан 15.11.2023",
-                photos = null
+                photos = emptyList()
             ),
 
             // Клапаны
@@ -144,7 +144,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "КП-3",
                 status = "В работе",
                 additionalInfo = "Настройка давления срабатывания: 8,5 МПа. Проверен 20.12.2023",
-                photos = null
+                photos = emptyList()
             ),
 
             // Задвижки
@@ -160,7 +160,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "МТ-12",
                 status = "В работе",
                 additionalInfo = "Основная запорная арматура. Требуется ревизия сальникового уплотнения",
-                photos = null
+                photos = emptyList()
             ),
 
             // Датчики
@@ -176,7 +176,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "В работе",
                 additionalInfo = "Преобразователь 4-20 мА. Подключен к ПЛК Siemens",
-                photos = null
+                photos = emptyList()
             ),
             Device(
                 type = "Датчик",
@@ -190,7 +190,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "Испорчен",
                 additionalInfo = "Нестабильные показания. Отправлен в лабораторию 08.01.2024",
-                photos = null
+                photos = emptyList()
             ),
 
             // Преобразователи
@@ -206,7 +206,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "В работе",
                 additionalInfo = "Управление скоростью насоса. Установлен в шкафу управления",
-                photos = null
+                photos = emptyList()
             ),
 
             // Регуляторы
@@ -222,7 +222,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "В работе",
                 additionalInfo = "ПИД-регулятор с термопарой типа K",
-                photos = null
+                photos = emptyList()
             ),
 
             // Другое
@@ -238,7 +238,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = "ФВ-2",
                 status = "В работе",
                 additionalInfo = "Требуется чистка раз в месяц. Последняя чистка: 28.12.2023",
-                photos = null
+                photos = emptyList()
             ),
             Device(
                 type = "Другое",
@@ -252,7 +252,7 @@ class DatabaseInitializer @Inject constructor(
                 valveNumber = null,
                 status = "Хранение",
                 additionalInfo = "Запасной ресивер. Прошел гидроиспытания 15.11.2023",
-                photos = null
+                photos = emptyList()
             )
         )
     }

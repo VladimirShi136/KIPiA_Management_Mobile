@@ -1,6 +1,7 @@
 package com.kipia.management.mobile.ui.components.topappbar
 
 import androidx.compose.runtime.*
+import com.kipia.management.mobile.data.entities.Device
 
 /**
  * Контроллер для управления состоянием TopAppBar во всем приложении
@@ -63,14 +64,25 @@ class TopAppBarController {
             }
 
             "photos" -> {
+                val selectedLocation = additionalParams["selectedLocation"] as? String
+                val selectedDeviceId = additionalParams["selectedDeviceId"] as? Int
+                val actualLocation = if (selectedLocation.isNullOrEmpty()) null else selectedLocation
+                val actualDeviceId = if (selectedDeviceId == 0) null else selectedDeviceId
+
                 _state.value = TopAppBarData(
-                    title = "Галерея",
-                    showBackButton = true,
-                    showSettingsIcon = false,
-                    showThemeToggle = false,
-                    showFilterMenu = false,
-                    showAddButton = true,
-                    onAddClick = additionalParams["onAddPhoto"] as? () -> Unit
+                    title = "Учет приборов КИПиА",
+                    showBackButton = false,
+                    showSettingsIcon = true,
+                    showThemeToggle = true,
+                    showFilterMenu = true,
+                    showAddButton = false,
+                    isGridView = additionalParams["isGridView"] as? Boolean ?: true,
+                    selectedLocation = actualLocation,
+                    selectedDeviceId = actualDeviceId,
+                    locations = additionalParams["locations"] as? List<String> ?: emptyList(),
+                    devices = additionalParams["devices"] as? List<Device> ?: emptyList(),
+                    onLocationFilterChange = additionalParams["onLocationFilterChange"] as? ((String?) -> Unit),
+                    onDeviceFilterChange = additionalParams["onDeviceFilterChange"] as? ((Int?) -> Unit),
                 )
             }
 
@@ -95,10 +107,17 @@ data class TopAppBarData(
     val showSaveButton: Boolean = false,
     val showDeleteButton: Boolean = false,
     val showAddButton: Boolean = false,
+    val isGridView: Boolean = true,
+    val selectedLocation: String? = null,
+    val selectedDeviceId: Int? = null,
+    val locations: List<String> = emptyList(),
+    val devices: List<Device> = emptyList(),
+    val onLocationFilterChange: ((String?) -> Unit)? = null,
+    val onDeviceFilterChange: ((Int?) -> Unit)? = null,
     val onEditClick: (() -> Unit)? = null,
     val onSaveClick: (() -> Unit)? = null,
     val onDeleteClick: (() -> Unit)? = null,
-    val onAddClick: (() -> Unit)? = null
+    val onAddClick: (() -> Unit)? = null,
 ) {
     companion object {
         fun getDefault(): TopAppBarData {
@@ -111,7 +130,8 @@ data class TopAppBarData(
                 showEditButton = false,
                 showSaveButton = false,
                 showDeleteButton = false,
-                showAddButton = false
+                showAddButton = false,
+                isGridView = true
             )
         }
     }

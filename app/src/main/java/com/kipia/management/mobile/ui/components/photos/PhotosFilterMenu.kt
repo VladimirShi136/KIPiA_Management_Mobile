@@ -1,4 +1,4 @@
-package com.kipia.management.mobile.ui.components.table
+package com.kipia.management.mobile.ui.components.photos
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -6,32 +6,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import com.kipia.management.mobile.data.entities.Device
+import timber.log.Timber
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DeviceFilterMenu(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    locationFilter: String?,
+fun PhotosFilterMenu(
+    selectedLocation: String?,
+    selectedDeviceId: Int?,
     locations: List<String>,
+    devices: List<Device>,
     onLocationFilterChange: (String?) -> Unit,
-    statusFilter: String?,
-    onStatusFilterChange: (String?) -> Unit,
+    onDeviceFilterChange: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -43,15 +45,21 @@ fun DeviceFilterMenu(
         }
     }
 
+    // Подсчет активных фильтров
+    val activeFilters = listOfNotNull(
+        if (selectedLocation != null) "1" else null,
+        if (selectedDeviceId != null) "1" else null,
+        if (searchQuery.isNotEmpty()) "1" else null
+    ).size
+
     Box(modifier = modifier) {
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier.size(48.dp)
         ) {
-
             Icon(
                 Icons.Default.FilterAlt,
-                contentDescription = "Фильтры и поиск",
+                contentDescription = "Фильтры фото",
                 tint = Color.White
             )
 
@@ -59,12 +67,6 @@ fun DeviceFilterMenu(
                 containerColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
             ) {
-                val activeFilters = listOfNotNull(
-                    if (searchQuery.isNotEmpty()) "1" else null,
-                    if (locationFilter != null) "1" else null,
-                    if (statusFilter != null) "1" else null
-                ).size
-
                 if (activeFilters > 0) {
                     Text(
                         text = activeFilters.toString(),
@@ -85,27 +87,30 @@ fun DeviceFilterMenu(
             DropdownMenuItem(
                 text = {
                     Text(
-                        text = "Фильтры приборов",
+                        text = "Фильтры фото",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                 },
                 onClick = {},
                 trailingIcon = {
-                    Icon(Icons.Default.Tune, contentDescription = null)
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                 }
             )
 
             HorizontalDivider()
 
-            // Поиск
+            // Поиск (как в DeviceFilterMenu)
             SearchMenuItem(
                 searchQuery = searchQuery,
                 showSearch = showSearch,
-                onSearchQueryChange = onSearchQueryChange,
+                onSearchQueryChange = { newQuery ->
+                    searchQuery = newQuery
+                    // Можно добавить поиск по фото
+                    Timber.d("Поиск фото: $newQuery")
+                },
                 onToggleSearch = {
                     showSearch = !showSearch
-                    // ★★★★ Убрали LaunchedEffect отсюда ★★★★
                 },
                 focusRequester = focusRequester,
                 keyboardController = keyboardController
@@ -113,47 +118,50 @@ fun DeviceFilterMenu(
 
             // Фильтр по местоположению с вложенным меню
             LocationFilterMenuItem(
-                currentFilter = locationFilter,
+                currentFilter = selectedLocation,
                 locations = locations,
                 onItemSelected = { selectedLocation ->
                     onLocationFilterChange(selectedLocation)
-                    expanded = false
                 }
             )
 
-            // Фильтр по статусу с вложенным меню
-            StatusFilterMenuItem(
-                currentFilter = statusFilter,
-                onItemSelected = { selectedStatus ->
-                    onStatusFilterChange(selectedStatus)
-                    expanded = false
+            // Фильтр по прибору с вложенным меню
+            DeviceFilterMenuItem(
+                currentFilter = selectedDeviceId,
+                devices = devices,
+                onItemSelected = { selectedDeviceId ->
+                    onDeviceFilterChange(selectedDeviceId)
                 }
             )
 
             HorizontalDivider()
 
-            // Кнопка сброса фильтров
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "Сбросить все фильтры",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = {
-                    onSearchQueryChange("")
-                    onLocationFilterChange(null)
-                    onStatusFilterChange(null)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            )
+            // Кнопка сброса фильтров (как в DeviceFilterMenu)
+            if (activeFilters > 0) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "Сбросить все фильтры",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    onClick = {
+                        // Сброс всех фильтров
+                        searchQuery = ""
+                        onLocationFilterChange(null)
+                        onDeviceFilterChange(null)
+                        expanded = false
+                        Timber.d("Все фильтры сброшены")
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                )
+            }
         }
     }
 }
@@ -175,7 +183,7 @@ private fun SearchMenuItem(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Поиск приборов",
+                        text = "Поиск фото",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.weight(1f)
                     )
@@ -193,7 +201,7 @@ private fun SearchMenuItem(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = onSearchQueryChange,
-                        placeholder = { Text("Введите текст...") },
+                        placeholder = { Text("Название, прибор...") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
@@ -232,7 +240,6 @@ private fun LocationFilterMenuItem(
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
 
-    // Основной пункт меню
     DropdownMenuItem(
         text = {
             Row(
@@ -262,7 +269,6 @@ private fun LocationFilterMenuItem(
         }
     )
 
-    // Вложенное меню как отдельный композабл
     LocationSubMenu(
         showSubMenu = showSubMenu,
         onDismiss = { showSubMenu = false },
@@ -318,12 +324,12 @@ private fun LocationSubMenu(
 }
 
 @Composable
-private fun StatusFilterMenuItem(
-    currentFilter: String?,
-    onItemSelected: (String?) -> Unit
+private fun DeviceFilterMenuItem(
+    currentFilter: Int?,
+    devices: List<Device>,
+    onItemSelected: (Int?) -> Unit
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
-    val statuses = listOf("В работе", "Хранение", "Утерян", "Испорчен")
 
     DropdownMenuItem(
         text = {
@@ -332,7 +338,7 @@ private fun StatusFilterMenuItem(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Статус",
+                    text = "Прибор",
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -347,30 +353,29 @@ private fun StatusFilterMenuItem(
         },
         onClick = { showSubMenu = true },
         leadingIcon = {
-            Icon(Icons.Default.Flag, contentDescription = null)
+            Icon(Icons.Default.Devices, contentDescription = null)
         },
         trailingIcon = {
             Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
         }
     )
 
-    // Вложенное меню как отдельный композабл
-    StatusSubMenu(
+    DeviceSubMenu(
         showSubMenu = showSubMenu,
         onDismiss = { showSubMenu = false },
         currentFilter = currentFilter,
-        statuses = statuses,
+        devices = devices,
         onItemSelected = onItemSelected
     )
 }
 
 @Composable
-private fun StatusSubMenu(
+private fun DeviceSubMenu(
     showSubMenu: Boolean,
     onDismiss: () -> Unit,
-    currentFilter: String?,
-    statuses: List<String>,
-    onItemSelected: (String?) -> Unit
+    currentFilter: Int?,
+    devices: List<Device>,
+    onItemSelected: (Int?) -> Unit
 ) {
     DropdownMenu(
         expanded = showSubMenu,
@@ -380,7 +385,7 @@ private fun StatusSubMenu(
         DropdownMenuItem(
             text = {
                 Text(
-                    "Все статусы",
+                    "Все приборы",
                     fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
                 )
             },
@@ -392,16 +397,18 @@ private fun StatusSubMenu(
 
         HorizontalDivider()
 
-        statuses.forEach { status ->
+        devices.forEach { device ->
             DropdownMenuItem(
                 text = {
                     Text(
-                        status,
-                        fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal
+                        device.getDisplayName(),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        fontWeight = if (currentFilter == device.id) FontWeight.Bold else FontWeight.Normal
                     )
                 },
                 onClick = {
-                    onItemSelected(status)
+                    onItemSelected(device.id)
                     onDismiss()
                 }
             )

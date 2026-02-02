@@ -5,16 +5,22 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 class Converters {
-    private val gson = Gson()
-
+    // ДЛЯ СОВМЕСТИМОСТИ с JavaFX - используем ТОТ ЖЕ разделитель ";"
+    /**
+     * List<String> → "photo1.jpg;photo2.jpg;photo3.jpg"
+     * ТОТ ЖЕ ФОРМАТ ЧТО В JAVA FX!
+     */
     @TypeConverter
-    fun fromStringList(list: List<String>?): String? {
-        return if (list == null) null else gson.toJson(list)
+    fun fromStringList(list: List<String>?): String {
+        return list?.joinToString(";") ?: ""
     }
 
+    /**
+     * "photo1.jpg;photo2.jpg;photo3.jpg" → List<String>
+     */
     @TypeConverter
-    fun toStringList(json: String?): List<String>? {
-        return if (json == null) null else
-            gson.fromJson(json, object : TypeToken<List<String>>() {}.type)
+    fun toStringList(value: String?): List<String> {
+        if (value.isNullOrBlank()) return emptyList()
+        return value.split(";").filter { it.isNotBlank() }
     }
 }

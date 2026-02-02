@@ -16,53 +16,62 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
+import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
+import java.io.File
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullScreenPhotoScreen(
     photoPath: String,
-    deviceName: String,
+    device: Device,
     onNavigateBack: () -> Unit,
-    onRotateLeft: () -> Unit,
-    onRotateRight: () -> Unit,
-    onDelete: () -> Unit,
-    viewModel: PhotoDetailViewModel = hiltViewModel()
+    viewModel: PhotoDetailViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentPhotoPath = uiState.currentPhotoPath ?: photoPath
 
-    // Обработка успешного удаления
-    LaunchedEffect(uiState.isDeleted) {
-        if (uiState.isDeleted) {
-            onNavigateBack()
-        }
-    }
+    // ✅ ДОБАВЛЯЕМ: CoroutineScope для вызова suspend функций
+    val coroutineScope = rememberCoroutineScope()
 
-    // Обработка ошибок
-    LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            // TODO: Показать снекбар с ошибкой
-            viewModel.clearError()
-        }
+    // Определяем имя файла из пути
+    val fileName = remember(photoPath) {
+        File(photoPath).name
     }
 
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
 
+    // Сохраняем устройство во ViewModel
+    LaunchedEffect(device) {
+        viewModel.setCurrentDevice(device)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        deviceName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column {
+                        // Имя устройства
+                        Text(
+                            device.getDisplayName(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        // ★ ДОБАВЛЯЕМ: Имя файла
+                        Text(
+                            fileName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -79,16 +88,32 @@ fun FullScreenPhotoScreen(
                         )
                     }
 
-                    IconButton(onClick = onRotateLeft) {
+                    IconButton(
+                        onClick = {
+                            viewModel.rotatePhoto(currentPhotoPath, -90f)
+                        }
+                    ) {
                         Icon(Icons.Default.RotateLeft, contentDescription = "Повернуть влево")
                     }
 
-                    IconButton(onClick = onRotateRight) {
+                    IconButton(
+                        onClick = {
+                            viewModel.rotatePhoto(currentPhotoPath, 90f)
+                        }
+                    ) {
                         Icon(Icons.Default.RotateRight, contentDescription = "Повернуть вправо")
                     }
 
                     IconButton(
-                        onClick = onDelete,
+                        onClick = {
+                            // ✅ ИСПРАВЛЕНО: используем coroutineScope
+                            coroutineScope.launch {
+                                val success = viewModel.deletePhoto(fileName)
+                                if (success) {
+                                    onNavigateBack()
+                                }
+                            }
+                        },
                         colors = IconButtonDefaults.iconButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         )

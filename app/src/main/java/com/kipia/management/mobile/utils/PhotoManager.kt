@@ -1,160 +1,224 @@
 package com.kipia.management.mobile.utils
 
-import android.Manifest
-import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
-import android.provider.Settings
-import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
+import androidx.room.withTransaction
+import com.kipia.management.mobile.data.dao.DeviceDao
+import com.kipia.management.mobile.data.database.AppDatabase
+import com.kipia.management.mobile.data.entities.Device
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.provider.OpenableColumns
+import java.io.IOException
 
 @Singleton
 class PhotoManager @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext val context: Context,
+    private val deviceDao: DeviceDao,
+    private val database: AppDatabase
 ) {
-
-    /**
-     * Проверяет разрешения для камеры
-     */
-    fun checkCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+    companion object {
+        private const val BASE_PHOTOS_DIR = "device_photos"
+        private const val PHOTO_PREFIX = "device"
     }
 
+    // === СТРУКТУРА ПАПОК (КАК В JAVA FX) ===
+
     /**
-     * Проверяет разрешения для чтения медиа
+     * Получает базовую папку для фото
      */
-    fun checkStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_MEDIA_IMAGES
-            ) == PackageManager.PERMISSION_GRANTED
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE
-                    ) == PackageManager.PERMISSION_GRANTED
+    fun getBasePhotosDir(): File {
+        return File(context.filesDir, BASE_PHOTOS_DIR).apply {
+            if (!exists()) mkdirs()
         }
     }
 
     /**
-     * Проверяет все необходимые разрешения
+     * Получает папку для конкретного местоположения устройства
      */
-    fun hasAllRequiredPermissions(): Boolean {
-        val permissions = getRequiredPermissions()
-        return permissions.all { permission ->
-            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    fun getLocationDir(location: String): File {
+        val safeLocation = location.ifEmpty { "unknown" }
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_") // Безопасное имя папки
+        return File(getBasePhotosDir(), safeLocation).apply {
+            if (!exists()) mkdirs()
         }
     }
 
     /**
-     * Получает список разрешений для запроса
+     * Генерирует имя файла как в Java FX: device_[id]_[timestamp]_[hash].jpg
      */
-    fun getRequiredPermissions(): Array<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.CAMERA,
-                Manifest.permission.READ_MEDIA_IMAGES
+    private fun generateJavaFXFileName(deviceId: Int, originalName: String? = null): String {
+        val timestamp = System.currentTimeMillis()
+        val randomHash = UUID.randomUUID().toString().substring(0, 8)
+
+        val baseName = originalName?.substringBeforeLast(".") ?: "photo"
+        val safeBaseName = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+
+        val ext = originalName?.substringAfterLast(".", "jpg") ?: "jpg"
+
+        return "${PHOTO_PREFIX}_${deviceId}_${safeBaseName}_${timestamp}_${randomHash}.$ext"
+    }
+
+    // === ОСНОВНЫЕ МЕТОДЫ С ИНТЕГРАЦИЕЙ БД ===
+
+    /**
+     * Сохраняет фото для устройства и обновляет БД
+     */
+    suspend fun savePhotoForDevice(
+        device: Device,
+        uri: Uri
+    ): Result<PhotoSaveResult> = database.withTransaction {
+        try {
+            // 1. Генерируем имя файла
+            val fileName = generateJavaFXFileName(
+                device.id,
+                getFileNameFromUri(uri)
             )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            arrayOf(
-                Manifest.permission.CAMERA,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.CAMERA,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
-        }
-    }
 
-    /**
-     * Открывает настройки разрешений
-     */
-    fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-        }
-        context.startActivity(intent)
-    }
+            // 2. Создаем папку location
+            val locationDir = getLocationDir(device.location)
 
-    /**
-     * Создает временный файл для фото
-     */
-    fun createImageFile(): Uri? {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ - используем MediaStore
-                val resolver = context.contentResolver
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, generateFileName())
-                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/KIPiA")
+            // 3. Копируем файл
+            val outputFile = File(locationDir, fileName)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                outputFile.outputStream().use { output ->
+                    input.copyTo(output)
                 }
+            } ?: return@withTransaction Result.failure(
+                IOException("Не удалось открыть файл из $uri")
+            )
 
-                resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-            } else {
-                // Android 9 и ниже - создаем файл
-                val storageDir = File(
-                    context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                    "KIPiA"
-                )
-
-                if (!storageDir.exists()) {
-                    storageDir.mkdirs()
-                }
-
-                val imageFile = File.createTempFile(
-                    "JPEG_${System.currentTimeMillis()}_",
-                    ".jpg",
-                    storageDir
-                )
-
-                FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    imageFile
+            if (!outputFile.exists()) {
+                return@withTransaction Result.failure(
+                    IOException("Файл не был создан: ${outputFile.absolutePath}")
                 )
             }
+
+            // 4. Обновляем Device в БД (добавляем фото в список)
+            val updatedDevice = device.addPhoto(fileName)
+            val rowsUpdated = deviceDao.updateDevice(updatedDevice)
+
+            if (rowsUpdated <= 0) {
+                // Откатываем - удаляем созданный файл
+                outputFile.delete()
+                return@withTransaction Result.failure(
+                    IOException("Не удалось обновить устройство в БД")
+                )
+            }
+
+            Result.success(
+                PhotoSaveResult(
+                    fileName = fileName,
+                    fullPath = outputFile.absolutePath,
+                    device = updatedDevice
+                )
+            )
+
         } catch (e: Exception) {
-            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Удаляет фото устройства и обновляет БД
+     */
+    suspend fun deleteDevicePhoto(
+        device: Device,
+        fileName: String
+    ): Boolean = database.withTransaction {
+        try {
+            var fileDeleted = true
+            var dbUpdated = true
+
+            // 1. Удаляем файл (если существует)
+            val file = File(getLocationDir(device.location), fileName)
+            if (file.exists()) {
+                fileDeleted = file.delete()
+            }
+
+            // 2. Обновляем Device в БД (удаляем фото из списка)
+            if (fileDeleted) {
+                val updatedDevice = device.removePhoto(fileName)
+                dbUpdated = deviceDao.updateDevice(updatedDevice) > 0
+            }
+
+            fileDeleted && dbUpdated
+
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Получает полный путь к фото устройства
+     */
+    fun getFullPhotoPath(device: Device, fileName: String): String? {
+        return try {
+            File(getLocationDir(device.location), fileName).absolutePath
+        } catch (_: Exception) {
             null
+        }
+    }
+
+    /**
+     * Получает все существующие фото устройства
+     */
+    fun getDevicePhotos(device: Device): List<File> {
+        return device.photos.map { fileName ->
+            File(getLocationDir(device.location), fileName)
+        }.filter { it.exists() }
+    }
+
+    /**
+     * Получает все существующие фото устройства (пути)
+     */
+    fun getDevicePhotoPaths(device: Device): List<String> {
+        return getDevicePhotos(device).map { it.absolutePath }
+    }
+
+    // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+
+    /**
+     * Получает имя файла из Uri
+     */
+    private fun getFileNameFromUri(uri: Uri): String? {
+        return when (uri.scheme) {
+            "content" -> {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val displayNameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (displayNameIndex != -1) {
+                            cursor.getString(displayNameIndex)
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                }
+            }
+            "file" -> {
+                uri.lastPathSegment
+            }
+            else -> {
+                // Пробуем извлечь из пути
+                uri.toString().substringAfterLast("/")
+            }
         }
     }
 
     /**
      * Сохраняет фото из Uri в постоянное хранилище приложения
      */
-    suspend fun savePhotoFromUri(uri: Uri): String? {
+    fun savePhotoFromUri(uri: Uri): String? {
+        // Старый метод - для совместимости
         return kotlin.runCatching {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 val fileName = "IMG_${System.currentTimeMillis()}.jpg"
@@ -217,49 +281,9 @@ class PhotoManager @Inject constructor(
         }
     }
 
-    /**
-     * Удаляет фото
-     */
-    fun deletePhoto(photoPath: String): Boolean {
-        return try {
-            val file = File(photoPath)
-            if (file.exists()) {
-                file.delete()
-            } else {
-                // Попробуем удалить через MediaStore для Android 10+
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
-                    context.contentResolver.delete(uri, null, null) > 0
-                } else {
-                    false
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
-
-    /**
-     * Получает папку для хранения фото устройств
-     */
-    fun getDevicePhotosDir(): File {
-        val dir = File(context.filesDir, "device_photos")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        return dir
-    }
-
-    /**
-     * Генерирует имя файла
-     */
-    private fun generateFileName(): String {
-        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        return "KIPiA_$timeStamp.jpg"
-    }
+    data class PhotoSaveResult(
+        val fileName: String,
+        val fullPath: String,
+        val device: Device
+    )
 }

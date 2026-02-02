@@ -1,29 +1,38 @@
 package com.kipia.management.mobile.viewmodel
 
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.repository.DeviceRepository
+import com.kipia.management.mobile.utils.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class DeviceDetailViewModel @Inject constructor(
-    private val repository: DeviceRepository
+    private val repository: DeviceRepository,
+    private val photoManager: PhotoManager
 ) : ViewModel() {
 
     private val _device = MutableStateFlow<Device?>(null)
     val device: StateFlow<Device?> = _device
 
-    // Flow для получения списка фото
-    val photos = _device.map { device ->
-        device?.getPhotoList() ?: emptyList()
-    }
+    // ✅ ИЗМЕНЯЕМ: вместо _photos используем computed property
+    val photos: StateFlow<List<String>> = device.map { device ->
+        device?.let {
+            photoManager.getDevicePhotoPaths(it) // Используем PhotoManager
+        } ?: emptyList()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     private val _uiState = MutableStateFlow(DeviceDetailUiState())
     val uiState: StateFlow<DeviceDetailUiState> = _uiState
@@ -97,6 +106,22 @@ class DeviceDetailViewModel @Inject constructor(
         // TODO: Сохранить статус в SharedPreferences или БД
         // Временная реализация:
         println("Сохранение статуса избранного: deviceId=$deviceId, isFavorite=$isFavorite")
+    }
+
+    suspend fun addPhoto(uri: android.net.Uri): Result<String> {
+        val currentDevice = _device.value ?: return Result.failure(
+            IllegalStateException("Устройство не загружено")
+        )
+
+        return photoManager.savePhotoForDevice(currentDevice, uri).map { result ->
+            // Обновляем устройство
+            loadDevice(currentDevice.id)
+            result.fullPath
+        }
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
     }
 }
 

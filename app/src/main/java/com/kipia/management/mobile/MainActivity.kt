@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,9 +37,12 @@ import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.getTopAppBarColors
+import com.kipia.management.mobile.utils.PhotoManager
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -48,7 +50,10 @@ class MainActivity : ComponentActivity() {
     lateinit var deviceRepository: DeviceRepository
 
     @Inject
-    lateinit var notificationManager: NotificationManager // ★★★★ ДОБАВЛЕНО ★★★★
+    lateinit var notificationManager: NotificationManager
+
+    @Inject // ✅ ДОБАВЛЕНО: инжектируем PhotoManager
+    lateinit var photoManager: PhotoManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +65,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Timber.d("Compose начал рендеринг")
-            KIPiAApp(notificationManager) // ★★★★ ПЕРЕДАЕМ notificationManager ★★★★
+            KIPiAApp(
+                notificationManager = notificationManager,
+                photoManager = photoManager // ✅ ПЕРЕДАЕМ
+            )
         }
     }
 }
@@ -68,7 +76,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KIPiAApp(
-    notificationManager: NotificationManager // ★★★★ ПАРАМЕТР ★★★★
+    notificationManager: NotificationManager,
+    photoManager: PhotoManager
 ) {
     KIPiATheme {
         Surface(
@@ -245,40 +254,83 @@ fun KIPiAApp(
                             Timber.d("Actions: showBackButton=${topAppBarState.showBackButton}")
 
                             if (!topAppBarState.showBackButton) {
-                                // ★★★★ ДЕЙСТВИЯ ДЛЯ ГЛАВНОГО ЭКРАНА ★★★★
-                                val themeViewModel: ThemeViewModel = hiltViewModel()
-                                val devicesViewModel: DevicesViewModel = hiltViewModel()
+                                // ★★★★ ЕСЛИ ЭТО ЭКРАН PHOTOS - ПОКАЗЫВАЕМ ФИЛЬТРЫ ДЛЯ ФОТО ★★★★
+                                if (navController.currentDestination?.route == "photos") {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Объединенное меню фильтров для фото
+                                        PhotosFilterMenu(
+                                            selectedLocation = topAppBarState.selectedLocation,
+                                            selectedDeviceId = topAppBarState.selectedDeviceId,
+                                            locations = topAppBarState.locations,
+                                            devices = topAppBarState.devices,
+                                            onLocationFilterChange = { location ->
+                                                topAppBarState.onLocationFilterChange?.invoke(location)
+                                            },
+                                            onDeviceFilterChange = { deviceId ->
+                                                topAppBarState.onDeviceFilterChange?.invoke(deviceId)
+                                            },
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
 
-                                val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
-                                val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
-                                val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
-                                val locationFilter = uiState.locationFilter
-                                val statusFilter = uiState.statusFilter
+                                        ThemeToggleButton()
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        IconButton(onClick = {
+                                            navController.navigate("settings")
+                                        }) {
+                                            Icon(
+                                                Icons.Filled.Settings,
+                                                contentDescription = "Настройки",
+                                                tint = topAppBarContent
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // ★★★★ ДЕЙСТВИЯ ДЛЯ ГЛАВНОГО ЭКРАНА ★★★★
+                                    val themeViewModel: ThemeViewModel = hiltViewModel()
+                                    val devicesViewModel: DevicesViewModel = hiltViewModel()
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    DeviceFilterMenu(
-                                        searchQuery = searchQuery,
-                                        onSearchQueryChange = { devicesViewModel.setSearchQuery(it) },
-                                        locationFilter = locationFilter,
-                                        locations = allLocations,
-                                        onLocationFilterChange = {
-                                            devicesViewModel.setLocationFilter(it)
-                                        },
-                                        statusFilter = statusFilter,
-                                        onStatusFilterChange = { devicesViewModel.setStatusFilter(it) },
-                                        modifier = Modifier.padding(end = 4.dp)
-                                    )
-                                    ThemeToggleButton()
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    IconButton(onClick = {
-                                        navController.navigate("settings")
-                                    }) {
-                                        Icon(
-                                            Icons.Filled.Settings,
-                                            contentDescription = "Настройки",
-                                            tint = topAppBarContent                                        )
+                                    val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
+                                    val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
+                                    val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
+                                    val locationFilter = uiState.locationFilter
+                                    val statusFilter = uiState.statusFilter
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        DeviceFilterMenu(
+                                            searchQuery = searchQuery,
+                                            onSearchQueryChange = {
+                                                devicesViewModel.setSearchQuery(
+                                                    it
+                                                )
+                                            },
+                                            locationFilter = locationFilter,
+                                            locations = allLocations,
+                                            onLocationFilterChange = {
+                                                devicesViewModel.setLocationFilter(it)
+                                            },
+                                            statusFilter = statusFilter,
+                                            onStatusFilterChange = {
+                                                devicesViewModel.setStatusFilter(
+                                                    it
+                                                )
+                                            },
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                        ThemeToggleButton()
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        IconButton(onClick = {
+                                            navController.navigate("settings")
+                                        }) {
+                                            Icon(
+                                                Icons.Filled.Settings,
+                                                contentDescription = "Настройки",
+                                                tint = topAppBarContent
+                                            )
+                                        }
                                     }
                                 }
                             } else {
@@ -299,7 +351,8 @@ fun KIPiAApp(
                                             Icon(
                                                 Icons.Filled.Edit,
                                                 contentDescription = "Редактировать",
-                                                tint = topAppBarContent                                            )
+                                                tint = topAppBarContent
+                                            )
                                         }
                                     }
                                     // ★★★★ КНОПКА СОХРАНЕНИЯ ★★★★
@@ -314,7 +367,8 @@ fun KIPiAApp(
                                             Icon(
                                                 Icons.Filled.Save,
                                                 contentDescription = "Сохранить",
-                                                tint = topAppBarContent                                            )
+                                                tint = topAppBarContent
+                                            )
                                         }
                                     }
                                     // ★★★★ КНОПКА УДАЛЕНИЯ ★★★★
@@ -329,7 +383,8 @@ fun KIPiAApp(
                                             Icon(
                                                 Icons.Filled.Delete,
                                                 contentDescription = "Удалить",
-                                                tint = topAppBarContent                                            )
+                                                tint = topAppBarContent
+                                            )
                                         }
                                     }
                                     // ★★★★ КНОПКА ДОБАВЛЕНИЯ ★★★★
@@ -344,7 +399,8 @@ fun KIPiAApp(
                                             Icon(
                                                 Icons.Filled.Add,
                                                 contentDescription = "Добавить",
-                                                tint = topAppBarContent                                            )
+                                                tint = topAppBarContent
+                                            )
                                         }
                                     }
                                 }
@@ -381,7 +437,8 @@ fun KIPiAApp(
                     navController = navController,
                     devicesViewModel = hiltViewModel(),
                     topAppBarController = topAppBarController,
-                    notificationManager = notificationManager, // ★★★★ ПЕРЕДАЕМ notificationManager ★★★★
+                    notificationManager = notificationManager,
+                    photoManager = photoManager,
                     updateBottomNavVisibility = updateBottomNavVisibility,
                     modifier = Modifier
                         .fillMaxSize()
