@@ -1,8 +1,8 @@
 package com.kipia.management.mobile.ui.components.photos
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -10,11 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kipia.management.mobile.data.entities.Device
@@ -29,15 +28,18 @@ fun PhotosFilterMenu(
     devices: List<Device>,
     onLocationFilterChange: (String?) -> Unit,
     onDeviceFilterChange: (Int?) -> Unit,
+    onResetAllFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // ★ ДОБАВЬТЕ ЭТУ ОТЛАДКУ ★
+    Timber.d("PhotosFilterMenu ПАРАМЕТРЫ: location='$selectedLocation', device='$selectedDeviceId'")
+
     var expanded by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // ★★★★ Используем LaunchedEffect для управления фокусом ★★★★
+    // ★ Используем LaunchedEffect для управления фокусом ★
     LaunchedEffect(showSearch) {
         if (showSearch) {
             focusRequester.requestFocus()
@@ -45,36 +47,46 @@ fun PhotosFilterMenu(
         }
     }
 
-    // Подсчет активных фильтров
-    val activeFilters = listOfNotNull(
-        if (selectedLocation != null) "1" else null,
-        if (selectedDeviceId != null) "1" else null,
-        if (searchQuery.isNotEmpty()) "1" else null
-    ).size
+    // ★ Подсчет активных фильтров ★
+    val activeFilters = remember(selectedLocation, selectedDeviceId) {
+        listOfNotNull(
+            if (selectedLocation != null) "1" else null,
+            if (selectedDeviceId != null) "1" else null
+        ).size
+    }
+
+    // ★ Логирование для отладки ★
+    Timber.d("PhotosFilterMenu - Активных фильтров: $activeFilters")
+    Timber.d("  Локация: $selectedLocation")
+    Timber.d("  Устройство: $selectedDeviceId")
 
     Box(modifier = modifier) {
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier.size(48.dp)
         ) {
+            // Иконка фильтра
             Icon(
                 Icons.Default.FilterAlt,
                 contentDescription = "Фильтры фото",
                 tint = Color.White
             )
 
+            // Бейдж - ВСЕГДА отображаем кружок
             Badge(
                 containerColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
             ) {
+                // Показываем цифру только если activeFilters > 0
                 if (activeFilters > 0) {
                     Text(
-                        text = activeFilters.toString(),
+                        text = activeFilters.toString(), // "1" или "2"
                         color = Color.White,
                         fontSize = 10.sp,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
+                // Если activeFilters = 0 - бейдж пустой (но кружок виден)
             }
         }
 
@@ -100,28 +112,13 @@ fun PhotosFilterMenu(
 
             HorizontalDivider()
 
-            // Поиск (как в DeviceFilterMenu)
-            SearchMenuItem(
-                searchQuery = searchQuery,
-                showSearch = showSearch,
-                onSearchQueryChange = { newQuery ->
-                    searchQuery = newQuery
-                    // Можно добавить поиск по фото
-                    Timber.d("Поиск фото: $newQuery")
-                },
-                onToggleSearch = {
-                    showSearch = !showSearch
-                },
-                focusRequester = focusRequester,
-                keyboardController = keyboardController
-            )
-
             // Фильтр по местоположению с вложенным меню
             LocationFilterMenuItem(
                 currentFilter = selectedLocation,
                 locations = locations,
                 onItemSelected = { selectedLocation ->
                     onLocationFilterChange(selectedLocation)
+                    expanded = false
                 }
             )
 
@@ -131,105 +128,35 @@ fun PhotosFilterMenu(
                 devices = devices,
                 onItemSelected = { selectedDeviceId ->
                     onDeviceFilterChange(selectedDeviceId)
+                    expanded = false
                 }
             )
 
             HorizontalDivider()
 
-            // Кнопка сброса фильтров (как в DeviceFilterMenu)
-            if (activeFilters > 0) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = "Сбросить все фильтры",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    },
-                    onClick = {
-                        // Сброс всех фильтров
-                        searchQuery = ""
-                        onLocationFilterChange(null)
-                        onDeviceFilterChange(null)
-                        expanded = false
-                        Timber.d("Все фильтры сброшены")
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                )
-            }
+            // ★ КНОПКА СБРОСА ФИЛЬТРОВ ★
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Сбросить все фильтры",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                onClick = {
+                    onResetAllFilters()
+                    expanded = false
+                    Timber.d("Все фильтры сброшены")
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            )
         }
     }
-}
-
-@Composable
-private fun SearchMenuItem(
-    searchQuery: String,
-    showSearch: Boolean,
-    onSearchQueryChange: (String) -> Unit,
-    onToggleSearch: () -> Unit,
-    focusRequester: FocusRequester,
-    keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?
-) {
-    DropdownMenuItem(
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Поиск фото",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (searchQuery.isNotEmpty()) {
-                        Text(
-                            text = "✓",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (showSearch) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        placeholder = { Text("Название, прибор...") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { onSearchQueryChange("") }
-                                ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Очистить")
-                                }
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                keyboardController?.hide()
-                            }
-                        )
-                    )
-                }
-            }
-        },
-        onClick = onToggleSearch,
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null)
-        }
-    )
 }
 
 @Composable
@@ -251,11 +178,24 @@ private fun LocationFilterMenuItem(
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f)
                 )
-                if (currentFilter != null) {
-                    Text(
-                        text = "✓",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Галочка оранжевая если фильтр активен
+                    if (currentFilter != null) {
+                        Text(
+                            text = "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                    // Стрелка всегда справа
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = "Выбрать",
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -263,9 +203,6 @@ private fun LocationFilterMenuItem(
         onClick = { showSubMenu = true },
         leadingIcon = {
             Icon(Icons.Default.LocationOn, contentDescription = null)
-        },
-        trailingIcon = {
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
         }
     )
 
@@ -293,10 +230,16 @@ private fun LocationSubMenu(
     ) {
         DropdownMenuItem(
             text = {
-                Text(
-                    "Все места",
-                    fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Все места",
+                        fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             },
             onClick = {
                 onItemSelected(null)
@@ -309,10 +252,24 @@ private fun LocationSubMenu(
         locations.forEach { location ->
             DropdownMenuItem(
                 text = {
-                    Text(
-                        location,
-                        fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            location,
+                            fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (currentFilter == location) {
+                            Text(
+                                text = "✓",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                 },
                 onClick = {
                     onItemSelected(location)
@@ -342,11 +299,24 @@ private fun DeviceFilterMenuItem(
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.weight(1f)
                 )
-                if (currentFilter != null) {
-                    Text(
-                        text = "✓",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Галочка оранжевая если фильтр активен
+                    if (currentFilter != null) {
+                        Text(
+                            text = "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                    // Стрелка всегда справа
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = "Выбрать",
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -354,9 +324,6 @@ private fun DeviceFilterMenuItem(
         onClick = { showSubMenu = true },
         leadingIcon = {
             Icon(Icons.Default.Devices, contentDescription = null)
-        },
-        trailingIcon = {
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
         }
     )
 
@@ -384,10 +351,16 @@ private fun DeviceSubMenu(
     ) {
         DropdownMenuItem(
             text = {
-                Text(
-                    "Все приборы",
-                    fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Все приборы",
+                        fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             },
             onClick = {
                 onItemSelected(null)
@@ -400,12 +373,26 @@ private fun DeviceSubMenu(
         devices.forEach { device ->
             DropdownMenuItem(
                 text = {
-                    Text(
-                        device.getDisplayName(),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        fontWeight = if (currentFilter == device.id) FontWeight.Bold else FontWeight.Normal
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            device.getDisplayName(),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            fontWeight = if (currentFilter == device.id) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (currentFilter == device.id) {
+                            Text(
+                                text = "✓",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                 },
                 onClick = {
                     onItemSelected(device.id)
@@ -413,5 +400,88 @@ private fun DeviceSubMenu(
                 }
             )
         }
+    }
+}
+
+@Composable
+fun PhotosActiveFiltersBadge(
+    selectedLocation: String?,
+    selectedDeviceId: Int?,
+    devices: List<Device>, // Для получения имени устройства по ID
+    onClearFilters: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.FilterAlt,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = buildActiveFiltersText(selectedLocation, selectedDeviceId, devices),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onClearFilters,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Очистить фильтры",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+private fun buildActiveFiltersText(
+    selectedLocation: String?,
+    selectedDeviceId: Int?,
+    devices: List<Device>
+): String {
+    val filters = mutableListOf<String>()
+
+    if (selectedLocation != null) {
+        filters.add("Место: $selectedLocation")
+    }
+
+    if (selectedDeviceId != null) {
+        val device = devices.find { it.id == selectedDeviceId }
+        filters.add("Прибор: ${device?.getDisplayName() ?: "#$selectedDeviceId"}")
+    }
+
+    return if (filters.isEmpty()) {
+        "Нет активных фильтров"
+    } else {
+        "Фильтры: ${filters.joinToString(", ")}"
     }
 }

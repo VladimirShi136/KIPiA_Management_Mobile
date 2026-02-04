@@ -11,6 +11,7 @@ import com.kipia.management.mobile.utils.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 
@@ -19,6 +20,7 @@ class PhotosViewModel @Inject constructor(
     repository: DeviceRepository,
     private val photoManager: PhotoManager
 ) : ViewModel() {
+    private val _forceRefresh = MutableStateFlow(0)
     private val _selectedDeviceId = MutableStateFlow<Int?>(null)
     private val _selectedLocation = MutableStateFlow<String?>(null)
     private val _viewMode = MutableStateFlow(ViewMode.GRID)
@@ -26,12 +28,16 @@ class PhotosViewModel @Inject constructor(
     val uiState: StateFlow<PhotosUiState> = _uiState
 
     // Все устройства
-    val devices = repository.getAllDevices()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val devices = combine(
+        repository.getAllDevices(),
+        _forceRefresh
+    ) { devices, _ ->
+        devices
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // Все уникальные местоположения из устройств
     val allLocations = devices.map { deviceList ->
@@ -41,14 +47,16 @@ class PhotosViewModel @Inject constructor(
             .sorted()
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = emptyList()
     )
 
     // Все фото с фильтрацией по устройству и местоположению
-    val photos = devices.map { deviceList ->
-        val locationFilter = _selectedLocation.value
-        val deviceFilter = _selectedDeviceId.value
+    val photos = combine(
+        devices,
+        _selectedLocation,
+        _selectedDeviceId
+    ) { deviceList, locationFilter, deviceFilter ->
 
         deviceList
             .filter { device ->
@@ -61,7 +69,6 @@ class PhotosViewModel @Inject constructor(
                 device.photos.mapNotNull { fileName ->
                     val fullPath = photoManager.getFullPhotoPath(device, fileName)
                     if (fullPath != null && File(fullPath).exists()) {
-                        // используем PhotoItem из UI пакета
                         PhotoItem(
                             fileName = fileName,
                             fullPath = fullPath,
@@ -78,6 +85,28 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    //  Функция для сброса всех фильтров
+    fun resetAllFilters() {
+        Timber.d("═══════════════════════════════════════")
+        Timber.d("СБРОС ВСЕХ ФИЛЬТРОВ")
+        Timber.d("  Было - Локация: ${_selectedLocation.value}, Устройство: ${_selectedDeviceId.value}")
+
+        _selectedLocation.value = null
+        _selectedDeviceId.value = null
+
+        _uiState.value = _uiState.value.copy(
+            selectedLocation = null,
+            selectedDeviceId = null
+        )
+
+        Timber.d("  Стало - Локация: null, Устройство: null")
+        Timber.d("═══════════════════════════════════════")
+    }
+
+    fun forceLoadData() {
+        _forceRefresh.value++
+    }
+
     // ★ ДОБАВЛЯЕМ: Flow для сгруппированных данных
     private val _groupedByLocation = MutableStateFlow<List<LocationPhotoGroup>>(emptyList())
     val groupedByLocation: StateFlow<List<LocationPhotoGroup>> = _groupedByLocation
@@ -88,10 +117,42 @@ class PhotosViewModel @Inject constructor(
 
 
     init {
-        loadPhotos()
-        // ★ ИНИЦИАЛИЗИРУЕМ ГРУППИРОВКУ
+        Timber.d("══════════════════════════════════════════")
+        Timber.d("${this::class.simpleName} СОЗДАН")
+        Timber.d("  HashCode: ${System.identityHashCode(this)}")
+        Timber.d("  Thread: ${Thread.currentThread().name}")
+
+        // Логирование загрузки данных
         viewModelScope.launch {
-            devices.collect { deviceList ->
+            devices.collect {
+                Timber.d("${this::class.simpleName}: devices loaded - ${it.size}")
+            }
+        }
+
+        viewModelScope.launch {
+            allLocations.collect {
+                Timber.d("${this::class.simpleName}: locations loaded - ${it.size}")
+            }
+        }
+
+        loadPhotos()
+
+        // ★ ОБНОВЛЯЕМ: группировка должна обновляться при изменении фильтров ИЛИ устройств
+        viewModelScope.launch {
+            // Объединяем потоки: устройства и фильтры
+            combine(
+                devices,
+                _selectedLocation,
+                _selectedDeviceId
+            ) { deviceList, locationFilter, deviceFilter ->
+                Triple(deviceList, locationFilter, deviceFilter)
+            }.collect { (deviceList, locationFilter, deviceFilter) ->
+                Timber.d("═══════════════════════════════════════")
+                Timber.d("ТРИГГЕР ОБНОВЛЕНИЯ ГРУППИРОВКИ:")
+                Timber.d("  Изменились фильтры: $locationFilter / $deviceFilter")
+                Timber.d("  Устройств: ${deviceList.size}")
+                Timber.d("═══════════════════════════════════════")
+
                 updateGroupedPhotos(deviceList)
             }
         }
@@ -122,12 +183,32 @@ class PhotosViewModel @Inject constructor(
         }
     }
 
-    // ★ ДОБАВЛЯЕМ: Метод для обновления сгруппированных данных
+    // ★ ИСПРАВЛЕННЫЙ: Метод для обновления сгруппированных данных с фильтрацией
     private fun updateGroupedPhotos(deviceList: List<Device>) {
         viewModelScope.launch {
+            // ★ ВАЖНО: берем текущие значения фильтров
+            val locationFilter = _selectedLocation.value
+            val deviceFilter = _selectedDeviceId.value
+
+            Timber.d("═══════════════════════════════════════")
+            Timber.d("ОБНОВЛЕНИЕ ГРУППИРОВКИ:")
+            Timber.d("  Всего устройств: ${deviceList.size}")
+            Timber.d("  Фильтр локации: $locationFilter")
+            Timber.d("  Фильтр устройства: $deviceFilter")
+
+            // ★ ФИЛЬТРУЕМ устройства перед группировкой
+            val filteredDevices = deviceList.filter { device ->
+                val matchesLocation = locationFilter == null || device.location == locationFilter
+                val matchesDevice = deviceFilter == null || device.id == deviceFilter
+
+                matchesLocation && matchesDevice
+            }
+
+            Timber.d("  После фильтрации: ${filteredDevices.size} устройств")
+
             val groups = mutableMapOf<String, MutableList<PhotoItem>>()
 
-            deviceList.forEach { device ->
+            filteredDevices.forEach { device ->
                 val location = device.location.ifEmpty { "Без локации" }
 
                 device.photos.forEach { fileName ->
@@ -154,6 +235,12 @@ class PhotosViewModel @Inject constructor(
                     isExpanded = _expandedGroups.value.contains(location)
                 )
             }.sortedBy { it.location }
+
+            Timber.d("  Создано групп: ${sortedGroups.size}")
+            sortedGroups.forEach { group ->
+                Timber.d("    - ${group.location}: ${group.photos.size} фото")
+            }
+            Timber.d("═══════════════════════════════════════")
 
             _groupedByLocation.value = sortedGroups
         }
@@ -202,16 +289,28 @@ class PhotosViewModel @Inject constructor(
         }
     }
 
-    // ★ ДОБАВЛЕНО: фильтр по местоположению
+    // ★ ДОБАВЛЕНО: фильтр по местоположению с логами
     fun selectLocation(location: String?) {
+        Timber.d("═══════════════════════════════════════")
+        Timber.d("ВЫБРАНА ЛОКАЦИЯ: $location")
+        Timber.d("  Было: ${_selectedLocation.value}")
+        Timber.d("  Стало: $location")
+        Timber.d("═══════════════════════════════════════")
+
         _selectedLocation.value = location
         _uiState.value = _uiState.value.copy(
             selectedLocation = location
         )
     }
 
-    // ★ ИЗМЕНЕНО: переименовано для ясности
+    // ★ ИЗМЕНЕНО: переименовано для ясности с логами
     fun selectDevice(deviceId: Int?) {
+        Timber.d("═══════════════════════════════════════")
+        Timber.d("ВЫБРАНО УСТРОЙСТВО: $deviceId")
+        Timber.d("  Было: ${_selectedDeviceId.value}")
+        Timber.d("  Стало: $deviceId")
+        Timber.d("═══════════════════════════════════════")
+
         _selectedDeviceId.value = deviceId
         _uiState.value = _uiState.value.copy(
             selectedDeviceId = deviceId
@@ -253,5 +352,5 @@ data class PhotosUiState(
     val selectedLocation: String? = null,
     val viewMode: ViewMode = ViewMode.GRID,
     val isGridView: Boolean = true,
-    val displayMode: DisplayMode = DisplayMode.GROUPED // ★ НОВОЕ: режим отображения
+    val displayMode: DisplayMode = DisplayMode.GROUPED // ★ режим отображения
 )

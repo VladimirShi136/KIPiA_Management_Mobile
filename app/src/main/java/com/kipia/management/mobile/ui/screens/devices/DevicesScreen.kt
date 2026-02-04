@@ -276,8 +276,8 @@ fun DevicesScreen(
             // ★★★★ КНОПКА ДОБАВЛЕНИЯ ПРИБОРА ★★★★
             FloatingActionButton(
                 onClick = { onNavigateToDeviceEdit(null) },
-                containerColor = MaterialTheme.colorScheme.tertiary, // Используем tertiary
-                contentColor = MaterialTheme.colorScheme.onTertiary, // Используем onTertiary
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(

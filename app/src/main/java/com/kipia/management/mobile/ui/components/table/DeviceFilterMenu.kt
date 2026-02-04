@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import timber.log.Timber
 
 @Composable
 fun DeviceFilterMenu(
@@ -105,7 +106,6 @@ fun DeviceFilterMenu(
                 onSearchQueryChange = onSearchQueryChange,
                 onToggleSearch = {
                     showSearch = !showSearch
-                    // ★★★★ Убрали LaunchedEffect отсюда ★★★★
                 },
                 focusRequester = focusRequester,
                 keyboardController = keyboardController
@@ -145,6 +145,7 @@ fun DeviceFilterMenu(
                     onLocationFilterChange(null)
                     onStatusFilterChange(null)
                     expanded = false
+                    Timber.d("Все фильтры сброшены")
                 },
                 leadingIcon = {
                     Icon(
@@ -303,10 +304,25 @@ private fun LocationSubMenu(
         locations.forEach { location ->
             DropdownMenuItem(
                 text = {
-                    Text(
-                        location,
-                        fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            location,
+                            fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // ★ Галочка ТОЛЬКО для выбранной локации ★
+                        if (currentFilter == location) {
+                            Text(
+                                text = "✓",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                 },
                 onClick = {
                     onItemSelected(location)
@@ -395,10 +411,25 @@ private fun StatusSubMenu(
         statuses.forEach { status ->
             DropdownMenuItem(
                 text = {
-                    Text(
-                        status,
-                        fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            status,
+                            fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // ★ Галочка ТОЛЬКО для выбранного статуса ★
+                        if (currentFilter == status) {
+                            Text(
+                                text = "✓",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                 },
                 onClick = {
                     onItemSelected(status)

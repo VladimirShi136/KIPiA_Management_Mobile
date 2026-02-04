@@ -32,12 +32,12 @@ import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
 import com.kipia.management.mobile.ui.navigation.KIPiANavHost
 import com.kipia.management.mobile.ui.theme.KIPiATheme
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
+import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.shared.NotificationManager
@@ -79,6 +79,14 @@ fun KIPiAApp(
     notificationManager: NotificationManager,
     photoManager: PhotoManager
 ) {
+    val devicesViewModel: DevicesViewModel = hiltViewModel()
+    val photosViewModel: PhotosViewModel = hiltViewModel()
+
+    // ★★★★ ДОБАВЛЕНО: Получаем состояние photos ★★★★
+    val photosState by photosViewModel.uiState.collectAsStateWithLifecycle()
+    val photosDevices by photosViewModel.devices.collectAsStateWithLifecycle()
+    val photosLocations by photosViewModel.allLocations.collectAsStateWithLifecycle()
+
     KIPiATheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -259,17 +267,19 @@ fun KIPiAApp(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Объединенное меню фильтров для фото
                                         PhotosFilterMenu(
-                                            selectedLocation = topAppBarState.selectedLocation,
-                                            selectedDeviceId = topAppBarState.selectedDeviceId,
-                                            locations = topAppBarState.locations,
-                                            devices = topAppBarState.devices,
+                                            selectedLocation = photosState.selectedLocation, // ← из photosViewModel
+                                            selectedDeviceId = photosState.selectedDeviceId, // ← из photosViewModel
+                                            locations = photosLocations,
+                                            devices = photosDevices,
                                             onLocationFilterChange = { location ->
-                                                topAppBarState.onLocationFilterChange?.invoke(location)
+                                                photosViewModel.selectLocation(location)
                                             },
                                             onDeviceFilterChange = { deviceId ->
-                                                topAppBarState.onDeviceFilterChange?.invoke(deviceId)
+                                                photosViewModel.selectDevice(deviceId)
+                                            },
+                                            onResetAllFilters = {
+                                                photosViewModel.resetAllFilters()
                                             },
                                             modifier = Modifier.padding(end = 4.dp)
                                         )
@@ -436,6 +446,7 @@ fun KIPiAApp(
                 KIPiANavHost(
                     navController = navController,
                     devicesViewModel = hiltViewModel(),
+                    photosViewModel = photosViewModel,
                     topAppBarController = topAppBarController,
                     notificationManager = notificationManager,
                     photoManager = photoManager,

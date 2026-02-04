@@ -24,6 +24,7 @@ import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.utils.PhotoManager
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
+import com.kipia.management.mobile.viewmodel.PhotosViewModel
 
 /**
  * Чистый навигационный хост - только маршрутизация
@@ -32,6 +33,7 @@ import com.kipia.management.mobile.viewmodel.DevicesViewModel
 fun KIPiANavHost(
     navController: NavHostController = rememberNavController(),
     devicesViewModel: DevicesViewModel,
+    photosViewModel: PhotosViewModel,
     topAppBarController: TopAppBarController,
     notificationManager: NotificationManager,
     photoManager: PhotoManager, // ✅ ДОБАВЛЕНО параметр
@@ -155,7 +157,9 @@ fun KIPiANavHost(
                         navController.navigate("fullscreen_photo/${device.id}/$photoIndex")
                     }
                 },
-                topAppBarController = topAppBarController // ★ ДОБАВЛЕНО
+                updateBottomNavVisibility = updateBottomNavVisibility,
+                viewModel = photosViewModel,
+                topAppBarController = topAppBarController
             )
         }
 
