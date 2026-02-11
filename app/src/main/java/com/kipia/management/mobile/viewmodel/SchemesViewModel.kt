@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.repository.SchemeRepository
-import com.kipia.management.mobile.ui.screens.schemes.SortBy
+import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,11 +21,11 @@ class SchemesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
-    private val _sortBy = MutableStateFlow(SortBy.NAME_ASC)
+    private val _sortBy = MutableStateFlow(SchemesSortBy.NAME_ASC)
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
 
-    // Используем combine для 4 потоков
+    // Расширенный UI State для работы с TopAppBar
     val uiState = combine(
         _searchQuery,
         _sortBy,
@@ -59,8 +59,8 @@ class SchemesViewModel @Inject constructor(
         .combine(_sortBy) { filteredSchemes, sortBy ->
             // Сортировка только по имени
             when (sortBy) {
-                SortBy.NAME_ASC -> filteredSchemes.sortedBy { it.name }
-                SortBy.NAME_DESC -> filteredSchemes.sortedByDescending { it.name }
+                SchemesSortBy.NAME_ASC -> filteredSchemes.sortedBy { it.name }
+                SchemesSortBy.NAME_DESC -> filteredSchemes.sortedByDescending { it.name }
                 else -> filteredSchemes // Для других значений оставляем как есть
             }
         }
@@ -70,19 +70,24 @@ class SchemesViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
-    fun setSortBy(sortBy: SortBy) {
+    fun setSortBy(sortBy: SchemesSortBy) {
         _sortBy.value = sortBy
+    }
+
+    fun resetAllFilters() {
+        _searchQuery.value = ""
+        _sortBy.value = SchemesSortBy.NAME_ASC
     }
 
     suspend fun deleteScheme(scheme: Scheme): DeleteResult {
         return try {
             _isLoading.value = true
 
-            // ★★★★ ПРОВЕРКА: ЕСТЬ ЛИ ПРИБОРЫ С ЭТОЙ ЛОКАЦИЕЙ? ★★★★
             val devices = deviceRepository.getAllDevicesSync()
             val deviceCount = devices.count { it.location == scheme.name }
 
@@ -92,7 +97,6 @@ class SchemesViewModel @Inject constructor(
                         "Сначала удалите или переместите приборы.")
             }
 
-            // Если приборов нет - удаляем схему
             repository.deleteScheme(scheme)
             DeleteResult.Success
         } catch (e: Exception) {
@@ -102,7 +106,8 @@ class SchemesViewModel @Inject constructor(
         }
     }
 
-    // Дополнительный метод для отображения статуса
+
+    // Получаем схемы со статусом
     fun getSchemesWithStatus(): Flow<List<SchemeWithStatus>> {
         return repository.getAllSchemes()
             .combine(deviceRepository.getAllDevices()) { schemes, devices ->
@@ -115,14 +120,31 @@ class SchemesViewModel @Inject constructor(
                     )
                 }
             }
+            .combine(_searchQuery) { schemesWithStatus, query ->
+                if (query.isBlank()) {
+                    schemesWithStatus
+                } else {
+                    schemesWithStatus.filter { item ->
+                        item.scheme.name.contains(query, ignoreCase = true) ||
+                                item.scheme.description?.contains(query, ignoreCase = true) == true
+                    }
+                }
+            }
+            .combine(_sortBy) { filteredSchemes, sortBy ->
+                when (sortBy) {
+                    SchemesSortBy.NAME_ASC -> filteredSchemes.sortedBy { it.scheme.name }
+                    SchemesSortBy.NAME_DESC -> filteredSchemes.sortedByDescending { it.scheme.name }
+                    else -> filteredSchemes
+                }
+            }
     }
 }
 
 data class SchemesUiState(
     val searchQuery: String = "",
-    val sortBy: SortBy = SortBy.NAME_ASC,
+    val sortBy: SchemesSortBy = SchemesSortBy.NAME_ASC,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
 )
 
 data class SchemeWithStatus(

@@ -15,7 +15,9 @@ import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 
 @Composable
-fun ThemeToggleButton() {
+fun ThemeToggleButton(
+    contentColor: Color = Color.White
+) {
     val themeViewModel: ThemeViewModel = hiltViewModel()
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
 
@@ -29,16 +31,18 @@ fun ThemeToggleButton() {
                 Icon(
                     Icons.Filled.LightMode,
                     contentDescription = "Светлая тема",
-                    tint = Color.White
+                    tint = contentColor
                 )
             }
+
             PreferencesRepository.THEME_DARK -> {
                 Icon(
                     Icons.Filled.DarkMode,
                     contentDescription = "Темная тема",
-                    tint = Color.White
+                    tint = contentColor
                 )
             }
+
             PreferencesRepository.THEME_FOLLOW_SYSTEM -> {
                 Icon(
                     Icons.Filled.SettingsBrightness, // ← Иконка системной темы

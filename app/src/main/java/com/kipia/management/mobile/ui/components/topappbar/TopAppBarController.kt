@@ -2,6 +2,7 @@ package com.kipia.management.mobile.ui.components.topappbar
 
 import androidx.compose.runtime.*
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 
 /**
  * Контроллер для управления состоянием TopAppBar во всем приложении
@@ -86,6 +87,60 @@ class TopAppBarController {
                 )
             }
 
+            "schemes" -> {
+                // Получаем параметры для фильтров схем
+                val searchQuery = additionalParams["searchQuery"] as? String ?: ""
+                val selectedFilter = additionalParams["selectedFilter"] as? String?
+                val currentSort = additionalParams["currentSort"] as? SchemesSortBy // ← ИЗМЕНИЛИ
+                    ?: SchemesSortBy.NAME_ASC // ← ИЗМЕНИЛИ
+
+                _state.value = TopAppBarData(
+                    title = additionalParams["title"] as? String ?: "Учет приборов КИПиА",
+                    showBackButton = false,
+                    showSettingsIcon = additionalParams["showSettingsIcon"] as? Boolean ?: true,
+                    showThemeToggle = additionalParams["showThemeToggle"] as? Boolean ?: true,
+                    showFilterMenu = true,
+
+                    // ★ ПЕРЕДАЕМ ДАННЫЕ ДЛЯ ФИЛЬТРОВ СХЕМ
+                    showSchemesFilterMenu = true,
+                    schemesSearchQuery = searchQuery,
+                    schemesCurrentSort = currentSort,
+                    onSchemesSearchQueryChange = additionalParams["onSearchQueryChange"] as? ((String) -> Unit),
+                    onSchemesSortSelected = additionalParams["onSortSelected"] as? ((SchemesSortBy) -> Unit), // ← ИЗМЕНИЛИ
+                    onSchemesResetAllFilters = additionalParams["onResetAllFilters"] as? (() -> Unit)
+                )
+            }
+
+            "scheme_editor" -> {
+                val isNewScheme = additionalParams["isNewScheme"] as? Boolean ?: true
+                val name = "Редактор схем"
+                if (isNewScheme) "Новая схема" else "Редактирование схемы"
+
+                _state.value = TopAppBarData(
+                    title = name,
+                    showBackButton = true,
+                    showSettingsIcon = true,
+                    showThemeToggle = false,
+                    showFilterMenu = false,
+
+                    // ★ ПАРАМЕТРЫ ДЛЯ РЕДАКТОРА СХЕМ
+                    showSchemeEditorActions = true,
+                    isNewScheme = isNewScheme,
+                    canSave = additionalParams["canSave"] as? Boolean ?: true,
+                    canUndo = additionalParams["canUndo"] as? Boolean ?: false,
+                    canRedo = additionalParams["canRedo"] as? Boolean ?: false,
+                    isDirty = additionalParams["isDirty"] as? Boolean ?: false,
+
+                    // ★ КОЛБЭКИ
+                    onBackClick = additionalParams["onBackClick"] as? (() -> Unit),
+                    onSaveClick = additionalParams["onSaveClick"] as? (() -> Unit),
+                    onUndoClick = additionalParams["onUndoClick"] as? (() -> Unit),
+                    onRedoClick = additionalParams["onRedoClick"] as? (() -> Unit),
+                    onPropertiesClick = additionalParams["onPropertiesClick"] as? (() -> Unit),
+                    onEditorSettingsClick = additionalParams["onEditorSettingsClick"] as? (() -> Unit)
+                )
+            }
+
             else -> {
                 // Главный экран или неизвестный экран - используем состояние по умолчанию
                 _state.value = TopAppBarData.getDefault()
@@ -95,9 +150,10 @@ class TopAppBarController {
 }
 
 /**
- * Данные для TopAppBar (без composable функций)
+ * Данные для TopAppBar
  */
 data class TopAppBarData(
+    // ★ ОСНОВНЫЕ ПОЛЯ
     val title: String = "Учет приборов КИПиА",
     val showBackButton: Boolean = false,
     val showSettingsIcon: Boolean = true,
@@ -110,14 +166,39 @@ data class TopAppBarData(
     val isGridView: Boolean = true,
     val selectedLocation: String? = null,
     val selectedDeviceId: Int? = null,
-    val locations: List<String> = emptyList(),
-    val devices: List<Device> = emptyList(),
-    val onLocationFilterChange: ((String?) -> Unit)? = null,
-    val onDeviceFilterChange: ((Int?) -> Unit)? = null,
-    val onEditClick: (() -> Unit)? = null,
+    // ★ Общий колбэк
     val onSaveClick: (() -> Unit)? = null,
+    // ★ КОЛБЭКИ ДЛЯ ПРИБОРОВ
+    val onEditClick: (() -> Unit)? = null,
     val onDeleteClick: (() -> Unit)? = null,
     val onAddClick: (() -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ МЕНЮ ФИЛЬТРАЦИИ ФОТО
+    val locations: List<String> = emptyList(),
+    val devices: List<Device> = emptyList(),
+    // ★ КОЛБЭКИ ДЛЯ МЕНЮ ФИЛЬТРАЦИИ ФОТО
+    val onLocationFilterChange: ((String?) -> Unit)? = null,
+    val onDeviceFilterChange: ((Int?) -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ МЕНЮ ФИЛЬТРАЦИИ СХЕМ
+    val showSchemesFilterMenu: Boolean = false,
+    val schemesSearchQuery: String? = null,
+    val schemesCurrentSort: SchemesSortBy? = null,
+    // ★ КОЛБЭКИ ДЛЯ МЕНЮ ФИЛЬТРАЦИИ СХЕМ
+    val onSchemesSearchQueryChange: ((String) -> Unit)? = null,
+    val onSchemesSortSelected: ((SchemesSortBy) -> Unit)? = null,
+    val onSchemesResetAllFilters: (() -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ РЕДАКТОРА СХЕМ
+    val showSchemeEditorActions: Boolean = false,
+    val isNewScheme: Boolean = true,
+    val canSave: Boolean = true,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
+    val isDirty: Boolean = false,
+    // ★ КОЛБЭКИ ДЛЯ РЕДАКТОРА СХЕМ
+    val onBackClick: (() -> Unit)? = null,
+    val onUndoClick: (() -> Unit)? = null,
+    val onRedoClick: (() -> Unit)? = null,
+    val onPropertiesClick: (() -> Unit)? = null,
+    val onEditorSettingsClick: (() -> Unit)? = null
 ) {
     companion object {
         fun getDefault(): TopAppBarData {

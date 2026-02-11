@@ -1,10 +1,11 @@
-package com.kipia.management.mobile.utils
+package com.kipia.management.mobile.managers
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import com.kipia.management.mobile.data.dao.DeviceDao
 import com.kipia.management.mobile.data.database.AppDatabase
@@ -12,11 +13,10 @@ import com.kipia.management.mobile.data.entities.Device
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
-import java.util.*
+import java.io.IOException
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import android.provider.OpenableColumns
-import java.io.IOException
 
 @Singleton
 class PhotoManager @Inject constructor(
@@ -219,7 +219,7 @@ class PhotoManager @Inject constructor(
      */
     fun savePhotoFromUri(uri: Uri): String? {
         // Старый метод - для совместимости
-        return kotlin.runCatching {
+        return runCatching {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 val fileName = "IMG_${System.currentTimeMillis()}.jpg"
                 val outputDir = File(context.filesDir, "device_photos")

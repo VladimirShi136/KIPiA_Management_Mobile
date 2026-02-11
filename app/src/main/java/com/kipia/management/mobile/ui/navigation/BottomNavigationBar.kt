@@ -52,12 +52,13 @@ val bottomNavItems = listOf(
 @Composable
 fun BottomNavigationBar(
     navController: NavController,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
-    val bottomNavColors = getBottomNavColors()
+    val bottomNavColors = getBottomNavColors(isDarkTheme)
 
     // Определяем, активен ли таб devices
     val isDevicesTabActive = when {

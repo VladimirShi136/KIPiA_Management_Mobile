@@ -22,9 +22,10 @@ import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
 import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
 import com.kipia.management.mobile.ui.shared.NotificationManager
-import com.kipia.management.mobile.utils.PhotoManager
+import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
+import com.kipia.management.mobile.viewmodel.SchemesViewModel
 
 /**
  * Чистый навигационный хост - только маршрутизация
@@ -34,6 +35,7 @@ fun KIPiANavHost(
     navController: NavHostController = rememberNavController(),
     devicesViewModel: DevicesViewModel,
     photosViewModel: PhotosViewModel,
+    schemesViewModel: SchemesViewModel,
     topAppBarController: TopAppBarController,
     notificationManager: NotificationManager,
     photoManager: PhotoManager, // ✅ ДОБАВЛЕНО параметр
@@ -128,7 +130,9 @@ fun KIPiANavHost(
                         "scheme_editor"
                     }
                     navController.navigate(route)
-                }
+                },
+                topAppBarController = topAppBarController, // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
+                updateBottomNavVisibility = updateBottomNavVisibility // ★ ПЕРЕДАЕМ КОЛБЭК
             )
         }
 
@@ -138,7 +142,17 @@ fun KIPiANavHost(
             SchemeEditorScreen(
                 schemeId = schemeId,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
+                onSaveSuccess = { navController.popBackStack() },
+                topAppBarController = topAppBarController // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
+            )
+        }
+
+        composable("scheme_editor") {
+            SchemeEditorScreen(
+                schemeId = null,
+                onNavigateBack = { navController.popBackStack() },
+                onSaveSuccess = { navController.popBackStack() },
+                topAppBarController = topAppBarController // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
             )
         }
 

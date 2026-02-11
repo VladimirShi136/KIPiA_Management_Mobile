@@ -1,8 +1,15 @@
 package com.kipia.management.mobile
 
+import android.app.Activity
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -10,6 +17,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,10 +47,22 @@ import timber.log.Timber
 import javax.inject.Inject
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.getTopAppBarColors
-import com.kipia.management.mobile.utils.PhotoManager
+import com.kipia.management.mobile.managers.PhotoManager
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import com.kipia.management.mobile.repository.PreferencesRepository
+import com.kipia.management.mobile.ui.components.scheme.SchemesFilterMenu
+import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
+import com.kipia.management.mobile.ui.theme.AppColors
+import com.kipia.management.mobile.ui.theme.SystemColors
+import com.kipia.management.mobile.ui.theme.getBottomNavColors
+import com.kipia.management.mobile.ui.theme.toHex
+import com.kipia.management.mobile.viewmodel.SchemesViewModel
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -52,40 +72,187 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var notificationManager: NotificationManager
 
-    @Inject // ✅ ДОБАВЛЕНО: инжектируем PhotoManager
+    @Inject
     lateinit var photoManager: PhotoManager
 
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Устанавливаем тему Material 3
+        // Тема Material 3
         setTheme(R.style.Theme_KipiaManagement)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // ★★★★ УПРОЩЕННАЯ НАСТРОЙКА ДЛЯ ВСЕХ ВЕРСИЙ ★★★★
+        setupEdgeToEdge()
+
         Timber.d("MainActivity создан")
 
         setContent {
             Timber.d("Compose начал рендеринг")
             KIPiAApp(
                 notificationManager = notificationManager,
-                photoManager = photoManager // ✅ ПЕРЕДАЕМ
+                photoManager = photoManager
             )
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun setupEdgeToEdge() {
+        // Базовый edge-to-edge
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Прозрачные панели
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+
+        // Для Android 8.0+ (Oreo)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        // Для Android 11+ (R) - используем новые API
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            // Для старых версий используем старый API с suppress warning
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         }
     }
 }
 
+@Composable
+fun DebugSystemColors() {
+    LaunchedEffect(Unit) {
+        Timber.d("=== DEBUG SYSTEM COLORS ===")
+        Timber.d("AppColors.DarkBlue: ${AppColors.DarkBlue.toHex()}")
+        Timber.d("AppColors.MediumDarkGray: ${AppColors.MediumDarkGray.toHex()}")
+        Timber.d("SystemColors.TopAppBar.LightBackground: ${SystemColors.TopAppBar.LightBackground.toHex()}")
+        Timber.d("SystemColors.TopAppBar.LightContent: ${SystemColors.TopAppBar.LightContent.toHex()}")
+        Timber.d("SystemColors.TopAppBar.DarkBackground: ${SystemColors.TopAppBar.DarkBackground.toHex()}")
+        Timber.d("SystemColors.TopAppBar.DarkContent: ${SystemColors.TopAppBar.DarkContent.toHex()}")
+        Timber.d("SystemColors.BottomNav.LightBackground: ${SystemColors.BottomNav.LightBackground.toHex()}")
+        Timber.d("SystemColors.BottomNav.DarkBackground: ${SystemColors.BottomNav.DarkBackground.toHex()}")
+        Timber.d("=== END DEBUG ===")
+    }
+}
+
+
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KIPiAApp(
     notificationManager: NotificationManager,
     photoManager: PhotoManager
 ) {
-    val devicesViewModel: DevicesViewModel = hiltViewModel()
     val photosViewModel: PhotosViewModel = hiltViewModel()
+    val themeViewModel: ThemeViewModel = hiltViewModel()
+    val schemesViewModel: SchemesViewModel = hiltViewModel()
+
+    // ★★★★ ПОЛУЧАЕМ ТЕКУЩУЮ ТЕМУ ★★★★
+    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
+    val systemUiController = rememberSystemUiController()
+
+    // Определяем, темная ли тема
+    val isDarkTheme = when (themeMode) {
+        PreferencesRepository.THEME_LIGHT -> false
+        PreferencesRepository.THEME_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
+
+    DebugSystemColors()
+
+    // ★★★★ КОНФИГУРАЦИЯ СИСТЕМНЫХ ПАНЕЛЕЙ ★★★★
+    val statusBarColor = if (isDarkTheme) {
+        SystemColors.TopAppBar.DarkBackground
+    } else {
+        SystemColors.TopAppBar.LightBackground
+    }
+
+    val navBarColor = if (isDarkTheme) {
+        SystemColors.BottomNav.DarkBackground
+    } else {
+        SystemColors.BottomNav.LightBackground
+    }
+
+    val darkIcons = !isDarkTheme
+    val context = LocalContext.current
+
+    // ★★★★ ОСНОВНАЯ НАСТРОЙКА СИСТЕМНЫХ ПАНЕЛЕЙ ★★★★
+    DisposableEffect(isDarkTheme, systemUiController) {
+        Timber.d("Настройка системных панелей:")
+        Timber.d("  isDarkTheme: $isDarkTheme")
+        Timber.d("  statusBarColor: ${statusBarColor.toHex()}")
+        Timber.d("  navBarColor: ${navBarColor.toHex()}")
+        Timber.d("  darkIcons: $darkIcons")
+
+        // Настраиваем системные панели
+        systemUiController.setStatusBarColor(
+            color = statusBarColor,
+            darkIcons = darkIcons
+        )
+
+        systemUiController.setNavigationBarColor(
+            color = navBarColor,
+            darkIcons = darkIcons,
+            navigationBarContrastEnforced = false
+        )
+
+        // ★★★★ ОСОБЫЙ СЛУЧАЙ ДЛЯ REALME/OPPO ★★★★
+        // Используем Post для гарантированного выполнения после рендера
+        val activity = context as Activity
+        activity.window.decorView.post {
+            activity.window.statusBarColor = statusBarColor.toArgb()
+            activity.window.navigationBarColor = navBarColor.toArgb()
+
+            // Для Android 11+ используем новый API
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val insetsController = activity.window.insetsController
+                insetsController?.setSystemBarsAppearance(
+                    if (darkIcons) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                            WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                )
+            } else {
+                // Для старых версий Android
+                @Suppress("DEPRECATION")
+                activity.window.decorView.systemUiVisibility =
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                            (if (darkIcons) View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0) or
+                            (if (darkIcons) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0)
+            }
+
+            // Повторная настройка через systemUiController
+            systemUiController.setStatusBarColor(
+                color = statusBarColor,
+                darkIcons = darkIcons
+            )
+
+            systemUiController.setNavigationBarColor(
+                color = navBarColor,
+                darkIcons = darkIcons,
+                navigationBarContrastEnforced = false
+            )
+        }
+
+        onDispose {
+            Timber.d("Очистка настроек системных панелей")
+        }
+    }
 
     // ★★★★ ДОБАВЛЕНО: Получаем состояние photos ★★★★
     val photosState by photosViewModel.uiState.collectAsStateWithLifecycle()
     val photosDevices by photosViewModel.devices.collectAsStateWithLifecycle()
     val photosLocations by photosViewModel.allLocations.collectAsStateWithLifecycle()
+
+    // ★★★★ ДОБАВЛЕНО: Получаем состояние schemes ★★★★
+    val schemesState by schemesViewModel.uiState.collectAsStateWithLifecycle()
 
     KIPiATheme {
         Surface(
@@ -98,6 +265,8 @@ fun KIPiAApp(
             val topAppBarState = topAppBarController.state.value
             // ★★★★ ПОЛУЧАЕМ ТЕКУЩУЮ ЦВЕТОВУЮ СХЕМУ ★★★★
             val colorScheme = MaterialTheme.colorScheme
+            val (topAppBarBg, topAppBarContent) = getTopAppBarColors(isDarkTheme)
+            val bottomNavColors = getBottomNavColors(isDarkTheme)
             // ★★★★ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ BOTTOM NAV ★★★★
             val updateBottomNavVisibility: (Boolean) -> Unit = { isVisible ->
                 Timber.d("updateBottomNavVisibility вызван: $isVisible")
@@ -160,7 +329,7 @@ fun KIPiAApp(
                         }
                     }
 
-                    // ОБРАБОТКА TOP APP BAR (оставляем без изменений)
+                    // ОБРАБОТКА TOP APP BAR
                     when {
                         route?.startsWith("device_edit") == true -> {
                             val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
@@ -194,8 +363,39 @@ fun KIPiAApp(
                             Timber.d("TopAppBar: Установлен для photos")
                         }
 
+                        route == "schemes" -> {
+                            Timber.d("TopAppBar: Установка для schemes")
+
+                            // ★ ПЕРЕДАЕМ ПАРАМЕТРЫ ДЛЯ СХЕМ
+                            topAppBarController.setForScreen("schemes", buildMap<String, Any> {
+                                // ★ УСТАНАВЛИВАЕМ ЗАГОЛОВОК
+                                put("title", "Учет приборов КИПиА")
+
+                                // ★ ПЕРЕДАЕМ СОСТОЯНИЕ ФИЛЬТРОВ (ЯВНО ПРЕОБРАЗУЕМ В Any)
+                                put("searchQuery", schemesState.searchQuery)
+                                put("currentSort", schemesState.sortBy)
+
+                                // ★ КОЛБЭКИ ДЛЯ УПРАВЛЕНИЯ ФИЛЬТРАМИ
+                                put("onSearchQueryChange", { query: String ->
+                                    schemesViewModel.setSearchQuery(query)
+                                })
+                                put("onSortSelected", { sortBy: SchemesSortBy -> // ← ИЗМЕНИЛИ
+                                    schemesViewModel.setSortBy(sortBy)
+                                })
+                                put("onResetAllFilters", {
+                                    schemesViewModel.resetAllFilters()
+                                })
+
+                                // ★ ДОБАВЛЯЕМ КНОПКИ ТЕМЫ И НАСТРОЕК
+                                put("showThemeToggle", true)
+                                put("showSettingsIcon", true)
+                            })
+
+                            Timber.d("TopAppBar: Установлен для schemes")
+                        }
+
                         // Главные табы
-                        route in listOf("devices", "schemes", "reports") -> {
+                        route in listOf("devices", "reports") -> {
                             topAppBarController.resetToDefault()
                             Timber.d("TopAppBar: Сброшен к дефолту (главный экран)")
                         }
@@ -209,17 +409,17 @@ fun KIPiAApp(
                 }
             }
 
-            // ★★★★ ПОЛУЧАЕМ ЦВЕТА ДЛЯ TOP APP BAR ИЗ COLOR.KT ★★★★
-            val (topAppBarBg, topAppBarContent) = getTopAppBarColors()
-
             Scaffold(
                 topBar = {
                     Timber.d("═══════════════════════════════════════════")
                     Timber.d("Рендеринг TopAppBar:")
+                    Timber.d("  isDarkTheme: $isDarkTheme")
                     Timber.d("  Заголовок: '${topAppBarState.title}'")
+                    Timber.d("  TopAppBarBg: ${topAppBarBg.toHex()}")
+                    Timber.d("  TopAppBarContent: ${topAppBarContent.toHex()}")
                     Timber.d("  Кнопка Назад: ${topAppBarState.showBackButton}")
-                    Timber.d("  Кнопка Редактировать: ${topAppBarState.showEditButton}")
-                    Timber.d("  onEditClick доступен: ${topAppBarState.onEditClick != null}")
+                    Timber.d("  Показ фильтров схем: ${topAppBarState.showSchemesFilterMenu}")
+                    Timber.d("  Редактор схем: ${topAppBarState.showSchemeEditorActions}")
                     Timber.d("═══════════════════════════════════════════")
 
                     TopAppBar(
@@ -247,7 +447,11 @@ fun KIPiAApp(
                             if (topAppBarState.showBackButton) {
                                 IconButton(onClick = {
                                     Timber.d("Нажата кнопка 'Назад'")
-                                    navController.navigateUp()
+                                    // ★ ПЕРВЫЙ ВЫЗОВ КОЛБЭКА ИЗ TOPAPPBAR, ЕСЛИ ОН ЕСТЬ
+                                    topAppBarState.onBackClick?.invoke() ?: run {
+                                        // ★ ЕСЛИ КОЛБЭКА НЕТ, ИСПОЛЬЗУЕМ СТАНДАРТНЫЙ ПОВЕДЕНИЕ
+                                        navController.navigateUp()
+                                    }
                                 }) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
@@ -262,155 +466,287 @@ fun KIPiAApp(
                             Timber.d("Actions: showBackButton=${topAppBarState.showBackButton}")
 
                             if (!topAppBarState.showBackButton) {
-                                // ★★★★ ЕСЛИ ЭТО ЭКРАН PHOTOS - ПОКАЗЫВАЕМ ФИЛЬТРЫ ДЛЯ ФОТО ★★★★
-                                if (navController.currentDestination?.route == "photos") {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        PhotosFilterMenu(
-                                            selectedLocation = photosState.selectedLocation, // ← из photosViewModel
-                                            selectedDeviceId = photosState.selectedDeviceId, // ← из photosViewModel
-                                            locations = photosLocations,
-                                            devices = photosDevices,
-                                            onLocationFilterChange = { location ->
-                                                photosViewModel.selectLocation(location)
-                                            },
-                                            onDeviceFilterChange = { deviceId ->
-                                                photosViewModel.selectDevice(deviceId)
-                                            },
-                                            onResetAllFilters = {
-                                                photosViewModel.resetAllFilters()
-                                            },
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
-
-                                        ThemeToggleButton()
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        IconButton(onClick = {
-                                            navController.navigate("settings")
-                                        }) {
-                                            Icon(
-                                                Icons.Filled.Settings,
-                                                contentDescription = "Настройки",
-                                                tint = topAppBarContent
+                                // ★★★★ ОПРЕДЕЛЯЕМ ТЕКУЩИЙ ЭКРАН И ПОКАЗЫВАЕМ СООТВЕТСТВУЮЩИЕ КНОПКИ ★★★★
+                                when (navController.currentDestination?.route) {
+                                    "photos" -> {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            PhotosFilterMenu(
+                                                selectedLocation = photosState.selectedLocation,
+                                                selectedDeviceId = photosState.selectedDeviceId,
+                                                locations = photosLocations,
+                                                devices = photosDevices,
+                                                onLocationFilterChange = { location ->
+                                                    photosViewModel.selectLocation(location)
+                                                },
+                                                onDeviceFilterChange = { deviceId ->
+                                                    photosViewModel.selectDevice(deviceId)
+                                                },
+                                                onResetAllFilters = {
+                                                    photosViewModel.resetAllFilters()
+                                                },
+                                                modifier = Modifier.padding(end = 4.dp)
                                             )
+
+                                            ThemeToggleButton(contentColor = topAppBarContent)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            IconButton(onClick = {
+                                                navController.navigate("settings")
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.Settings,
+                                                    contentDescription = "Настройки",
+                                                    tint = topAppBarContent
+                                                )
+                                            }
                                         }
                                     }
-                                } else {
-                                    // ★★★★ ДЕЙСТВИЯ ДЛЯ ГЛАВНОГО ЭКРАНА ★★★★
-                                    val themeViewModel: ThemeViewModel = hiltViewModel()
-                                    val devicesViewModel: DevicesViewModel = hiltViewModel()
 
-                                    val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
-                                    val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
-                                    val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
-                                    val locationFilter = uiState.locationFilter
-                                    val statusFilter = uiState.statusFilter
+                                    "schemes" -> {
+                                        // ★★★★ ФИЛЬТРЫ ДЛЯ СХЕМ ★★★★
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (topAppBarState.showSchemesFilterMenu) {
+                                                SchemesFilterMenu(
+                                                    searchQuery = topAppBarState.schemesSearchQuery
+                                                        ?: "",
+                                                    onSearchQueryChange = { query ->
+                                                        topAppBarState.onSchemesSearchQueryChange?.invoke(
+                                                            query
+                                                        )
+                                                    },
+                                                    currentSort = topAppBarState.schemesCurrentSort
+                                                        ?: SchemesSortBy.NAME_ASC,
+                                                    onSortSelected = { sortBy ->
+                                                        topAppBarState.onSchemesSortSelected?.invoke(
+                                                            sortBy
+                                                        )
+                                                    },
+                                                    onResetAllFilters = {
+                                                        topAppBarState.onSchemesResetAllFilters?.invoke()
+                                                    },
+                                                    modifier = Modifier.padding(end = 4.dp)
+                                                )
+                                            }
 
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        DeviceFilterMenu(
-                                            searchQuery = searchQuery,
-                                            onSearchQueryChange = {
-                                                devicesViewModel.setSearchQuery(
-                                                    it
+                                            ThemeToggleButton(contentColor = topAppBarContent)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            IconButton(onClick = {
+                                                navController.navigate("settings")
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.Settings,
+                                                    contentDescription = "Настройки",
+                                                    tint = topAppBarContent
                                                 )
-                                            },
-                                            locationFilter = locationFilter,
-                                            locations = allLocations,
-                                            onLocationFilterChange = {
-                                                devicesViewModel.setLocationFilter(it)
-                                            },
-                                            statusFilter = statusFilter,
-                                            onStatusFilterChange = {
-                                                devicesViewModel.setStatusFilter(
-                                                    it
-                                                )
-                                            },
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
-                                        ThemeToggleButton()
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        IconButton(onClick = {
-                                            navController.navigate("settings")
-                                        }) {
-                                            Icon(
-                                                Icons.Filled.Settings,
-                                                contentDescription = "Настройки",
-                                                tint = topAppBarContent
+                                            }
+                                        }
+                                    }
+
+                                    else -> {
+                                        // ★★★★ ДЕЙСТВИЯ ДЛЯ ГЛАВНОГО ЭКРАНА ПРИБОРОВ И ДРУГИХ ЭКРАНОВ ★★★★
+                                        val themeViewModel: ThemeViewModel = hiltViewModel()
+                                        val devicesViewModel: DevicesViewModel = hiltViewModel()
+
+                                        val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
+                                        val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
+                                        val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
+                                        val locationFilter = uiState.locationFilter
+                                        val statusFilter = uiState.statusFilter
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            DeviceFilterMenu(
+                                                searchQuery = searchQuery,
+                                                onSearchQueryChange = {
+                                                    devicesViewModel.setSearchQuery(it)
+                                                },
+                                                locationFilter = locationFilter,
+                                                locations = allLocations,
+                                                onLocationFilterChange = {
+                                                    devicesViewModel.setLocationFilter(it)
+                                                },
+                                                statusFilter = statusFilter,
+                                                onStatusFilterChange = {
+                                                    devicesViewModel.setStatusFilter(it)
+                                                },
+                                                modifier = Modifier.padding(end = 4.dp)
                                             )
+                                            ThemeToggleButton(contentColor = topAppBarContent)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            IconButton(onClick = {
+                                                navController.navigate("settings")
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.Settings,
+                                                    contentDescription = "Настройки",
+                                                    tint = topAppBarContent
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             } else {
-                                // ★★★★ ПОЛЬЗОВАТЕЛЬСКИЕ ДЕЙСТВИЯ ДЛЯ ДРУГИХ ЭКРАНОВ ★★★★
+                                // ★★★★ ДЛЯ ЭКРАНОВ С КНОПКОЙ НАЗАД ★★★★
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(end = 4.dp)
                                 ) {
-                                    // ★★★★ КНОПКА РЕДАКТИРОВАНИЯ ★★★★
-                                    if (topAppBarState.showEditButton) {
-                                        IconButton(
-                                            onClick = {
-                                                Timber.d("Кнопка редактирования нажата")
-                                                topAppBarState.onEditClick?.invoke()
-                                            },
-                                            enabled = topAppBarState.onEditClick != null
-                                        ) {
-                                            Icon(
-                                                Icons.Filled.Edit,
-                                                contentDescription = "Редактировать",
-                                                tint = topAppBarContent
-                                            )
+                                    // ★ ОПРЕДЕЛЯЕМ ТЕКУЩИЙ ЭКРАН ПО МАРШРУТУ
+                                    when {
+                                        // ★ РЕДАКТОР СХЕМ
+                                        navController.currentDestination?.route?.startsWith("scheme_editor") == true -> {
+                                            // 1. Кнопка свойств схемы
+                                            if (topAppBarState.showSchemeEditorActions) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка свойств нажата")
+                                                        topAppBarState.onPropertiesClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onPropertiesClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Tune,
+                                                        contentDescription = "Свойства схемы",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
+
+                                            // 2. Кнопка сохранения
+                                            if (topAppBarState.canSave) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка сохранения нажата")
+                                                        topAppBarState.onSaveClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onSaveClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Save,
+                                                        contentDescription = "Сохранить",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
+
+                                            // 3. Кнопка настроек редактора
+                                            if (topAppBarState.showSchemeEditorActions) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка настроек редактора нажата")
+                                                        topAppBarState.onEditorSettingsClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onEditorSettingsClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Settings,
+                                                        contentDescription = "Настройки редактора",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
                                         }
-                                    }
-                                    // ★★★★ КНОПКА СОХРАНЕНИЯ ★★★★
-                                    if (topAppBarState.showSaveButton) {
-                                        IconButton(
-                                            onClick = {
-                                                Timber.d("Кнопка сохранения нажата")
-                                                topAppBarState.onSaveClick?.invoke()
-                                            },
-                                            enabled = topAppBarState.onSaveClick != null
-                                        ) {
-                                            Icon(
-                                                Icons.Filled.Save,
-                                                contentDescription = "Сохранить",
-                                                tint = topAppBarContent
-                                            )
+
+                                        // ★ РЕДАКТОР ПРИБОРА (device_edit)
+                                        navController.currentDestination?.route?.startsWith("device_edit") == true -> {
+                                            // ★★★★ КНОПКА РЕДАКТИРОВАНИЯ ★★★★
+                                            if (topAppBarState.showEditButton) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка редактирования нажата")
+                                                        topAppBarState.onEditClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onEditClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Edit,
+                                                        contentDescription = "Редактировать",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
+                                            // ★★★★ КНОПКА СОХРАНЕНИЯ ★★★★
+                                            if (topAppBarState.showSaveButton) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка сохранения нажата")
+                                                        topAppBarState.onSaveClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onSaveClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Save,
+                                                        contentDescription = "Сохранить",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
+                                            // ★★★★ КНОПКА УДАЛЕНИЯ ★★★★
+                                            if (topAppBarState.showDeleteButton) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка удаления нажата")
+                                                        topAppBarState.onDeleteClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onDeleteClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Delete,
+                                                        contentDescription = "Удалить",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
+                                            // ★★★★ КНОПКА ДОБАВЛЕНИЯ ★★★★
+                                            if (topAppBarState.showAddButton) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка добавления нажата")
+                                                        topAppBarState.onAddClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onAddClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Add,
+                                                        contentDescription = "Добавить",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
                                         }
-                                    }
-                                    // ★★★★ КНОПКА УДАЛЕНИЯ ★★★★
-                                    if (topAppBarState.showDeleteButton) {
-                                        IconButton(
-                                            onClick = {
-                                                Timber.d("Кнопка удаления нажата")
-                                                topAppBarState.onDeleteClick?.invoke()
-                                            },
-                                            enabled = topAppBarState.onDeleteClick != null
-                                        ) {
-                                            Icon(
-                                                Icons.Filled.Delete,
-                                                contentDescription = "Удалить",
-                                                tint = topAppBarContent
-                                            )
+
+                                        // ★ ДЕТАЛИ ПРИБОРА (device_detail)
+                                        navController.currentDestination?.route?.startsWith("device_detail") == true -> {
+                                            // ★★★★ КНОПКА РЕДАКТИРОВАНИЯ ★★★★
+                                            if (topAppBarState.showEditButton) {
+                                                IconButton(
+                                                    onClick = {
+                                                        Timber.d("Кнопка редактирования нажата")
+                                                        topAppBarState.onEditClick?.invoke()
+                                                    },
+                                                    enabled = topAppBarState.onEditClick != null
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Edit,
+                                                        contentDescription = "Редактировать",
+                                                        tint = topAppBarContent
+                                                    )
+                                                }
+                                            }
                                         }
-                                    }
-                                    // ★★★★ КНОПКА ДОБАВЛЕНИЯ ★★★★
-                                    if (topAppBarState.showAddButton) {
-                                        IconButton(
-                                            onClick = {
-                                                Timber.d("Кнопка добавления нажата")
-                                                topAppBarState.onAddClick?.invoke()
-                                            },
-                                            enabled = topAppBarState.onAddClick != null
-                                        ) {
-                                            Icon(
-                                                Icons.Filled.Add,
-                                                contentDescription = "Добавить",
-                                                tint = topAppBarContent
-                                            )
+
+                                        // ★ НАСТРОЙКИ (settings)
+                                        navController.currentDestination?.route == "settings" -> {
+                                            // Можно добавить специальные кнопки для настроек если нужно
+                                        }
+
+                                        // ★ ПОЛНОЭКРАННОЕ ФОТО (fullscreen_photo)
+                                        navController.currentDestination?.route?.startsWith("fullscreen_photo") == true -> {
+                                            // Можно добавить кнопки для управления фото
                                         }
                                     }
                                 }
@@ -436,9 +772,19 @@ fun KIPiAApp(
                             animationSpec = tween(durationMillis = 300)
                         ) + fadeOut(animationSpec = tween(durationMillis = 200)),
                     ) {
-                        BottomNavigationBar(
-                            navController = navController,
-                        )
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.navigationBars),
+                            color = bottomNavColors.background,
+                            shape = RectangleShape,
+                            tonalElevation = 4.dp
+                        ) {
+                            BottomNavigationBar(
+                                navController = navController,
+                                isDarkTheme = isDarkTheme
+                            )
+                        }
                     }
                 },
                 contentWindowInsets = WindowInsets.safeDrawing
@@ -447,6 +793,7 @@ fun KIPiAApp(
                     navController = navController,
                     devicesViewModel = hiltViewModel(),
                     photosViewModel = photosViewModel,
+                    schemesViewModel = schemesViewModel,
                     topAppBarController = topAppBarController,
                     notificationManager = notificationManager,
                     photoManager = photoManager,

@@ -94,8 +94,8 @@ data class ShapeData(
                 width = width,
                 height = height,
                 rotation = rotation,
-                fillColor = Color(fillColor.toColorInt()), // ← ИСПОЛЬЗУЙТЕ AndroidColor
-                strokeColor = Color(strokeColor.toColorInt()),
+                fillColor = parseColor(fillColor), // Используем нашу функцию парсинга
+                strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth,
                 cornerRadius = properties["cornerRadius"] as? Float ?: 0f
             )
@@ -106,8 +106,8 @@ data class ShapeData(
                 width = width,
                 height = height,
                 rotation = rotation,
-                fillColor = Color(fillColor.toColorInt()), // ← ИСПОЛЬЗУЙТЕ AndroidColor
-                strokeColor = Color(strokeColor.toColorInt()),
+                fillColor = parseColor(fillColor),
+                strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth,
                 startX = properties["startX"] as? Float ?: 0f,
                 startY = properties["startY"] as? Float ?: 0f,
@@ -121,8 +121,8 @@ data class ShapeData(
                 width = width,
                 height = height,
                 rotation = rotation,
-                fillColor = Color(fillColor.toColorInt()), // ← ИСПОЛЬЗУЙТЕ AndroidColor
-                strokeColor = Color(strokeColor.toColorInt()),
+                fillColor = parseColor(fillColor),
+                strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth
             )
             "text" -> ComposeText(
@@ -132,8 +132,8 @@ data class ShapeData(
                 width = width,
                 height = height,
                 rotation = rotation,
-                fillColor = Color(fillColor.toColorInt()), // ← ИСПОЛЬЗУЙТЕ AndroidColor
-                strokeColor = Color(strokeColor.toColorInt()),
+                fillColor = parseColor(fillColor),
+                strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth,
                 text = properties["text"] as? String ?: "",
                 fontSize = properties["fontSize"] as? Float ?: 16f
@@ -145,12 +145,28 @@ data class ShapeData(
                 width = width,
                 height = height,
                 rotation = rotation,
-                fillColor = Color(fillColor.toColorInt()), // ← ИСПОЛЬЗУЙТЕ AndroidColor
-                strokeColor = Color(strokeColor.toColorInt()),
+                fillColor = parseColor(fillColor),
+                strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth
             )
             else -> throw IllegalArgumentException("Unknown shape type: $type")
         }
+    }
+}
+
+// Добавьте функцию парсинга в SchemeData.kt или в отдельный утилитарный файл:
+fun parseColor(colorHex: String): Color {
+    return try {
+        val cleanHex = colorHex.removePrefix("#")
+        val longColor = when (cleanHex.length) {
+            6 -> "FF$cleanHex" // RGB -> ARGB
+            8 -> cleanHex // ARGB
+            else -> "FFFFFFFF"
+        }.toLong(16)
+
+        Color(longColor)
+    } catch (e: Exception) {
+        Color.Transparent
     }
 }
 
@@ -192,15 +208,13 @@ fun ComposeShape.toShapeData(): ShapeData {
 }
 
 // Расширение для конвертации Compose Color в hex строку
+// И функцию toArgbHex() в ComposeShape расширении:
 private fun Color.toArgbHex(): String {
-    // Создаем android.graphics.Color из Compose Color
-    val androidColor = AndroidColor.argb(
-        (alpha * 255).toInt(),
-        (red * 255).toInt(),
-        (green * 255).toInt(),
-        (blue * 255).toInt()
-    )
-    return String.format("#%08X", androidColor)
+    val alpha = (alpha * 255).toInt().and(0xFF)
+    val red = (red * 255).toInt().and(0xFF)
+    val green = (green * 255).toInt().and(0xFF)
+    val blue = (blue * 255).toInt().and(0xFF)
+    return String.format("#%02X%02X%02X%02X", alpha, red, green, blue)
 }
 
 data class SchemeDevice(

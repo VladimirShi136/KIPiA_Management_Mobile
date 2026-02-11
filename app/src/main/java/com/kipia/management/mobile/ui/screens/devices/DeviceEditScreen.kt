@@ -23,7 +23,7 @@ import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.shared.NotificationManager
-import com.kipia.management.mobile.utils.PhotoManager
+import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.viewmodel.DeviceEditViewModel
 import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
 import kotlinx.coroutines.launch

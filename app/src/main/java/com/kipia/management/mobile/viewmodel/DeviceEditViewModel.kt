@@ -7,7 +7,7 @@ import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.DeviceStatus
-import com.kipia.management.mobile.utils.PhotoManager
+import com.kipia.management.mobile.managers.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

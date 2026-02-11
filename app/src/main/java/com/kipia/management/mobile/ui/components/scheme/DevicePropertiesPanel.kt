@@ -1,13 +1,17 @@
 package com.kipia.management.mobile.ui.components.scheme
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.theme.DeviceStatus
@@ -26,24 +30,35 @@ fun DevicePropertiesPanel(
 ) {
     if (device == null || schemeDevice == null) return
 
-    var rotation by remember(schemeDevice.deviceId) { mutableStateOf(schemeDevice.rotation) }
-    var scale by remember(schemeDevice.deviceId) { mutableStateOf(schemeDevice.scale) }
-    var positionX by remember(schemeDevice.deviceId) { mutableStateOf(schemeDevice.x.toString()) }
-    var positionY by remember(schemeDevice.deviceId) { mutableStateOf(schemeDevice.y.toString()) }
+    var rotation by remember(schemeDevice.deviceId) {
+        mutableStateOf(schemeDevice.rotation)
+    }
+    var scale by remember(schemeDevice.deviceId) {
+        mutableStateOf(schemeDevice.scale)
+    }
+    var positionX by remember(schemeDevice.deviceId) {
+        mutableStateOf(schemeDevice.x.toString())
+    }
+    var positionY by remember(schemeDevice.deviceId) {
+        mutableStateOf(schemeDevice.y.toString())
+    }
+
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     Card(
-        modifier = modifier.width(300.dp),
+        modifier = modifier.width(320.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Заголовок
             Row(
@@ -51,33 +66,48 @@ fun DevicePropertiesPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Свойства прибора",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Devices,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+
+                    Text(
+                        text = "Свойства прибора",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 IconButton(
                     onClick = onClose,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Закрыть",
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
             // Информация о приборе
-            DeviceInfoSection(device)
+            DeviceInfoCard(device)
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
 
             // Положение
             Text(
                 text = "Положение",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
-
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Row(
@@ -92,14 +122,10 @@ fun DevicePropertiesPanel(
                             onUpdatePosition(x, schemeDevice.y)
                         }
                     },
-                    label = {
-                        Text(
-                            "X",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
+                    label = { Text("X") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -115,14 +141,10 @@ fun DevicePropertiesPanel(
                             onUpdatePosition(schemeDevice.x, y)
                         }
                     },
-                    label = {
-                        Text(
-                            "Y",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
+                    label = { Text("Y") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         focusedLabelColor = MaterialTheme.colorScheme.primary,
@@ -131,7 +153,9 @@ fun DevicePropertiesPanel(
                 )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
 
             // Вращение
             Text(
@@ -151,7 +175,7 @@ fun DevicePropertiesPanel(
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                 )
             )
 
@@ -161,19 +185,24 @@ fun DevicePropertiesPanel(
             ) {
                 Text(
                     "0°",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     "${rotation.toInt()}°",
-                    color = MaterialTheme.colorScheme.primary // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     "360°",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))  // Используем HorizontalDivider вместо Divider
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
 
             // Масштаб
             Text(
@@ -193,7 +222,7 @@ fun DevicePropertiesPanel(
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.secondary,
                     activeTrackColor = MaterialTheme.colorScheme.secondary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                    inactiveTrackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
                 )
             )
 
@@ -203,19 +232,22 @@ fun DevicePropertiesPanel(
             ) {
                 Text(
                     "50%",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     "${(scale * 100).toInt()}%",
-                    color = MaterialTheme.colorScheme.secondary // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 Text(
                     "200%",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Кнопки действий
             Row(
@@ -224,32 +256,36 @@ fun DevicePropertiesPanel(
             ) {
                 OutlinedButton(
                     onClick = {
-                        // Сброс к значениям по умолчанию
                         rotation = 0f
                         scale = 1f
                         onUpdateRotation(0f)
                         onUpdateScale(1f)
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
+                    shape = RoundedCornerShape(8.dp)
                 ) {
+                    Icon(
+                        Icons.Default.Restore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text("Сброс")
                 }
 
                 Button(
-                    onClick = onRemoveDevice,
+                    onClick = { showDeleteConfirmation = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onError // ДОБАВЛЕНО
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Удалить")
@@ -257,151 +293,202 @@ fun DevicePropertiesPanel(
             }
         }
     }
+
+    // Диалог подтверждения удаления
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Удаление прибора") },
+            text = {
+                Text("Вы уверены, что хотите удалить прибор ${device.getDisplayName()} со схемы?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRemoveDevice()
+                        showDeleteConfirmation = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DeviceInfoSection(device: Device) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+fun DeviceInfoCard(device: Device) {
+    val deviceStatus = DeviceStatus.fromString(device.status)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = when (device.type.lowercase()) {
-                    "манометр", "pressure" -> Icons.Default.Speed
-                    "термометр", "thermometer" -> Icons.Default.Thermostat
-                    "счетчик", "counter" -> Icons.Default.Calculate
-                    "клапан", "valve" -> Icons.Default.TapAndPlay
-                    "датчик", "sensor" -> Icons.Default.Sensors
-                    "регулятор", "controller" -> Icons.Default.Tune
-                    else -> Icons.Default.Devices
-                },
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Исправляем Elvis operator - device.name может быть null
-            val displayName = if (!device.name.isNullOrBlank()) {
-                device.name
-            } else {
-                device.getDisplayName()
-            }
-
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Статус - используем DeviceStatus
-            val deviceStatus = DeviceStatus.fromString(device.status)
-
-            // ★★★★ ИСПРАВЛЕННЫЙ ВАРИАНТ AssistChip ★★★★
-            AssistChip(
-                onClick = {},
-                label = {
+            // Название и тип
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        device.status.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = deviceStatus.textColor
+                        text = device.getDisplayName(),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = deviceStatus.containerColor, // containerColor вместо backgroundColor
-                    labelColor = deviceStatus.textColor
-                ),
-            )
 
-            // Тип прибора - используем InputChip или FilterChip вместо SuggestionChip
-            FilterChip(
-                selected = false,
-                onClick = {},
-                label = {
                     Text(
-                        device.type,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        }
-
-        // Дополнительная информация
-        if (!device.additionalInfo.isNullOrBlank()) {
-            Text(
-                text = device.additionalInfo,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Инвентарный номер и место
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = "Инвентарный: ${device.inventoryNumber}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = "Место: ${device.location}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Номер крана, если есть
-            device.valveNumber?.let { valveNumber ->
-                if (valveNumber.isNotBlank()) {
-                    Text(
-                        text = "Кран: $valveNumber",
+                        text = device.type,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-        }
 
-        // Технические характеристики
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            device.measurementLimit?.let { limit ->
-                if (limit.isNotBlank()) {
-                    Text(
-                        text = "Предел: $limit",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                // Статус
+                AssistChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            device.status,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = deviceStatus.textColor
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = deviceStatus.containerColor,
+                        labelColor = deviceStatus.textColor
                     )
-                }
-            }
-
-            device.accuracyClass?.let { accuracy ->
-                Text(
-                    text = "Класс: $accuracy",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
                 )
             }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            )
+
+            // Инвентарный номер
+            InfoRow(
+                icon = Icons.Default.QrCode,
+                label = "Инв. №",
+                value = device.inventoryNumber
+            )
+
+            // Местоположение
+            InfoRow(
+                icon = Icons.Default.LocationOn,
+                label = "Место",
+                value = device.location
+            )
+
+            // Номер крана (если есть)
+            device.valveNumber?.takeIf { it.isNotBlank() }?.let {
+                InfoRow(
+                    icon = Icons.Default.Tune,
+                    label = "Кран",
+                    value = it
+                )
+            }
+
+            // Дополнительная информация
+            if (!device.additionalInfo.isNullOrBlank()) {
+                InfoRow(
+                    icon = Icons.Default.Info,
+                    label = "Инфо",
+                    value = device.additionalInfo,
+                    singleLine = false
+                )
+            }
+
+            // Технические характеристики
+            if (device.measurementLimit != null || device.accuracyClass != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    device.measurementLimit?.takeIf { it.isNotBlank() }?.let {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Предел: $it",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    device.accuracyClass?.let {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Кл. точности: $it",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun InfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    singleLine: Boolean = true
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+            overflow = if (singleLine) androidx.compose.ui.text.style.TextOverflow.Ellipsis else androidx.compose.ui.text.style.TextOverflow.Clip,
+            modifier = Modifier.weight(1f)
+        )
     }
 }

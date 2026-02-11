@@ -7,7 +7,7 @@ import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.ui.components.photos.DisplayMode
 import com.kipia.management.mobile.ui.components.photos.PhotoItem
 import com.kipia.management.mobile.ui.screens.photos.ViewMode
-import com.kipia.management.mobile.utils.PhotoManager
+import com.kipia.management.mobile.managers.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch

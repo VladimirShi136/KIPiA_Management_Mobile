@@ -1,17 +1,23 @@
 package com.kipia.management.mobile.ui.screens.schemes
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -20,89 +26,166 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.ui.components.scheme.SchemesActiveFiltersBadge
 import com.kipia.management.mobile.viewmodel.DeleteResult
 import com.kipia.management.mobile.viewmodel.SchemeWithStatus
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchemesScreen(
     onNavigateToSchemeEditor: (Int?) -> Unit,
+    updateBottomNavVisibility: (Boolean) -> Unit = {},
+    topAppBarController: com.kipia.management.mobile.ui.components.topappbar.TopAppBarController? = null,
     viewModel: SchemesViewModel = hiltViewModel()
 ) {
     val schemesWithStatus by viewModel.getSchemesWithStatus()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val scrollState = rememberLazyListState()
+    val context = LocalContext.current
 
     var showDeleteDialog by remember { mutableStateOf<Scheme?>(null) }
     var showError by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Схемы") },
-                actions = {
-                    // Сортировка
-                    SortMenu(
-                        currentSort = uiState.sortBy,
-                        onSortSelected = { viewModel.setSortBy(it) }
-                    )
+    // ★ ЛОГИКА СКРЫТИЯ BOTTOM NAV ПРИ ПРОКРУТКЕ (как в PhotosScreen)
+    val shouldShowBottomNav by remember(scrollState) {
+        derivedStateOf {
+            with(scrollState) {
+                firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
+            }
+        }
+    }
 
-                    // Поиск
-                    SearchField(
-                        searchQuery = uiState.searchQuery,
-                        onSearchQueryChanged = { viewModel.setSearchQuery(it) }
-                    )
-                }
-            )
-        },
+    // ★ Обновляем видимость BottomNav
+    LaunchedEffect(shouldShowBottomNav) {
+        Timber.d("SchemesScreen: BottomNav видимость = $shouldShowBottomNav")
+        updateBottomNavVisibility(shouldShowBottomNav)
+    }
+
+    // ★ ЛОГИКА ДЛЯ КНОПКИ "НАВЕРХ"
+    val showScrollToTopButton by remember(shouldShowBottomNav) {
+        derivedStateOf {
+            !shouldShowBottomNav
+        }
+    }
+
+    // ★ Настраиваем TopAppBar через контроллер (аналогично PhotosScreen)
+    LaunchedEffect(topAppBarController, uiState) {
+        topAppBarController?.setForScreen("schemes", buildMap<String, Any> { // ← ЯВНО УКАЗЫВАЕМ ТИП
+            put("title", "Учет приборов КИПиА")
+            put("searchQuery", uiState.searchQuery)
+            put("currentSort", uiState.sortBy)
+            put("onSearchQueryChange", { query: String ->
+                viewModel.setSearchQuery(query)
+            })
+            put("onSortSelected", { sortBy: SchemesSortBy ->
+                viewModel.setSortBy(sortBy)
+            })
+            put("onResetAllFilters", {
+                viewModel.resetAllFilters()
+            })
+            put("showThemeToggle", true)
+            put("showSettingsIcon", true)
+        })
+    }
+
+    val scrollToTop: () -> Unit = {
+        scope.launch {
+            scrollState.animateScrollToItem(0)
+        }
+    }
+
+    Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onNavigateToSchemeEditor(null) },
-                containerColor = MaterialTheme.colorScheme.primary
+            Column(
+                modifier = Modifier
+                    .padding(end = 46.dp, bottom = 30.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить схему")
+                // ★ КНОПКА "НАВЕРХ"
+                AnimatedVisibility(
+                    visible = showScrollToTopButton,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    FloatingActionButton(
+                        onClick = scrollToTop,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowUpward,
+                            contentDescription = "Наверх",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                // ★ КНОПКА ДОБАВЛЕНИЯ СХЕМЫ
+                FloatingActionButton(
+                    onClick = { onNavigateToSchemeEditor(null) },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Добавить схему")
+                }
             }
         }
     ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                LoadingState()
-            }
-            schemesWithStatus.isEmpty() -> {
-                EmptySchemesState(
-                    onCreateScheme = { onNavigateToSchemeEditor(null) },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
-            else -> {
-                SchemesList(
-                    schemesWithStatus = schemesWithStatus,
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                // АКТИВНЫЕ ФИЛЬТРЫ (как в PhotosScreen)
+                SchemesActiveFiltersBadge(
                     searchQuery = uiState.searchQuery,
-                    onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                    onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                    onDeleteScheme = { scheme ->
-                        // ★★★★ ПРОВЕРЯЕМ МОЖНО ЛИ УДАЛИТЬ ★★★★
-                        if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
-                            showDeleteDialog = scheme
-                        } else {
-                            showError = "Нельзя удалить схему '$scheme.name'. " +
-                                    "К ней привязаны приборы."
-                        }
-                    },
+                    currentSort = uiState.sortBy,
+                    onClearFilters = { viewModel.resetAllFilters() },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
                 )
+
+                when {
+                    uiState.isLoading -> {
+                        LoadingState()
+                    }
+                    schemesWithStatus.isEmpty() -> {
+                        EmptySchemesState(
+                            onCreateScheme = { onNavigateToSchemeEditor(null) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    else -> {
+                        SchemesList(
+                            schemesWithStatus = schemesWithStatus,
+                            scrollState = scrollState,
+                            onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                            onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                            onDeleteScheme = { scheme ->
+                                if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
+                                    showDeleteDialog = scheme
+                                } else {
+                                    showError = "Нельзя удалить схему '$scheme.name'. " +
+                                            "К ней привязаны приборы."
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             }
         }
 
         // Диалог подтверждения удаления
-        if (showDeleteDialog != null) {
+        showDeleteDialog?.let { scheme ->
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = null },
                 title = { Text("Удаление схемы") },
@@ -110,18 +193,16 @@ fun SchemesScreen(
                     Column {
                         Text("Вы уверены, что хотите удалить схему:")
                         Spacer(modifier = Modifier.height(4.dp))
-                        showDeleteDialog?.let { scheme ->
+                        Text(
+                            text = "'${scheme.name}'",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        if (scheme.description?.isNotBlank() == true) {
                             Text(
-                                text = "'${scheme.name}'",
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                                text = "Описание: ${scheme.description}",
+                                fontStyle = FontStyle.Italic
                             )
-                            if (scheme.description?.isNotBlank() == true) {
-                                Text(
-                                    text = "Описание: ${scheme.description}",
-                                    fontStyle = FontStyle.Italic
-                                )
-                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -133,16 +214,13 @@ fun SchemesScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            showDeleteDialog?.let { scheme ->
-                                scope.launch {
-                                    val result = viewModel.deleteScheme(scheme)
-                                    when (result) {
-                                        is DeleteResult.Success -> {
-                                            // Можно показать Snackbar
-                                        }
-                                        is DeleteResult.Error -> {
-                                            showError = result.message
-                                        }
+                            scope.launch {
+                                when (val result = viewModel.deleteScheme(scheme)) {
+                                    is DeleteResult.Success -> {
+                                        // Можно показать Snackbar
+                                    }
+                                    is DeleteResult.Error -> {
+                                        showError = result.message
                                     }
                                 }
                             }
@@ -164,11 +242,11 @@ fun SchemesScreen(
         }
 
         // Ошибка
-        if (showError != null) {
+        showError?.let { error ->
             AlertDialog(
                 onDismissRequest = { showError = null },
                 title = { Text("Нельзя удалить схему") },
-                text = { Text(showError!!) },
+                text = { Text(error) },
                 confirmButton = {
                     TextButton(onClick = { showError = null }) {
                         Text("OK")
@@ -180,115 +258,22 @@ fun SchemesScreen(
 }
 
 @Composable
-fun SortMenu(
-    currentSort: SortBy,
-    onSortSelected: (SortBy) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Сортировка")
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("По имени (А-Я)") },
-                onClick = {
-                    onSortSelected(SortBy.NAME_ASC)
-                    expanded = false
-                },
-                leadingIcon = {
-                    if (currentSort == SortBy.NAME_ASC) {
-                        Icon(Icons.Default.Check, contentDescription = null)
-                    } else {
-                        Spacer(modifier = Modifier.size(24.dp))
-                    }
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("По имени (Я-А)") },
-                onClick = {
-                    onSortSelected(SortBy.NAME_DESC)
-                    expanded = false
-                },
-                leadingIcon = {
-                    if (currentSort == SortBy.NAME_DESC) {
-                        Icon(Icons.Default.Check, contentDescription = null)
-                    } else {
-                        Spacer(modifier = Modifier.size(24.dp))
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun SearchField(
-    searchQuery: String,
-    onSearchQueryChanged: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    if (expanded) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChanged,
-                placeholder = { Text("Поиск схем...") },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp),
-                singleLine = true
-            )
-
-            IconButton(onClick = {
-                expanded = false
-                onSearchQueryChanged("")
-            }) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть поиск")
-            }
-        }
-    } else {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.Search, contentDescription = "Поиск")
-        }
-    }
-}
-
-@Composable
 fun SchemesList(
     schemesWithStatus: List<SchemeWithStatus>,
-    searchQuery: String,
+    scrollState: LazyListState,
     onSchemeClick: (Scheme) -> Unit,
     onEditScheme: (Scheme) -> Unit,
     onDeleteScheme: (Scheme) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val filteredSchemes = if (searchQuery.isBlank()) {
-        schemesWithStatus
-    } else {
-        schemesWithStatus.filter { item ->
-            item.scheme.name.contains(searchQuery, ignoreCase = true) ||
-                    item.scheme.description?.contains(searchQuery, ignoreCase = true) == true
-        }
-    }
-
     LazyColumn(
+        state = scrollState,
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
-        items(filteredSchemes, key = { it.scheme.id }) { item ->
+        items(schemesWithStatus.size, key = { index -> schemesWithStatus[index].scheme.id }) { index ->
+            val item = schemesWithStatus[index]
             SchemeCard(
                 scheme = item.scheme,
                 deviceCount = item.deviceCount,
@@ -529,6 +514,6 @@ fun EmptySchemesState(
     }
 }
 
-enum class SortBy {
+enum class SchemesSortBy {
     NAME_ASC, NAME_DESC
 }

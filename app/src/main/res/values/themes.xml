@@ -1,10 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.KipiaManagement" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Только для Edge-to-edge -->
+        <!-- Прозрачные панели для edge-to-edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
+
+        <!-- Отключаем полупрозрачность (лучше с Compose) -->
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+
+        <!-- Для Android 10+ (API 29) -->
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="q">false</item>
+
+        <!-- Для Android 8.1+ (API 27) -->
+        <item name="android:windowDrawsSystemBarBackgrounds" tools:targetApi="27">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+
+        <!-- Для API 24-26 -->
+        <item name="android:fitsSystemWindows" tools:targetApi="24">false</item>
     </style>
 </resources>

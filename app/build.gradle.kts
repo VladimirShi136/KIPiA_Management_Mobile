@@ -107,4 +107,6 @@ dependencies {
     // DataStore (НОВОЕ) ⬅️
     implementation(libs.datastore.preferences)
     implementation(libs.datastore.preferences.core)
+
+    implementation(libs.accompanist.systemuicontroller)
 }

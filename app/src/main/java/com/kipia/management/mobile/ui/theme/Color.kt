@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
+import timber.log.Timber
 
 
 // ===== ОСНОВНАЯ ПАЛИТРА ИЗ ИКОНКИ =====
@@ -15,8 +16,12 @@ object AppColors {
     val LightGrayBlue = Color(0xFFB6C0C9) // Нейтральный - #B6C0C9
 
     // Дополнительные из градации
-    val DarkBlue = Color(0xFF465261)      // Для шапки - #465261
-    val MediumDarkGray = Color(0xFF6C7884) // Для навигации - #6C7884
+    val DarkBlue = Color(0xFF465261).also {
+        Timber.d("🎨 AppColors.DarkBlue: ${it.toHex()}")
+    }     // Для шапки - #465261
+    val MediumDarkGray = Color(0xFF6C7884).also {
+        Timber.d("🎨 AppColors.MediumDarkGray: ${it.toHex()}")
+    } // Для навигации - #6C7884
     val MediumGray = Color(0xFF848C9B)    // Для второстепенного текста - #848C9B
     val Pinkish = Color(0xFFE4BEBE)       // Розоватый (исправленный) - #E4BEBE
 
@@ -60,26 +65,38 @@ object SystemColors {
     // ★★★★ ЦВЕТА ДЛЯ TOP APP BAR ★★★★
     object TopAppBar {
         // Светлая тема
-        val LightBackground = AppColors.DarkBlue       // #465261
-        val LightContent = Color.White
+        val LightBackground = AppColors.DarkBlue.also {
+            Timber.d("🎨 TopAppBar.LightBackground инициализирован: ${it.toHex()}")
+        }
+        val LightContent = Color.White.also {
+            Timber.d("🎨 TopAppBar.LightContent инициализирован: ${it.toHex()}")
+        }
         val LightBorder = Color.White.copy(alpha = 0.8f)
 
         // Темная тема (можно настроить позже)
-        val DarkBackground = Color(0xFF1E2A3A)         // Темнее для dark theme
-        val DarkContent = Color.White
+        val DarkBackground = Color(0xFF1E2A3A).also {
+            Timber.d("🎨 TopAppBar.DarkBackground инициализирован: ${it.toHex()}")
+        }
+        val DarkContent = Color.White.also {
+            Timber.d("🎨 TopAppBar.DarkContent инициализирован: ${it.toHex()}")
+        }
         val DarkBorder = Color.White.copy(alpha = 0.8f)
     }
 
     // ★★★★ ЦВЕТА ДЛЯ BOTTOM NAVIGATION ★★★★
     object BottomNav {
         // Светлая тема
-        val LightBackground = AppColors.MediumDarkGray // #6C7884
+        val LightBackground = AppColors.MediumDarkGray.also {
+            Timber.d("🎨 BottomNav.LightBackground инициализирован: ${it.toHex()}")
+        }
         val LightSelectedText = Color.White
         val LightUnselectedText = Color.White.copy(alpha = 0.8f)
         val LightBorder = Color.White.copy(alpha = 0.3f)
 
         // Темная тема (можно настроить позже)
-        val DarkBackground = Color(0xFF4A5568)         // Для dark theme
+        val DarkBackground = Color(0xFF4A5568).also {
+            Timber.d("BottomNav.DarkBackground инициализирован: ${it.toHex()}")
+        }         // Для dark theme
         val DarkSelectedText = Color.White
         val DarkUnselectedText = Color.White.copy(alpha = 0.8f)
         val DarkBorder = Color.White.copy(alpha = 0.3f)
@@ -246,22 +263,29 @@ fun getBottomNavTextColor(backgroundColor: Color): Color {
  * Получить цвета для TopAppBar в зависимости от темы
  */
 @Composable
-fun getTopAppBarColors(): Pair<Color, Color> {
-    val isDarkTheme = isSystemInDarkTheme()
-    return if (isDarkTheme) {
+fun getTopAppBarColors(isDarkTheme: Boolean = isSystemInDarkTheme()): Pair<Color, Color> {
+    Timber.d("🎨 getTopAppBarColors() вызван: isDarkTheme=$isDarkTheme")
+
+    val colors = if (isDarkTheme) {
+        Timber.d("🎨 Используем DARK цвета: bg=${SystemColors.TopAppBar.DarkBackground.toHex()}, content=${SystemColors.TopAppBar.DarkContent.toHex()}")
         Pair(SystemColors.TopAppBar.DarkBackground, SystemColors.TopAppBar.DarkContent)
     } else {
+        Timber.d("🎨 Используем LIGHT цвета: bg=${SystemColors.TopAppBar.LightBackground.toHex()}, content=${SystemColors.TopAppBar.LightContent.toHex()}")
         Pair(SystemColors.TopAppBar.LightBackground, SystemColors.TopAppBar.LightContent)
     }
+
+    Timber.d("🎨 Выбран цвет TopAppBar: ${colors.first.toHex()}")
+    return colors
 }
 
 /**
  * Получить цвета для BottomNav в зависимости от темы
  */
 @Composable
-fun getBottomNavColors(): BottomNavColors {
-    val isDarkTheme = isSystemInDarkTheme()
-    return if (isDarkTheme) {
+fun getBottomNavColors(isDarkTheme: Boolean = isSystemInDarkTheme()): BottomNavColors {
+    Timber.d("🎨 getBottomNavColors() вызван: isDarkTheme=$isDarkTheme")
+
+    val colors = if (isDarkTheme) {
         BottomNavColors(
             background = SystemColors.BottomNav.DarkBackground,
             selectedText = SystemColors.BottomNav.DarkSelectedText,
@@ -276,6 +300,14 @@ fun getBottomNavColors(): BottomNavColors {
             border = SystemColors.BottomNav.LightBorder
         )
     }
+
+    Timber.d("🎨 Выбран цвет BottomNav: ${colors.background.toHex()}")
+    return colors
+}
+
+// Вспомогательная функция
+fun Color.toHex(): String {
+    return String.format("#%08X", this.value.toInt())
 }
 
 data class BottomNavColors(
