@@ -11,8 +11,6 @@ import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeRectangle
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeRhombus
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeText
-import android.graphics.Color as AndroidColor // Android Color с алиасом
-import androidx.core.graphics.toColorInt
 
 
 /**
@@ -82,7 +80,11 @@ data class ShapeData(
     val fillColor: String = "#00000000", // ARGB hex
     val strokeColor: String = "#FF000000",
     val strokeWidth: Float = 2f,
-    val properties: Map<String, Any> = emptyMap() // Дополнительные свойства
+    val properties: Map<String, Any> = emptyMap(), // Дополнительные свойства
+    val transform: TransformData? = null, // Локальная трансформация
+    val layer: LayerData? = null, // Информация о слое
+    val isLocked: Boolean = false, // Заблокирован ли объект
+    val isVisible: Boolean = true // Видимость
 ) {
     // Конвертация в ComposeShape
     fun toComposeShape(): ComposeShape {
@@ -153,6 +155,20 @@ data class ShapeData(
         }
     }
 }
+
+data class TransformData(
+    val scaleX: Float = 1f,
+    val scaleY: Float = 1f,
+    val rotation: Float = 0f,
+    val skewX: Float = 0f,
+    val skewY: Float = 0f
+)
+
+data class LayerData(
+    val zIndex: Int,
+    val groupId: String? = null,
+    val isGroup: Boolean = false
+)
 
 // Добавьте функцию парсинга в SchemeData.kt или в отдельный утилитарный файл:
 fun parseColor(colorHex: String): Color {

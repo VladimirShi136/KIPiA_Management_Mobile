@@ -30,6 +30,11 @@ interface ComposeShape {
     fun contains(point: Offset): Boolean
     fun copy(): ComposeShape
     fun copyWithId(): ComposeShape  // Для создания дубликатов с новым ID
+
+    // Добавленные методы для обновления свойств
+    fun copyWithFillColor(color: Color): ComposeShape
+    fun copyWithStrokeColor(color: Color): ComposeShape
+    fun copyWithStrokeWidth(width: Float): ComposeShape
 }
 
 // Прямоугольник
@@ -114,6 +119,16 @@ data class ComposeRectangle(
 
     override fun copyWithId(): ComposeRectangle =
         this.copy(id = "rect_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    // Реализация новых методов
+    override fun copyWithFillColor(color: Color): ComposeRectangle =
+        this.copy(fillColor = color)
+
+    override fun copyWithStrokeColor(color: Color): ComposeRectangle =
+        this.copy(strokeColor = color)
+
+    override fun copyWithStrokeWidth(width: Float): ComposeRectangle =
+        this.copy(strokeWidth = width)
 }
 
 // Линия
@@ -199,6 +214,16 @@ data class ComposeLine(
 
     override fun copyWithId(): ComposeLine =
         this.copy(id = "line_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    // Реализация новых методов
+    override fun copyWithFillColor(color: Color): ComposeLine =
+        this.copy(fillColor = color)
+
+    override fun copyWithStrokeColor(color: Color): ComposeLine =
+        this.copy(strokeColor = color)
+
+    override fun copyWithStrokeWidth(width: Float): ComposeLine =
+        this.copy(strokeWidth = width)
 }
 
 // Эллипс
@@ -266,6 +291,16 @@ data class ComposeEllipse(
 
     override fun copyWithId(): ComposeEllipse =
         this.copy(id = "ellipse_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    // Реализация новых методов
+    override fun copyWithFillColor(color: Color): ComposeEllipse =
+        this.copy(fillColor = color)
+
+    override fun copyWithStrokeColor(color: Color): ComposeEllipse =
+        this.copy(strokeColor = color)
+
+    override fun copyWithStrokeWidth(width: Float): ComposeEllipse =
+        this.copy(strokeWidth = width)
 }
 
 // Текст
@@ -366,6 +401,16 @@ data class ComposeText(
 
     override fun copyWithId(): ComposeText =
         this.copy(id = "text_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    // Реализация новых методов
+    override fun copyWithFillColor(color: Color): ComposeText =
+        this.copy(fillColor = color)
+
+    override fun copyWithStrokeColor(color: Color): ComposeText =
+        this.copy(strokeColor = color)
+
+    override fun copyWithStrokeWidth(width: Float): ComposeText =
+        this.copy(strokeWidth = width)
 }
 
 // Ромб
@@ -439,6 +484,16 @@ data class ComposeRhombus(
 
     override fun copyWithId(): ComposeRhombus =
         this.copy(id = "rhombus_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    // Реализация новых методов
+    override fun copyWithFillColor(color: Color): ComposeRhombus =
+        this.copy(fillColor = color)
+
+    override fun copyWithStrokeColor(color: Color): ComposeRhombus =
+        this.copy(strokeColor = color)
+
+    override fun copyWithStrokeWidth(width: Float): ComposeRhombus =
+        this.copy(strokeWidth = width)
 }
 
 // Фабрика фигур
