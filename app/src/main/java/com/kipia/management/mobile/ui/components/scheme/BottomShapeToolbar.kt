@@ -1,8 +1,11 @@
 package com.kipia.management.mobile.ui.components.scheme
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,11 +16,23 @@ import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import com.kipia.management.mobile.viewmodel.EditorMode
-import timber.log.Timber
+
+// Список режимов создания фигур - выносим в константу
+private val SHAPE_CREATION_MODES = listOf(
+    EditorMode.RECTANGLE,
+    EditorMode.LINE,
+    EditorMode.ELLIPSE,
+    EditorMode.RHOMBUS,
+    EditorMode.TEXT
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomShapeToolbar(
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     editorMode: EditorMode,
     selectedShape: ComposeShape?,
     selectedDevice: Pair<Device, SchemeDevice>?,
@@ -30,97 +45,93 @@ fun BottomShapeToolbar(
     modifier: Modifier = Modifier
 ) {
     var showShapeCreationMenu by remember { mutableStateOf(false) }
-    var showShapeActionsMenu by remember { mutableStateOf(false) }
-    var showDeviceActionsMenu by remember { mutableStateOf(false) }
 
-    val hasSelectedShape = selectedShape != null
-    val hasSelectedDevice = selectedDevice != null
+    // Оптимизированные состояния
+    val hasSelectedShape by remember(selectedShape) {
+        derivedStateOf { selectedShape != null }
+    }
+    val hasSelectedDevice by remember(selectedDevice) {
+        derivedStateOf { selectedDevice != null }
+    }
+
+    // Оптимизация для isShapeCreationMode
+    val isShapeCreationMode by remember(editorMode) {
+        derivedStateOf { editorMode in SHAPE_CREATION_MODES }
+    }
 
     Card(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
+        LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .heightIn(min = 64.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Кнопка создания фигур (всегда доступна)
-            ShapeCreationButton(
-                isActive = editorMode in listOf(
-                    EditorMode.RECTANGLE,
-                    EditorMode.LINE,
-                    EditorMode.ELLIPSE,
-                    EditorMode.RHOMBUS,
-                    EditorMode.TEXT
-                ),
-                onClick = {
-                    Timber.d("ShapeCreationButton clicked, showing menu")
-                    showShapeCreationMenu = true
+            // Стабильные кнопки с фиксированными ключами
+            item(key = "undo") {
+                IconButton(onClick = onUndo, enabled = canUndo) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, null)
                 }
-            )
+            }
 
-            VerticalDivider()
+            item(key = "redo") {
+                IconButton(onClick = onRedo, enabled = canRedo) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, null)
+                }
+            }
 
-            // Кнопка добавления устройства
-            IconButton(
-                onClick = {
-                    onModeChanged(EditorMode.DEVICE)
-                    onAddDevice()
-                },
-                modifier = Modifier.size(40.dp),
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = if (editorMode == EditorMode.DEVICE)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurface
-                )
-            ) {
-                Icon(
-                    Icons.Default.DeviceHub,
-                    contentDescription = "Добавить прибор",
-                    modifier = Modifier.size(20.dp)
+            item(key = "select") {
+                IconButton(onClick = { onModeChanged(EditorMode.SELECT) }) {
+                    Icon(Icons.Default.ArrowOutward, null)
+                }
+            }
+
+            item(key = "panzoom") {
+                IconButton(onClick = { onModeChanged(EditorMode.PAN_ZOOM) }) {
+                    Icon(Icons.Default.ZoomIn, null)
+                }
+            }
+
+            item(key = "shape_creation") {
+                ShapeCreationButton(
+                    isActive = isShapeCreationMode,
+                    onClick = { showShapeCreationMenu = true }
                 )
             }
 
-            // Контекстные действия (появляются при выделении)
-            if (hasSelectedShape) {
-                VerticalDivider()
+            item(key = "add_device") {
+                IconButton(onClick = {
+                    onModeChanged(EditorMode.DEVICE)
+                    onAddDevice()
+                }) {
+                    Icon(Icons.Default.DeviceHub, null)
+                }
+            }
 
-                ShapeActionsMenu(
-                    onMenuClick = onShapeMenuClick,
-                    onDuplicate = onDuplicateShape,
-                    onDelete = onDeleteSelected
-                )
+            // Динамические элементы с ключами на основе ID
+            if (hasSelectedShape) {
+                item(key = "shape_actions_${selectedShape?.id ?: "none"}") {
+                    ShapeActionsMenu(
+                        onMenuClick = onShapeMenuClick,
+                        onDuplicate = onDuplicateShape,
+                        onDelete = onDeleteSelected
+                    )
+                }
             }
 
             if (hasSelectedDevice) {
-                VerticalDivider()
-
-                DeviceActionsMenu(
-                    onMenuClick = onDeviceMenuClick,
-                    onDelete = onDeleteSelected
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Индикатор выделения (опционально)
-            if (hasSelectedShape || hasSelectedDevice) {
-                Badge(
-                    modifier = Modifier.padding(end = 4.dp),
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = "1",
-                        style = MaterialTheme.typography.labelSmall
+                item(key = "device_actions_${selectedDevice?.first?.id ?: "none"}") {
+                    DeviceActionsMenu(
+                        onMenuClick = onDeviceMenuClick,
+                        onDelete = onDeleteSelected
                     )
                 }
             }
@@ -128,67 +139,11 @@ fun BottomShapeToolbar(
     }
 
     // Выпадающее меню создания фигур
-    DropdownMenu(
+    ShapeCreationDropdownMenu(
         expanded = showShapeCreationMenu,
-        onDismissRequest = { showShapeCreationMenu = false },
-        modifier = Modifier.width(240.dp)
-    ) {
-        DropdownMenuItem(
-            text = { Text("Прямоугольник") },
-            onClick = {
-                Timber.d("Rectangle selected, changing mode to RECTANGLE")
-                onModeChanged(EditorMode.RECTANGLE)
-                showShapeCreationMenu = false
-            },
-            leadingIcon = {
-                Icon(Icons.Default.CropSquare, contentDescription = null)
-            }
-        )
-
-        DropdownMenuItem(
-            text = { Text("Линия") },
-            onClick = {
-                onModeChanged(EditorMode.LINE)
-                showShapeCreationMenu = false
-            },
-            leadingIcon = {
-                Icon(Icons.Default.HorizontalRule, contentDescription = null)
-            }
-        )
-
-        DropdownMenuItem(
-            text = { Text("Эллипс") },
-            onClick = {
-                onModeChanged(EditorMode.ELLIPSE)
-                showShapeCreationMenu = false
-            },
-            leadingIcon = {
-                Icon(Icons.Default.Circle, contentDescription = null)
-            }
-        )
-
-        DropdownMenuItem(
-            text = { Text("Ромб") },
-            onClick = {
-                onModeChanged(EditorMode.RHOMBUS)
-                showShapeCreationMenu = false
-            },
-            leadingIcon = {
-                Icon(Icons.Default.Diamond, contentDescription = null)
-            }
-        )
-
-        DropdownMenuItem(
-            text = { Text("Текст") },
-            onClick = {
-                onModeChanged(EditorMode.TEXT)
-                showShapeCreationMenu = false
-            },
-            leadingIcon = {
-                Icon(Icons.Default.TextFields, contentDescription = null)
-            }
-        )
-    }
+        onDismiss = { showShapeCreationMenu = false },
+        onModeSelected = onModeChanged
+    )
 }
 
 @Composable
@@ -196,14 +151,18 @@ private fun ShapeCreationButton(
     isActive: Boolean,
     onClick: () -> Unit
 ) {
+    // Используем remember для цвета, чтобы не пересоздавать при каждой рекомпозиции
+    val contentColor = if (isActive) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     IconButton(
         onClick = onClick,
         modifier = Modifier.size(40.dp),
         colors = IconButtonDefaults.iconButtonColors(
-            contentColor = if (isActive)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurface
+            contentColor = contentColor
         )
     ) {
         Icon(
@@ -211,6 +170,43 @@ private fun ShapeCreationButton(
             contentDescription = "Создать фигуру",
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+@Composable
+private fun ShapeCreationDropdownMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onModeSelected: (EditorMode) -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.width(240.dp)
+    ) {
+        // Используем список для итерации вместо повторяющегося кода
+        val menuItems = remember {
+            listOf(
+                Triple(EditorMode.RECTANGLE, "Прямоугольник", Icons.Default.CropSquare),
+                Triple(EditorMode.LINE, "Линия", Icons.Default.HorizontalRule),
+                Triple(EditorMode.ELLIPSE, "Эллипс", Icons.Default.Circle),
+                Triple(EditorMode.RHOMBUS, "Ромб", Icons.Default.Diamond),
+                Triple(EditorMode.TEXT, "Текст", Icons.Default.TextFields)
+            )
+        }
+
+        menuItems.forEach { (mode, label, icon) ->
+            DropdownMenuItem(
+                text = { Text(label) },
+                onClick = {
+                    onModeSelected(mode)
+                    onDismiss()
+                },
+                leadingIcon = {
+                    Icon(icon, contentDescription = null)
+                }
+            )
+        }
     }
 }
 
@@ -260,8 +256,6 @@ private fun ShapeActionsMenu(
                     Icon(Icons.Default.FileCopy, contentDescription = null)
                 }
             )
-
-            Divider()
 
             DropdownMenuItem(
                 text = {
@@ -321,8 +315,6 @@ private fun DeviceActionsMenu(
                 }
             )
 
-            Divider()
-
             DropdownMenuItem(
                 text = {
                     Text(
@@ -344,16 +336,4 @@ private fun DeviceActionsMenu(
             )
         }
     }
-}
-
-@Composable
-fun VerticalDivider(
-    modifier: Modifier = Modifier
-) {
-    Divider(
-        modifier = modifier
-            .height(32.dp)
-            .width(1.dp),
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-    )
 }

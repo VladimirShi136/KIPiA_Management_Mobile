@@ -120,6 +120,7 @@ fun DevicesScreen(
                 }
 
                 NotificationManager.Notification.None -> return@collect
+                is NotificationManager.Notification.SchemeSaved -> TODO()
             }
 
             scope.launch {

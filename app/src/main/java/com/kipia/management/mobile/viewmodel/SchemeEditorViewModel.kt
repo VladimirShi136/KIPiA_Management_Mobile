@@ -1,11 +1,19 @@
 package com.kipia.management.mobile.viewmodel
 
-import android.graphics.Matrix
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kipia.management.mobile.commands.AddDeviceCommand
+import com.kipia.management.mobile.commands.AddShapeCommand
+import com.kipia.management.mobile.commands.DeleteShapeCommand
+import com.kipia.management.mobile.commands.MoveDeviceCommand
+import com.kipia.management.mobile.commands.MoveShapeCommand
+import com.kipia.management.mobile.commands.RemoveDeviceCommand
+import com.kipia.management.mobile.commands.UpdateShapeFillColorCommand
+import com.kipia.management.mobile.commands.UpdateShapeStrokeColorCommand
+import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.DeviceLocation
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.data.entities.SchemeData
@@ -32,26 +40,7 @@ data class CanvasState(
     val backgroundImage: String? = null,
     val gridEnabled: Boolean = false,
     val gridSize: Int = 50
-) {
-    // Простое преобразование координат без матриц
-    fun screenToCanvas(screenPoint: Offset): Offset {
-        return Offset(
-            (screenPoint.x - offset.x) / scale,
-            (screenPoint.y - offset.y) / scale
-        )
-    }
-
-    fun canvasToScreen(canvasPoint: Offset): Offset {
-        return Offset(
-            canvasPoint.x * scale + offset.x,
-            canvasPoint.y * scale + offset.y
-        )
-    }
-
-    fun copyWithTransform(scale: Float, offset: Offset): CanvasState {
-        return this.copy(scale = scale, offset = offset)
-    }
-}
+)
 
 data class SelectionState(
     val selectedShapeId: String? = null,
@@ -59,7 +48,7 @@ data class SelectionState(
 )
 
 data class EditorUIState(
-    val mode: EditorMode = EditorMode.NONE, // Меняем SELECT на NONE
+    val mode: EditorMode = EditorMode.NONE,
     val isDirty: Boolean = false,
     val showShapeProperties: Boolean = false,
     val showDeviceProperties: Boolean = false,
@@ -76,7 +65,7 @@ data class EditorState(
 
 @HiltViewModel
 class SchemeEditorViewModel @Inject constructor(
-    private val savedStateHandle: SavedStateHandle,
+    savedStateHandle: SavedStateHandle,
     private val schemeRepository: SchemeRepository,
     private val deviceRepository: DeviceRepository,
     private val deviceLocationRepository: DeviceLocationRepository
@@ -84,21 +73,53 @@ class SchemeEditorViewModel @Inject constructor(
 
     private val schemeId: Int? = savedStateHandle.get<String>("schemeId")?.toIntOrNull()
 
-    // Менеджеры
     private val shapeManager = ShapeManager()
     private val deviceManager = DeviceManager()
     private val commandManager = CommandManager()
 
-    // Единый UI State
+    // ============ ОСНОВНЫЕ СОСТОЯНИЯ ============
+
     private val _editorState = MutableStateFlow(EditorState())
     val editorState = _editorState.asStateFlow()
 
-    // Отдельные Flow для производительности
+    // Отдельные потоки для данных, которые могут часто меняться
     val shapes = shapeManager.shapes
+    val allDevices = deviceManager.allDevices
     val devices = deviceManager.devices
-    val availableDevices = deviceManager.availableDevices
     val canUndo = commandManager.canUndo
     val canRedo = commandManager.canRedo
+
+    // ============ availableDevices ============
+
+    val availableDevices: StateFlow<List<Device>> = combine(
+        deviceManager.allDevices,
+        deviceManager.devices.map { it -> it.map { it.deviceId }.toSet() }.distinctUntilChanged(),
+        _editorState.map { it.scheme.name }.distinctUntilChanged()
+    ) { allDevices, placedIds, schemeName ->
+        Timber.d("🔄 availableDevices recompute:")
+        Timber.d("   allDevices.size = ${allDevices.size}")
+        Timber.d("   placedIds = $placedIds")
+        Timber.d("   schemeName = '$schemeName'")
+
+        val result = allDevices.filter { device ->
+            val condition = device.id !in placedIds && device.location == schemeName
+            if (condition) {
+                Timber.d("   ✅ Device ${device.id} '${device.name}' подходит (location='${device.location}')")
+            } else {
+                Timber.d("   ❌ Device ${device.id} не подходит: inPlaced=${device.id in placedIds}, location='${device.location}' != '$schemeName'")
+            }
+            condition
+        }
+
+        Timber.d("   Результат: ${result.size} устройств доступно")
+        result
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // ============ ЗАГРУЗКА ДАННЫХ ============
 
     init {
         loadData()
@@ -107,34 +128,37 @@ class SchemeEditorViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             try {
-                // Загружаем все устройства
+                // 1. Сначала загружаем все устройства
                 val allDevices = deviceRepository.getAllDevicesSync()
-                deviceManager.setAvailableDevices(allDevices)
+                deviceManager.setAllDevices(allDevices)
 
-                // Загружаем схему
+                // 2. Загружаем схему и обновляем editorState с правильным scheme.name
                 schemeId?.let { id ->
                     val scheme = schemeRepository.getSchemeById(id)
                     scheme?.let {
                         val schemeData = it.getSchemeData()
+
+                        // Сначала обновляем editorState с правильным именем схемы
                         _editorState.update { state ->
                             state.copy(
                                 scheme = it,
                                 canvasState = state.canvasState.copy(
                                     width = schemeData.width,
                                     height = schemeData.height,
-                                    backgroundColor = parseColor(schemeData.backgroundColor ?: "#FFFFFFFF"),
+                                    backgroundColor = parseColor(schemeData.backgroundColor),
                                     backgroundImage = schemeData.backgroundImage
-                                ),
-                                uiState = state.uiState.copy(isDirty = false)
+                                )
                             )
                         }
 
-                        // Загружаем фигуры
+                        // Даем время на обновление state
+                        delay(50)
+
+                        // 3. Теперь загружаем фигуры и устройства
                         schemeData.shapes.forEach { shapeData ->
                             shapeManager.addShape(shapeData.toComposeShape())
                         }
 
-                        // Загружаем устройства схемы
                         val locations = deviceLocationRepository.getLocationsForScheme(id)
                         locations.forEach { location ->
                             deviceManager.addDevice(
@@ -144,116 +168,133 @@ class SchemeEditorViewModel @Inject constructor(
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
+                // Ошибка логируется в репозитории
             }
         }
     }
 
     // ============ ТРАНСФОРМАЦИЯ КАНВАСА ============
 
-    fun updateCanvasTransform(scale: Float, offset: Offset) {
-        Timber.d("ViewModel.updateCanvasTransform - scale: $scale, offset: $offset")
+    fun updateCanvasTransform(scale: Float, offset: Offset, resetOffset: Boolean = false) {
+        val newOffset = if (resetOffset) Offset.Zero else offset
+        val newScale = scale.coerceIn(0.5f, 3.0f)
 
-        // Получаем текущее состояние
-        val currentState = _editorState.value
+        val currentState = _editorState.value.canvasState
+        if (currentState.scale == newScale && currentState.offset == newOffset) return
 
-        // Создаем новое состояние с обновленными значениями
-        val newCanvasState = currentState.canvasState.copy(
-            scale = scale,
-            offset = offset
-        )
-
-        // Обновляем состояние
         _editorState.update { state ->
-            state.copy(canvasState = newCanvasState)
-        }
-
-        Timber.d("CanvasState updated - new scale: ${newCanvasState.scale}, offset: ${newCanvasState.offset}")
-    }
-
-    // ============ ДЕЙСТВИЯ С ФИГУРАМИ ============
-
-    fun addShape(shape: ComposeShape, position: Offset) {
-        val newShape = shape.copyWithId().apply {
-            x = position.x
-            y = position.y
-        }
-
-        commandManager.execute(object : Command {
-            override fun execute() {
-                shapeManager.addShape(newShape)
-                _editorState.update {
-                    it.copy(
-                        uiState = it.uiState.copy(
-                            mode = EditorMode.NONE, // Меняем SELECT на NONE
-                            isDirty = true
-                        )
-                    )
-                }
-            }
-
-            override fun undo() {
-                shapeManager.removeShape(newShape.id)
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
-            }
-        })
-    }
-
-    fun moveShape(shapeId: String, delta: Offset) {
-        shapeManager.moveShape(shapeId, delta)
-        _editorState.update {
-            it.copy(
-                uiState = it.uiState.copy(isDirty = true)
+            state.copy(
+                canvasState = state.canvasState.copy(
+                    scale = newScale,
+                    offset = newOffset
+                )
             )
         }
     }
 
+    // ============ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ ДАННЫХ ============
+
+    fun markAsDirty() {
+        if (!_editorState.value.uiState.isDirty) {
+            _editorState.update { state ->
+                state.copy(
+                    uiState = state.uiState.copy(isDirty = true)
+                )
+            }
+        }
+    }
+
+    // ============ ДЕЙСТВИЯ С ФИГУРАМИ ============
+
+    fun addShape(shapeType: EditorMode, position: Offset) {
+        val newShape = ComposeShapeFactory.create(shapeType).apply {
+            if (this is ComposeText) {
+                x = position.x
+                y = position.y
+            } else {
+                x = position.x - width / 2
+                y = position.y - height / 2
+            }
+        }
+
+        commandManager.execute(
+            AddShapeCommand(
+                shapeManager = shapeManager,
+                onStateChange = { markAsDirty() },
+                shape = newShape
+            )
+        )
+    }
+
+    fun addTextShape(text: String, position: Offset) {
+        val textShape = ComposeShapeFactory.createText().apply {
+            this.text = text
+            this.width = (text.length * 10f + 30f).coerceAtLeast(50f)
+            this.height = 40f
+            x = position.x
+            y = position.y
+        }
+
+        commandManager.execute(
+            AddShapeCommand(
+                shapeManager = shapeManager,
+                onStateChange = { markAsDirty() },
+                shape = textShape
+            )
+        )
+    }
+
+    fun moveShape(shapeId: String, delta: Offset) {
+        commandManager.execute(
+            MoveShapeCommand(
+                shapeManager = shapeManager,
+                onStateChange = { markAsDirty() },
+                shapeId = shapeId,
+                delta = delta
+            )
+        )
+    }
+
     fun deleteSelectedShape() {
         val shapeId = _editorState.value.selection.selectedShapeId ?: return
+        val shape = shapes.value.find { it.id == shapeId } ?: return
 
-        commandManager.execute(object : Command {
-            private val shape = shapes.value.find { it.id == shapeId }
-
-            override fun execute() {
-                shapeManager.removeShape(shapeId)
-                _editorState.update { state ->
-                    state.copy(
-                        selection = SelectionState(),
-                        uiState = state.uiState.copy(
-                            isDirty = true,
-                            showShapeProperties = false
-                        )
-                    )
-                }
-            }
-
-            override fun undo() {
-                shape?.let { shapeManager.addShape(it) }
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
-            }
-        })
+        commandManager.execute(
+            DeleteShapeCommand(
+                shapeManager = shapeManager,
+                editorState = _editorState,
+                shape = shape
+            )
+        )
     }
 
     fun updateShapeFillColor(shapeId: String, color: Color) {
-        shapeManager.updateShape(shapeId) { shape ->
-            shape.copyWithFillColor(color)
-        }
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        val shape = shapes.value.find { it.id == shapeId } ?: return
+
+        commandManager.execute(
+            UpdateShapeFillColorCommand(
+                shapeManager = shapeManager,
+                editorState = _editorState,
+                shapeId = shapeId,
+                newColor = color,
+                oldColor = shape.fillColor
+            )
+        )
     }
 
     fun updateShapeStrokeColor(shapeId: String, color: Color) {
-        shapeManager.updateShape(shapeId) { shape ->
-            shape.copyWithStrokeColor(color)
-        }
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
-    }
+        val shape = shapes.value.find { it.id == shapeId } ?: return
 
-    fun updateShapeStrokeWidth(shapeId: String, width: Float) {
-        shapeManager.updateShape(shapeId) { shape ->
-            shape.copyWithStrokeWidth(width)
-        }
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        commandManager.execute(
+            UpdateShapeStrokeColorCommand(
+                shapeManager = shapeManager,
+                editorState = _editorState,
+                shapeId = shapeId,
+                newColor = color,
+                oldColor = shape.strokeColor
+            )
+        )
     }
 
     fun duplicateShape(shapeId: String) {
@@ -265,12 +306,12 @@ class SchemeEditorViewModel @Inject constructor(
         commandManager.execute(object : Command {
             override fun execute() {
                 shapeManager.addShape(duplicate)
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+                markAsDirty()
             }
 
             override fun undo() {
                 shapeManager.removeShape(duplicate.id)
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+                markAsDirty()
             }
         })
     }
@@ -278,58 +319,56 @@ class SchemeEditorViewModel @Inject constructor(
     // ============ ДЕЙСТВИЯ С УСТРОЙСТВАМИ ============
 
     fun addDevice(deviceId: Int, position: Offset) {
-        commandManager.execute(object : Command {
-            override fun execute() {
-                deviceManager.addDevice(deviceId, position)
-                _editorState.update {
-                    it.copy(
-                        uiState = it.uiState.copy(
-                            mode = EditorMode.NONE, // Меняем SELECT на NONE
-                            isDirty = true
-                        )
-                    )
-                }
-            }
+        Timber.d("📱 Добавление устройства ID=$deviceId на позицию $position")
 
-            override fun undo() {
-                deviceManager.removeDevice(deviceId)
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        val device = availableDevices.value.find { it.id == deviceId }
+        if (device == null) {
+            Timber.e("❌ Устройство с ID=$deviceId не найдено в availableDevices")
+            Timber.e("   availableDevices: ${availableDevices.value.map { it.id }}")
+            return
+        }
+
+        Timber.d("✅ Устройство найдено: ${device.name}")
+        Timber.d("   Текущее кол-во устройств на схеме: ${deviceManager.devices.value.size}")
+
+        commandManager.execute(
+            AddDeviceCommand(
+                deviceManager = deviceManager,
+                onStateChange = { markAsDirty() },
+                deviceId = deviceId,
+                position = position
+            )
+        )
+
+        // Проверяем после добавления
+        viewModelScope.launch {
+            delay(100) // Даем время на обновление
+            Timber.d("📊 После добавления: устройств на схеме = ${deviceManager.devices.value.size}")
+            deviceManager.devices.value.forEach {
+                Timber.d("   - ID=${it.deviceId} на (${it.x}, ${it.y})")
             }
-        })
+        }
     }
 
     fun moveDevice(deviceId: Int, delta: Offset) {
-        deviceManager.updateDevicePosition(deviceId, delta)
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        commandManager.execute(
+            MoveDeviceCommand(
+                deviceManager = deviceManager,
+                onStateChange = { markAsDirty() },
+                deviceId = deviceId,
+                delta = delta
+            )
+        )
     }
 
     fun removeDevice(deviceId: Int) {
-        commandManager.execute(object : Command {
-            override fun execute() {
-                deviceManager.removeDevice(deviceId)
-                _editorState.update { state ->
-                    state.copy(
-                        selection = SelectionState(),
-                        uiState = state.uiState.copy(
-                            isDirty = true,
-                            showDeviceProperties = false
-                        )
-                    )
-                }
-            }
-
-            override fun undo() {
-                // Для undo нужно сохранять позицию, но для простоты пока так
-                _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
-            }
-        })
-    }
-
-    fun updateDeviceRotation(deviceId: Int, rotation: Float) {
-        deviceManager.updateDevice(deviceId) { device ->
-            device.copy(rotation = rotation)
-        }
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        commandManager.execute(
+            RemoveDeviceCommand(
+                deviceManager = deviceManager,
+                onStateChange = { markAsDirty() },
+                deviceId = deviceId
+            )
+        )
     }
 
     // ============ ВЫДЕЛЕНИЕ ============
@@ -342,7 +381,7 @@ class SchemeEditorViewModel @Inject constructor(
                     selectedDeviceId = null
                 ),
                 uiState = state.uiState.copy(
-                    showShapeProperties = false,
+                    showShapeProperties = shapeId != null,
                     showDeviceProperties = false
                 )
             )
@@ -358,13 +397,14 @@ class SchemeEditorViewModel @Inject constructor(
                 ),
                 uiState = state.uiState.copy(
                     showShapeProperties = false,
-                    showDeviceProperties = false
+                    showDeviceProperties = deviceId != null
                 )
             )
         }
     }
 
     fun clearSelection() {
+        Timber.d("🧹 clearSelection() called")
         _editorState.update { state ->
             state.copy(
                 selection = SelectionState(),
@@ -399,11 +439,6 @@ class SchemeEditorViewModel @Inject constructor(
     // ============ РЕЖИМЫ ============
 
     fun setMode(mode: EditorMode) {
-        Timber.d("ViewModel.setMode: $mode")
-        if (mode == EditorMode.NONE) {
-            // Логируем стек, чтобы узнать, кто вызывает сброс
-            Throwable().printStackTrace()
-        }
         _editorState.update { state ->
             state.copy(
                 uiState = state.uiState.copy(mode = mode)
@@ -412,17 +447,6 @@ class SchemeEditorViewModel @Inject constructor(
     }
 
     // ============ ТЕКСТОВЫЙ ДИАЛОГ ============
-
-    fun showTextInputDialog(position: Offset) {
-        _editorState.update { state ->
-            state.copy(
-                uiState = state.uiState.copy(
-                    showTextInputDialog = true,
-                    textInputPosition = position
-                )
-            )
-        }
-    }
 
     fun hideTextInputDialog() {
         _editorState.update { state ->
@@ -463,7 +487,6 @@ class SchemeEditorViewModel @Inject constructor(
                 currentState.scheme.id
             }
 
-            // Сохраняем позиции устройств
             currentDevices.forEach { device ->
                 deviceLocationRepository.saveLocation(
                     DeviceLocation(
@@ -483,8 +506,7 @@ class SchemeEditorViewModel @Inject constructor(
             }
 
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             false
         }
     }
@@ -493,12 +515,12 @@ class SchemeEditorViewModel @Inject constructor(
 
     fun undo() {
         commandManager.undo()
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        markAsDirty()
     }
 
     fun redo() {
         commandManager.redo()
-        _editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
+        markAsDirty()
     }
 
     // ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
@@ -520,19 +542,12 @@ class SchemeEditorViewModel @Inject constructor(
                 else -> 0xFFFFFFFFL
             }
             Color(longColor)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             Color.White
         }
     }
 }
 
-// Добавляем EditorMode
 enum class EditorMode {
-    NONE,       // Ничего не делаем (основной режим)
-    RECTANGLE,  // Добавление прямоугольника
-    LINE,       // Добавление линии
-    ELLIPSE,    // Добавление эллипса
-    TEXT,       // Добавление текста
-    RHOMBUS,    // Добавление ромба
-    DEVICE      // Добавление прибора
+    NONE, SELECT, RECTANGLE, LINE, ELLIPSE, TEXT, RHOMBUS, DEVICE, PAN_ZOOM
 }

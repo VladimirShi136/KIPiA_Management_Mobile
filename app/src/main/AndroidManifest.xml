@@ -34,6 +34,15 @@
         android:theme="@style/Theme.KipiaManagement"
         tools:targetApi="31">
 
+        <!-- 🔥 ОТЛАДКА РЕКОМПОЗИЦИЙ (добавлено) -->
+        <meta-data
+            android:name="compose.debug.showRecompose"
+            android:value="true" />
+        <!-- Показывает ОБНОВЛЕНИЯ состояния (опционально) -->
+        <meta-data
+            android:name="compose.debug.showUpdates"
+            android:value="true" />
+
         <!-- Главная Activity на Compose -->
         <activity
             android:name=".MainActivity"

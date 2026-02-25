@@ -38,7 +38,7 @@ fun KIPiANavHost(
     schemesViewModel: SchemesViewModel,
     topAppBarController: TopAppBarController,
     notificationManager: NotificationManager,
-    photoManager: PhotoManager, // ✅ ДОБАВЛЕНО параметр
+    photoManager: PhotoManager,
     updateBottomNavVisibility: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     startDestination: String = BottomNavItem.Devices.route
@@ -124,35 +124,24 @@ fun KIPiANavHost(
         composable(BottomNavItem.Schemes.route) {
             SchemesScreen(
                 onNavigateToSchemeEditor = { schemeId ->
-                    val route = if (schemeId != null) {
-                        "scheme_editor/$schemeId"
-                    } else {
-                        "scheme_editor"
-                    }
+                    val route = "scheme_editor/$schemeId"
                     navController.navigate(route)
                 },
-                topAppBarController = topAppBarController, // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
-                updateBottomNavVisibility = updateBottomNavVisibility // ★ ПЕРЕДАЕМ КОЛБЭК
+                topAppBarController = topAppBarController,
+                updateBottomNavVisibility = updateBottomNavVisibility,
+                notificationManager = notificationManager
             )
         }
 
         // Редактор схем
         composable("scheme_editor/{schemeId}") { backStackEntry ->
-            val schemeId = backStackEntry.arguments?.getString("schemeId")?.toIntOrNull()
+            val schemeId = backStackEntry.arguments?.getString("schemeId")?.toInt()
+            requireNotNull(schemeId) { "schemeId must not be null" }
             SchemeEditorScreen(
                 schemeId = schemeId,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() },
-                topAppBarController = topAppBarController // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
-            )
-        }
-
-        composable("scheme_editor") {
-            SchemeEditorScreen(
-                schemeId = null,
-                onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() },
-                topAppBarController = topAppBarController // ★ ПЕРЕДАЕМ КОНТРОЛЛЕР
+                topAppBarController = topAppBarController,
+                notificationManager = notificationManager
             )
         }
 

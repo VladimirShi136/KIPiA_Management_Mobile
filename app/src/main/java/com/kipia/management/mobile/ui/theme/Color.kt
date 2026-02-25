@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.remember
 import timber.log.Timber
 
 
@@ -264,18 +265,19 @@ fun getBottomNavTextColor(backgroundColor: Color): Color {
  */
 @Composable
 fun getTopAppBarColors(isDarkTheme: Boolean = isSystemInDarkTheme()): Pair<Color, Color> {
-    Timber.d("🎨 getTopAppBarColors() вызван: isDarkTheme=$isDarkTheme")
+    // Используем remember с ключом isDarkTheme
+    return remember(isDarkTheme) {
+        Timber.d("🎨 getTopAppBarColors() ВЫЧИСЛЕНИЕ: isDarkTheme=$isDarkTheme")
 
-    val colors = if (isDarkTheme) {
-        Timber.d("🎨 Используем DARK цвета: bg=${SystemColors.TopAppBar.DarkBackground.toHex()}, content=${SystemColors.TopAppBar.DarkContent.toHex()}")
-        Pair(SystemColors.TopAppBar.DarkBackground, SystemColors.TopAppBar.DarkContent)
-    } else {
-        Timber.d("🎨 Используем LIGHT цвета: bg=${SystemColors.TopAppBar.LightBackground.toHex()}, content=${SystemColors.TopAppBar.LightContent.toHex()}")
-        Pair(SystemColors.TopAppBar.LightBackground, SystemColors.TopAppBar.LightContent)
+        if (isDarkTheme) {
+            Pair(SystemColors.TopAppBar.DarkBackground, SystemColors.TopAppBar.DarkContent)
+        } else {
+            Pair(SystemColors.TopAppBar.LightBackground, SystemColors.TopAppBar.LightContent)
+        }
+    }.also { (bg, content) ->
+        // Логируем только при изменении темы (1 раз)
+        Timber.d("🎨 TopAppBar цвета установлены: bg=${bg.toHex()}, content=${content.toHex()}")
     }
-
-    Timber.d("🎨 Выбран цвет TopAppBar: ${colors.first.toHex()}")
-    return colors
 }
 
 /**
@@ -283,26 +285,27 @@ fun getTopAppBarColors(isDarkTheme: Boolean = isSystemInDarkTheme()): Pair<Color
  */
 @Composable
 fun getBottomNavColors(isDarkTheme: Boolean = isSystemInDarkTheme()): BottomNavColors {
-    Timber.d("🎨 getBottomNavColors() вызван: isDarkTheme=$isDarkTheme")
+    return remember(isDarkTheme) {
+        Timber.d("🎨 getBottomNavColors() ВЫЧИСЛЕНИЕ: isDarkTheme=$isDarkTheme")
 
-    val colors = if (isDarkTheme) {
-        BottomNavColors(
-            background = SystemColors.BottomNav.DarkBackground,
-            selectedText = SystemColors.BottomNav.DarkSelectedText,
-            unselectedText = SystemColors.BottomNav.DarkUnselectedText,
-            border = SystemColors.BottomNav.DarkBorder
-        )
-    } else {
-        BottomNavColors(
-            background = SystemColors.BottomNav.LightBackground,
-            selectedText = SystemColors.BottomNav.LightSelectedText,
-            unselectedText = SystemColors.BottomNav.LightUnselectedText,
-            border = SystemColors.BottomNav.LightBorder
-        )
+        if (isDarkTheme) {
+            BottomNavColors(
+                background = SystemColors.BottomNav.DarkBackground,
+                selectedText = SystemColors.BottomNav.DarkSelectedText,
+                unselectedText = SystemColors.BottomNav.DarkUnselectedText,
+                border = SystemColors.BottomNav.DarkBorder
+            )
+        } else {
+            BottomNavColors(
+                background = SystemColors.BottomNav.LightBackground,
+                selectedText = SystemColors.BottomNav.LightSelectedText,
+                unselectedText = SystemColors.BottomNav.LightUnselectedText,
+                border = SystemColors.BottomNav.LightBorder
+            )
+        }
+    }.also { colors ->
+        Timber.d("🎨 BottomNav цвета установлены: bg=${colors.background.toHex()}")
     }
-
-    Timber.d("🎨 Выбран цвет BottomNav: ${colors.background.toHex()}")
-    return colors
 }
 
 // Вспомогательная функция

@@ -1,10 +1,9 @@
 package com.kipia.management.mobile.ui.screens.schemes
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -19,10 +18,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.*
-import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShapeFactory
+import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.CanvasState
 import com.kipia.management.mobile.viewmodel.EditorMode
+import com.kipia.management.mobile.viewmodel.EditorState
 import com.kipia.management.mobile.viewmodel.SchemeEditorViewModel
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -30,112 +33,87 @@ import timber.log.Timber
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchemeEditorScreen(
-    schemeId: Int?,
+    schemeId: Int,
     onNavigateBack: () -> Unit,
-    onSaveSuccess: () -> Unit,
     viewModel: SchemeEditorViewModel = hiltViewModel(),
-    topAppBarController: com.kipia.management.mobile.ui.components.topappbar.TopAppBarController? = null
+    topAppBarController: TopAppBarController? = null,
+    notificationManager: NotificationManager
 ) {
+    // Только необходимые состояния
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
-    val shapes by viewModel.shapes.collectAsStateWithLifecycle()
-    val devices by viewModel.devices.collectAsStateWithLifecycle()
-    val availableDevices by viewModel.availableDevices.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
 
+    // Локальные состояния диалогов
     var showAddDeviceDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
     var showPropertiesDialog by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var colorPickerType by remember { mutableStateOf("fill") }
+    var selectedDeviceForPlacement by remember { mutableStateOf<Device?>(null) }
 
     val scope = rememberCoroutineScope()
 
-    val selectedShape = shapes.find { it.id == editorState.selection.selectedShapeId }
-    val selectedDevice = if (editorState.selection.selectedDeviceId != null) {
-        val device = availableDevices.find { it.id == editorState.selection.selectedDeviceId }
-        val schemeDevice = devices.find { it.deviceId == editorState.selection.selectedDeviceId }
-        if (device != null && schemeDevice != null) device to schemeDevice else null
-    } else null
-
-    LaunchedEffect(editorState.uiState.mode) {
-        Timber.d("SchemeEditorScreen: Mode changed to ${editorState.uiState.mode}")
+    // Колбэки
+    val onBackClick = remember {
+        {
+            if (editorState.uiState.isDirty) showExitDialog = true
+            else onNavigateBack()
+        }
     }
 
-    // ВРЕМЕННЫЕ ДИАЛОГИ
-    if (showAddDeviceDialog) {
-        SimpleAddDeviceDialog(
-            devices = availableDevices.filter { it.location == editorState.scheme.name },
-            schemeLocation = editorState.scheme.name,
-            onDeviceSelected = { device ->
-                val centerX = editorState.canvasState.width / 2f
-                val centerY = editorState.canvasState.height / 2f
-                viewModel.addDevice(device.id, Offset(centerX, centerY))
-                showAddDeviceDialog = false
-                viewModel.setMode(EditorMode.NONE)
-            },
-            onDismiss = {
-                showAddDeviceDialog = false
-                viewModel.setMode(EditorMode.NONE)
-            }
-        )
-    }
-
-    if (showExitDialog) {
-        SimpleExitDialog(
-            onSaveAndExit = {
-                scope.launch {
-                    val success = viewModel.saveScheme()
-                    if (success) onSaveSuccess()
-                    showExitDialog = false
-                }
-            },
-            onExitWithoutSaving = {
-                onNavigateBack()
-                showExitDialog = false
-            },
-            onDismiss = { showExitDialog = false }
-        )
-    }
-
-    if (editorState.uiState.showTextInputDialog && editorState.uiState.textInputPosition != null) {
-        SimpleTextInputDialog(
-            position = editorState.uiState.textInputPosition!!,
-            onDismiss = { viewModel.hideTextInputDialog() },
-            onConfirm = { text ->
-                val textShape = ComposeShapeFactory.createText().apply {
-                    this.text = text
-                    this.width = (text.length * 10f + 30f).coerceAtLeast(50f)
-                    this.height = 40f
-                }
-                viewModel.addShape(textShape, editorState.uiState.textInputPosition!!)
-                viewModel.hideTextInputDialog()
-            }
-        )
-    }
-
-    if (showColorPicker && editorState.selection.selectedShapeId != null) {
-        val selectedShape = shapes.find { it.id == editorState.selection.selectedShapeId }
-        SimpleColorPickerDialog(
-            title = if (colorPickerType == "fill") "Цвет заливки" else "Цвет обводки",
-            initialColor = when (colorPickerType) {
-                "fill" -> selectedShape?.fillColor ?: Color.Transparent
-                else -> selectedShape?.strokeColor ?: Color.Black
-            },
-            onColorSelected = { color ->
-                if (colorPickerType == "fill") {
-                    editorState.selection.selectedShapeId?.let { shapeId ->
-                        viewModel.updateShapeFillColor(shapeId, color)
-                    }
+    val onSaveClick = remember {
+        {
+            scope.launch {
+                if (viewModel.saveScheme()) {
+                    notificationManager.notifySchemeSaved(editorState.scheme.name)
+                    onNavigateBack()
                 } else {
-                    editorState.selection.selectedShapeId?.let { shapeId ->
-                        viewModel.updateShapeStrokeColor(shapeId, color)
-                    }
+                    notificationManager.notifyError("Ошибка при сохранении")
                 }
-                showColorPicker = false
-            },
-            onDismiss = { showColorPicker = false }
+            }
+        }
+    }
+
+    val onPropertiesClick = remember { { showPropertiesDialog = true } }
+
+    // BackHandler
+    BackHandler { onBackClick() }
+
+    // TopAppBar
+    LaunchedEffect(schemeId, editorState.uiState.isDirty) {
+        topAppBarController?.setForScreen(
+            screenRoute = "scheme_editor",
+            additionalParams = mapOf(
+                "title" to "Редактор",
+                "canSave" to true,
+                "isDirty" to editorState.uiState.isDirty,
+                "onBackClick" to onBackClick,
+                "onSaveClick" to onSaveClick,
+                "onPropertiesClick" to onPropertiesClick
+            )
         )
+    }
+
+    // Очистка TopAppBar при выходе
+    DisposableEffect(Unit) {
+        onDispose {
+            topAppBarController?.updateState(
+                topAppBarController.state.value.copy(
+                    showSchemeEditorActions = false,
+                    onBackClick = null,
+                    onSaveClick = null,
+                    onPropertiesClick = null
+                )
+            )
+        }
+    }
+
+    // Очистка выделения при PAN_ZOOM
+    LaunchedEffect(editorState.uiState.mode) {
+        if (editorState.uiState.mode == EditorMode.PAN_ZOOM) {
+            viewModel.clearSelection()
+        }
     }
 
     Scaffold { paddingValues ->
@@ -144,244 +122,54 @@ fun SchemeEditorScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Верхняя панель с UNDO/REDO
-            CanvasControls(
-                canUndo = canUndo,
-                canRedo = canRedo,
-                onUndo = { viewModel.undo() },
-                onRedo = { viewModel.redo() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-
-            // Основной холст
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f)
             ) {
-                SchemeCanvas(
+                SchemeCanvasContainer(
                     editorState = editorState,
-                    shapes = shapes,
-                    devices = devices,
-                    availableDevices = availableDevices,
-                    onShapeClick = { shapeId ->
-                        viewModel.selectShape(shapeId)
-                    },
-                    onDeviceClick = { deviceId ->
-                        viewModel.selectDevice(deviceId)
-                    },
-                    onCanvasClick = { position ->
-                        when (editorState.uiState.mode) {
-                            EditorMode.RECTANGLE -> {
-                                viewModel.addShape(ComposeShapeFactory.createRectangle(), position)
-                            }
-                            EditorMode.LINE -> {
-                                viewModel.addShape(ComposeShapeFactory.createLine(), position)
-                            }
-                            EditorMode.ELLIPSE -> {
-                                viewModel.addShape(ComposeShapeFactory.createEllipse(), position)
-                            }
-                            EditorMode.RHOMBUS -> {
-                                viewModel.addShape(ComposeShapeFactory.createRhombus(), position)
-                            }
-                            EditorMode.TEXT -> {
-                                viewModel.showTextInputDialog(position)
-                            }
-                            EditorMode.DEVICE -> {
-                                showAddDeviceDialog = true
-                            }
-                            else -> {
-                                // В режиме NONE клик по пустому месту сбрасывает выделение
-                                viewModel.clearSelection()
-                            }
-                        }
-                    },
-                    onShapeDrag = { shapeId, delta ->
-                        viewModel.moveShape(shapeId, delta)
-                    },
-                    onDeviceDrag = { deviceId, delta ->
-                        viewModel.moveDevice(deviceId, delta)
-                    },
-                    onTransform = { scale, offset ->
-                        viewModel.updateCanvasTransform(scale, offset)
-                    },
+                    viewModel = viewModel,
+                    selectedDeviceForPlacement = selectedDeviceForPlacement,
+                    onDeviceForPlacementChange = { selectedDeviceForPlacement = it },
+                    onAddDeviceDialogChange = { showAddDeviceDialog = it },
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Панель свойств фигуры
-                if (editorState.uiState.showShapeProperties && editorState.selection.selectedShapeId != null) {
-                    val selectedShape = shapes.find { it.id == editorState.selection.selectedShapeId }
+                ShapePropertiesPanel(
+                    editorState = editorState,
+                    shapes = viewModel.shapes.collectAsStateWithLifecycle().value,
+                    viewModel = viewModel,
+                    onColorPickerChange = { showColorPicker = it },
+                    onColorPickerTypeChange = { colorPickerType = it }
+                )
 
-                    Card(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .width(240.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "Свойства фигуры",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-
-                            Divider()
-
-                            Button(
-                                onClick = {
-                                    colorPickerType = "fill"
-                                    showColorPicker = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = selectedShape?.fillColor ?: Color.Transparent
-                                )
-                            ) {
-                                Text("Цвет заливки")
-                            }
-
-                            Button(
-                                onClick = {
-                                    colorPickerType = "stroke"
-                                    showColorPicker = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = selectedShape?.strokeColor ?: Color.Black
-                                )
-                            ) {
-                                Text("Цвет обводки")
-                            }
-
-                            Button(
-                                onClick = { viewModel.deleteSelectedShape() },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("Удалить")
-                            }
-
-                            TextButton(
-                                onClick = { viewModel.toggleShapeProperties() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Закрыть")
-                            }
-                        }
-                    }
-                }
-
-                // Панель свойств устройства
-                if (editorState.uiState.showDeviceProperties && editorState.selection.selectedDeviceId != null) {
-                    val device = availableDevices.find { it.id == editorState.selection.selectedDeviceId }
-                    val schemeDevice = devices.find { it.deviceId == editorState.selection.selectedDeviceId }
-
-                    if (device != null && schemeDevice != null) {
-                        Card(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(16.dp)
-                                .width(240.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "Свойства прибора",
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-
-                                Text(
-                                    text = "${device.name} (${device.type})",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-
-                                Text(
-                                    text = "Инв. №${device.inventoryNumber}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-
-                                Divider()
-
-                                Text(
-                                    text = "Позиция: (${schemeDevice.x.toInt()}, ${schemeDevice.y.toInt()})",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-
-                                Button(
-                                    onClick = { viewModel.removeDevice(device.id) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error
-                                    )
-                                ) {
-                                    Text("Удалить со схемы")
-                                }
-
-                                TextButton(
-                                    onClick = { viewModel.toggleDeviceProperties() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Закрыть")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Подсказка режима
-                ModeHint(
-                    mode = editorState.uiState.mode,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(8.dp)
+                DevicePropertiesPanel(
+                    editorState = editorState,
+                    allDevices = viewModel.allDevices.collectAsStateWithLifecycle().value,
+                    devices = viewModel.devices.collectAsStateWithLifecycle().value,
+                    viewModel = viewModel
                 )
             }
 
-            // Нижняя панель инструментов
-            BottomShapeToolbar(
-                editorMode = editorState.uiState.mode,
-                selectedShape = selectedShape,
-                selectedDevice = selectedDevice,
-                onModeChanged = { mode ->
-                    Timber.d("BottomShapeToolbar onModeChanged: $mode")
-                    viewModel.setMode(mode)
-                },
-                onAddDevice = {
-                    viewModel.setMode(EditorMode.DEVICE)
-                    showAddDeviceDialog = true
-                },
-                onShapeMenuClick = {
-                    viewModel.toggleShapeProperties()
-                },
-                onDeviceMenuClick = {
-                    viewModel.toggleDeviceProperties()
-                },
-                onDuplicateShape = {
-                    selectedShape?.let { viewModel.duplicateShape(it.id) }
-                },
-                onDeleteSelected = {
-                    if (selectedShape != null) {
-                        viewModel.deleteSelectedShape()
-                    } else if (selectedDevice != null) {
-                        viewModel.removeDevice(selectedDevice.first.id)
-                    }
-                },
+            BottomShapeToolbarContainer(
+                canUndo = canUndo,
+                canRedo = canRedo,
+                editorState = editorState,
+                viewModel = viewModel,
+                onAddDeviceDialogChange = { showAddDeviceDialog = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            Text(
+                text = "Режим: ${editorState.uiState.mode}",
+                modifier = Modifier.padding(8.dp)
+            )
         }
 
-        // Диалог свойств схемы
+        // Диалоги
         if (showPropertiesDialog) {
             SimpleSchemePropertiesDialog(
                 scheme = editorState.scheme,
@@ -389,10 +177,320 @@ fun SchemeEditorScreen(
                 onDismiss = { showPropertiesDialog = false }
             )
         }
+
+        if (showAddDeviceDialog) {
+            SimpleAddDeviceDialog(
+                devices = viewModel.availableDevices.collectAsStateWithLifecycle().value,
+                schemeLocation = editorState.scheme.name,
+                onDeviceSelected = { device ->
+                    viewModel.addDevice(device.id, Offset(500f, 500f))
+                    showAddDeviceDialog = false
+                    viewModel.setMode(EditorMode.SELECT)
+                },
+                onDismiss = {
+                    selectedDeviceForPlacement = null
+                    viewModel.setMode(EditorMode.SELECT)
+                    showAddDeviceDialog = false
+                }
+            )
+        }
+
+        if (showExitDialog) {
+            SimpleExitDialog(
+                onSaveAndExit = {
+                    scope.launch {
+                        if (viewModel.saveScheme()) {
+                            notificationManager.notifySchemeSaved(editorState.scheme.name)
+                            onNavigateBack()
+                        } else {
+                            notificationManager.notifyError("Ошибка при сохранении")
+                        }
+                    }
+                },
+                onExitWithoutSaving = onNavigateBack,
+                onDismiss = { showExitDialog = false }
+            )
+        }
+
+        if (editorState.uiState.showTextInputDialog && editorState.uiState.textInputPosition != null) {
+            SimpleTextInputDialog(
+                position = editorState.uiState.textInputPosition!!,
+                onDismiss = { viewModel.hideTextInputDialog() },
+                onConfirm = { text ->
+                    viewModel.addTextShape(text, editorState.uiState.textInputPosition!!)
+                    viewModel.hideTextInputDialog()
+                }
+            )
+        }
+
+        if (showColorPicker && editorState.selection.selectedShapeId != null) {
+            val selectedShape = viewModel.shapes.collectAsStateWithLifecycle().value.find {
+                it.id == editorState.selection.selectedShapeId
+            }
+            SimpleColorPickerDialog(
+                title = if (colorPickerType == "fill") "Цвет заливки" else "Цвет обводки",
+                initialColor = when (colorPickerType) {
+                    "fill" -> selectedShape?.fillColor ?: Color.Transparent
+                    else -> selectedShape?.strokeColor ?: Color.Black
+                },
+                onColorSelected = { color ->
+                    if (colorPickerType == "fill") {
+                        viewModel.updateShapeFillColor(editorState.selection.selectedShapeId!!, color)
+                    } else {
+                        viewModel.updateShapeStrokeColor(editorState.selection.selectedShapeId!!, color)
+                    }
+                    showColorPicker = false
+                },
+                onDismiss = { showColorPicker = false }
+            )
+        }
     }
 }
 
-// ============ ВРЕМЕННЫЕ ДИАЛОГИ ============
+// ============ ОСНОВНЫЕ КОМПОНЕНТЫ ============
+
+@Composable
+private fun SchemeCanvasContainer(
+    editorState: EditorState,
+    viewModel: SchemeEditorViewModel,
+    selectedDeviceForPlacement: Device?,
+    onDeviceForPlacementChange: (Device?) -> Unit,
+    onAddDeviceDialogChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shapes by viewModel.shapes.collectAsStateWithLifecycle()
+    val devices by viewModel.devices.collectAsStateWithLifecycle()
+    val availableDevices by viewModel.availableDevices.collectAsStateWithLifecycle()
+    val allDevices by viewModel.allDevices.collectAsStateWithLifecycle()
+
+    val onTransform = remember { { scale: Float, offset: Offset, _: Boolean ->
+        viewModel.updateCanvasTransform(scale, offset)
+    } }
+
+    val onCanvasClick = remember(editorState.uiState.mode, selectedDeviceForPlacement) { { position: Offset ->
+        Timber.d("🖱️ onCanvasClick: mode=${editorState.uiState.mode}, position=$position")
+        when (editorState.uiState.mode) {
+            EditorMode.RECTANGLE, EditorMode.LINE, EditorMode.ELLIPSE,
+            EditorMode.RHOMBUS, EditorMode.TEXT -> viewModel.addShape(editorState.uiState.mode, position)
+            EditorMode.DEVICE -> {
+                if (selectedDeviceForPlacement != null) {
+                    viewModel.addDevice(selectedDeviceForPlacement.id, position)
+                    onDeviceForPlacementChange(null)
+                    viewModel.setMode(EditorMode.SELECT)
+                } else {
+                    onAddDeviceDialogChange(true)
+                }
+            }
+            else -> {
+                Timber.d("🧹 Вызов clearSelection()")
+                viewModel.clearSelection()  // ← Это должно вызываться в SELECT режиме
+            }
+        }
+    } }
+
+    SchemeCanvas(
+        editorState = editorState,
+        canvasState = editorState.canvasState,
+        shapes = shapes,
+        devices = devices,
+        allDevices = allDevices,
+        availableDevices = availableDevices,
+        onShapeClick = { shapeId -> viewModel.selectShape(shapeId) },
+        onDeviceClick = { deviceId -> viewModel.selectDevice(deviceId) },
+        onCanvasClick = onCanvasClick,
+        onShapeDrag = { shapeId, delta -> viewModel.moveShape(shapeId, delta) },
+        onDeviceDrag = { deviceId, delta -> viewModel.moveDevice(deviceId, delta) },
+        onTransform = onTransform,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun ShapePropertiesPanel(
+    editorState: EditorState,
+    shapes: List<ComposeShape>,
+    viewModel: SchemeEditorViewModel,
+    onColorPickerChange: (Boolean) -> Unit,
+    onColorPickerTypeChange: (String) -> Unit
+) {
+    val selectedShape = editorState.selection.selectedShapeId?.let { id ->
+        shapes.find { it.id == id }
+    }
+
+    if (selectedShape != null &&
+        editorState.uiState.showShapeProperties &&
+        editorState.uiState.mode != EditorMode.PAN_ZOOM) {
+
+        Card(
+            modifier = Modifier
+                .padding(16.dp)
+                .width(240.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Свойства фигуры", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider()
+
+                Button(
+                    onClick = {
+                        onColorPickerTypeChange("fill")
+                        onColorPickerChange(true)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = selectedShape.fillColor
+                    )
+                ) {
+                    Text("Цвет заливки")
+                }
+
+                Button(
+                    onClick = {
+                        onColorPickerTypeChange("stroke")
+                        onColorPickerChange(true)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = selectedShape.strokeColor
+                    )
+                ) {
+                    Text("Цвет обводки")
+                }
+
+                Button(
+                    onClick = { viewModel.deleteSelectedShape() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Удалить")
+                }
+
+                TextButton(
+                    onClick = { viewModel.toggleShapeProperties() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Закрыть")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevicePropertiesPanel(
+    editorState: EditorState,
+    allDevices: List<Device>,
+    devices: List<SchemeDevice>,
+    viewModel: SchemeEditorViewModel
+) {
+    val selectedDeviceInfo = editorState.selection.selectedDeviceId?.let { id ->
+        val device = allDevices.find { it.id == id }
+        val schemeDevice = devices.find { it.deviceId == id }
+        if (device != null && schemeDevice != null) device to schemeDevice else null
+    }
+
+    if (selectedDeviceInfo != null &&
+        editorState.uiState.showDeviceProperties &&
+        editorState.uiState.mode != EditorMode.PAN_ZOOM) {
+
+        Card(
+            modifier = Modifier
+                .padding(16.dp)
+                .width(240.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Свойства прибора", style = MaterialTheme.typography.titleSmall)
+
+                val (device, schemeDevice) = selectedDeviceInfo
+                Text("${device.name} (${device.type})", style = MaterialTheme.typography.bodyMedium)
+                Text("Инв. №${device.inventoryNumber}", style = MaterialTheme.typography.bodySmall)
+
+                HorizontalDivider()
+
+                Text("Позиция: (${schemeDevice.x.toInt()}, ${schemeDevice.y.toInt()})")
+
+                Button(
+                    onClick = { viewModel.removeDevice(device.id) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Удалить со схемы")
+                }
+
+                TextButton(
+                    onClick = { viewModel.toggleDeviceProperties() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Закрыть")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomShapeToolbarContainer(
+    canUndo: Boolean,
+    canRedo: Boolean,
+    editorState: EditorState,
+    viewModel: SchemeEditorViewModel,
+    onAddDeviceDialogChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shapes by viewModel.shapes.collectAsStateWithLifecycle()
+    val allDevices by viewModel.allDevices.collectAsStateWithLifecycle()
+    val devices by viewModel.devices.collectAsStateWithLifecycle()
+
+    val selectedShape = editorState.selection.selectedShapeId?.let { id ->
+        shapes.find { it.id == id }
+    }
+
+    val selectedDeviceInfo = editorState.selection.selectedDeviceId?.let { id ->
+        val device = allDevices.find { it.id == id }
+        val schemeDevice = devices.find { it.deviceId == id }
+        if (device != null && schemeDevice != null) device to schemeDevice else null
+    }
+
+    val onModeChanged = remember(viewModel, onAddDeviceDialogChange) { { mode: EditorMode ->
+        viewModel.setMode(mode)
+        when (mode) {
+            EditorMode.DEVICE -> onAddDeviceDialogChange(true)
+            EditorMode.SELECT, EditorMode.PAN_ZOOM -> viewModel.clearSelection()
+            else -> {}
+        }
+    } }
+
+    BottomShapeToolbar(
+        canUndo = canUndo,
+        canRedo = canRedo,
+        onUndo = { viewModel.undo() },
+        onRedo = { viewModel.redo() },
+        editorMode = editorState.uiState.mode,
+        selectedShape = selectedShape,
+        selectedDevice = selectedDeviceInfo,
+        onModeChanged = onModeChanged,
+        onAddDevice = { viewModel.setMode(EditorMode.DEVICE) },
+        onShapeMenuClick = { viewModel.toggleShapeProperties() },
+        onDeviceMenuClick = { viewModel.toggleDeviceProperties() },
+        onDuplicateShape = { selectedShape?.let { viewModel.duplicateShape(it.id) } },
+        onDeleteSelected = {
+            if (selectedShape != null) viewModel.deleteSelectedShape()
+            else selectedDeviceInfo?.first?.let { viewModel.removeDevice(it.id) }
+        },
+        modifier = modifier
+    )
+}
+
+// ============ ДИАЛОГИ ============
 
 @Composable
 private fun SimpleAddDeviceDialog(
@@ -411,11 +509,8 @@ private fun SimpleAddDeviceDialog(
                     .heightIn(max = 400.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Схема: $schemeLocation",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text("Схема: $schemeLocation", style = MaterialTheme.typography.titleSmall)
+                Text("Доступно приборов: ${devices.size}", style = MaterialTheme.typography.bodySmall)
 
                 if (devices.isEmpty()) {
                     Box(
@@ -424,7 +519,12 @@ private fun SimpleAddDeviceDialog(
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Нет доступных приборов для этой локации")
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Info, null, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Нет доступных приборов для этой локации")
+                            Text("Все приборы уже размещены на схеме")
+                        }
                     }
                 } else {
                     devices.forEach { device ->
@@ -439,31 +539,17 @@ private fun SimpleAddDeviceDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = device.name ?: device.type,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = "${device.type} • Инв. №${device.inventoryNumber}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(device.name ?: device.type)
+                                    Text("${device.type} • Инв. №${device.inventoryNumber}")
                                 }
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = "Добавить"
-                                )
+                                Icon(Icons.Default.Add, null)
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Закрыть")
-            }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
     )
 }
 
@@ -477,16 +563,8 @@ private fun SimpleExitDialog(
         onDismissRequest = onDismiss,
         title = { Text("Сохранить изменения?") },
         text = { Text("У вас есть несохраненные изменения. Что вы хотите сделать?") },
-        confirmButton = {
-            Button(onClick = onSaveAndExit) {
-                Text("Сохранить и выйти")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onExitWithoutSaving) {
-                Text("Выйти без сохранения")
-            }
-        }
+        confirmButton = { Button(onClick = onSaveAndExit) { Text("Сохранить и выйти") } },
+        dismissButton = { TextButton(onClick = onExitWithoutSaving) { Text("Выйти без сохранения") } }
     )
 }
 
@@ -502,7 +580,7 @@ private fun SimpleTextInputDialog(
         onDismissRequest = onDismiss,
         title = { Text("Добавить текст") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column {
                 Text("Позиция: (${position.x.toInt()}, ${position.y.toInt()})")
                 OutlinedTextField(
                     value = text,
@@ -521,11 +599,7 @@ private fun SimpleTextInputDialog(
                 Text("Добавить")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена")
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }
 
@@ -539,57 +613,31 @@ private fun SimpleColorPickerDialog(
     var selectedColor by remember { mutableStateOf(initialColor) }
 
     val colors = listOf(
-        Color.Transparent,
-        Color.Black,
-        Color.White,
-        Color.Red,
-        Color(0xFFFF9800),
-        Color.Yellow,
-        Color.Green,
-        Color(0xFF2196F3),
-        Color(0xFF9C27B0),
-        Color(0xFFE91E63)
+        Color.Transparent, Color.Black, Color.White, Color.Red,
+        Color(0xFFFF9800), Color.Yellow, Color.Green,
+        Color(0xFF2196F3), Color(0xFF9C27B0), Color(0xFFE91E63)
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Предпросмотр
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
                         .size(60.dp)
-                        .background(selectedColor, CircleShape)
-                        .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        .background(selectedColor, shape = RoundedCornerShape(30.dp))
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // Сетка цветов
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column {
                     colors.chunked(3).forEach { rowColors ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowColors.forEach { color ->
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
-                                        .background(color, CircleShape)
-                                        .border(
-                                            width = 3.dp,
-                                            color = if (color == selectedColor)
-                                                MaterialTheme.colorScheme.primary
-                                            else Color.Transparent,
-                                            shape = CircleShape
-                                        )
+                                        .background(color, RoundedCornerShape(30.dp))
                                         .clickable { selectedColor = color }
                                 )
                             }
@@ -598,16 +646,8 @@ private fun SimpleColorPickerDialog(
                 }
             }
         },
-        confirmButton = {
-            Button(onClick = { onColorSelected(selectedColor) }) {
-                Text("Выбрать")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена")
-            }
-        }
+        confirmButton = { Button(onClick = { onColorSelected(selectedColor) }) { Text("Выбрать") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }
 
@@ -621,88 +661,12 @@ private fun SimpleSchemePropertiesDialog(
         onDismissRequest = onDismiss,
         title = { Text("Свойства схемы") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column {
                 Text("Название: ${scheme.name}")
                 Text("Описание: ${scheme.description ?: "Нет описания"}")
                 Text("Размер: ${canvasState.width} x ${canvasState.height}")
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Закрыть")
-            }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
     )
-}
-
-@Composable
-private fun SimpleExportDialog(
-    schemeName: String,
-    onExportAsImage: () -> Unit,
-    onExportAsPDF: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Экспорт схемы") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Экспортировать схему '$schemeName':")
-
-                ListItem(
-                    headlineContent = { Text("Как изображение (PNG)") },
-                    leadingContent = { Icon(Icons.Default.Image, null) },
-                    modifier = Modifier.clickable {
-                        onExportAsImage()
-                        onDismiss()
-                    }
-                )
-
-                ListItem(
-                    headlineContent = { Text("Как PDF документ") },
-                    leadingContent = { Icon(Icons.Default.PictureAsPdf, null) },
-                    modifier = Modifier.clickable {
-                        onExportAsPDF()
-                        onDismiss()
-                    }
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена")
-            }
-        }
-    )
-}
-
-@Composable
-private fun ModeHint(
-    mode: EditorMode,
-    modifier: Modifier = Modifier
-) {
-    val hintText = when (mode) {
-        EditorMode.NONE -> "Режим просмотра: нажмите на объект для выделения"
-        EditorMode.RECTANGLE -> "Режим прямоугольника: нажмите на холст для создания"
-        EditorMode.LINE -> "Режим линии: нажмите на холст для создания"
-        EditorMode.ELLIPSE -> "Режим эллипса: нажмите на холст для создания"
-        EditorMode.RHOMBUS -> "Режим ромба: нажмите на холст для создания"
-        EditorMode.TEXT -> "Режим текста: нажмите на холст для добавления текста"
-        EditorMode.DEVICE -> "Режим добавления приборов: нажмите на холст или кнопку +"
-    }
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Text(
-            text = hintText,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-    }
 }

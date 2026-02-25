@@ -2,15 +2,21 @@ package com.kipia.management.mobile.ui.components.scheme.shapes
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import android.graphics.Paint as AndroidPaint
-import kotlin.math.abs
-import kotlin.math.sqrt
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawBasicShapeSelectionMarker
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawEllipse
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawLine
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawLineShapeSelectionMarker
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawRectangle
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawRhombus
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawText
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInEllipse
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInLine
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInRhombus
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInText
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.transformPointToShapeSpace
+import com.kipia.management.mobile.viewmodel.EditorMode
 
 // Базовый интерфейс фигуры
 interface ComposeShape {
@@ -23,15 +29,13 @@ interface ComposeShape {
     var fillColor: Color
     var strokeColor: Color
     var strokeWidth: Float
-    var isSelected: Boolean
-    var zIndex: Int  // Добавлено для слоев
 
-    fun draw(drawScope: DrawScope)
+    fun draw(drawScope: DrawScope, isSelected: Boolean)
     fun contains(point: Offset): Boolean
-    fun copy(): ComposeShape
-    fun copyWithId(): ComposeShape  // Для создания дубликатов с новым ID
 
-    // Добавленные методы для обновления свойств
+    fun copy(): ComposeShape
+    fun copyWithId(): ComposeShape
+    fun copyWithPosition(x: Float, y: Float): ComposeShape
     fun copyWithFillColor(color: Color): ComposeShape
     fun copyWithStrokeColor(color: Color): ComposeShape
     fun copyWithStrokeWidth(width: Float): ComposeShape
@@ -48,87 +52,39 @@ data class ComposeRectangle(
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 2f,
-    override var isSelected: Boolean = false,
-    override var zIndex: Int = 0,
     var cornerRadius: Float = 0f
 ) : ComposeShape {
-
-    override fun draw(drawScope: DrawScope) {
-        drawScope.withTransform({
-            translate(x, y)
-            rotate(rotation, Offset(width / 2, height / 2))
-        }) {
-            drawRoundRect(
-                color = fillColor,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(width, height),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius)
-            )
-
-            drawRoundRect(
-                color = strokeColor,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(width, height),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        with(drawScope) {
+            drawRectangle(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                rotation = rotation,
+                fillColor = fillColor,
+                strokeColor = strokeColor,
+                strokeWidth = strokeWidth,
+                cornerRadius = cornerRadius
             )
 
             if (isSelected) {
-                drawRoundRect(
-                    color = Color.Blue.copy(alpha = 0.3f),
-                    topLeft = Offset.Zero,
-                    size = androidx.compose.ui.geometry.Size(width, height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-
-                // Ручки изменения размера
-                val handleSize = 8f
-                val handles = listOf(
-                    Offset(0f, 0f),
-                    Offset(width, 0f),
-                    Offset(0f, height),
-                    Offset(width, height)
-                )
-
-                handles.forEach { handle ->
-                    drawCircle(
-                        color = Color.Blue,
-                        radius = handleSize,
-                        center = handle
-                    )
-                }
-
-                // Маркер ресайза
-                drawCircle(
-                    color = Color(0xFF2196F3),
-                    radius = 12f,
-                    center = Offset(width, height)
-                )
+                drawBasicShapeSelectionMarker(width, height)
             }
         }
     }
 
     override fun contains(point: Offset): Boolean {
-        // Упрощенная проверка без учета поворота
-        return point.x in x..(x + width) && point.y in y..(y + height)
+        val localPoint = transformPointToShapeSpace(point, x, y, width, height, rotation)
+        return ShapeUtils.isPointInRectangle(localPoint, width, height)
     }
 
-    override fun copy(): ComposeRectangle =
-        this.copy(id = this.id)  // Сохраняем ID для обновлений
-
-    override fun copyWithId(): ComposeRectangle =
-        this.copy(id = "rect_${System.currentTimeMillis()}")  // Новый ID для дублирования
-
-    // Реализация новых методов
-    override fun copyWithFillColor(color: Color): ComposeRectangle =
-        this.copy(fillColor = color)
-
-    override fun copyWithStrokeColor(color: Color): ComposeRectangle =
-        this.copy(strokeColor = color)
-
-    override fun copyWithStrokeWidth(width: Float): ComposeRectangle =
-        this.copy(strokeWidth = width)
+    override fun copy(): ComposeRectangle = this.copy(id = this.id)
+    override fun copyWithId(): ComposeRectangle = this.copy(id = "rect_${System.currentTimeMillis()}")
+    override fun copyWithPosition(x: Float, y: Float): ComposeRectangle = this.copy(x = x, y = y)
+    override fun copyWithFillColor(color: Color): ComposeRectangle = this.copy(fillColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeRectangle = this.copy(strokeColor = color)
+    override fun copyWithStrokeWidth(width: Float): ComposeRectangle = this.copy(strokeWidth = width)
 }
 
 // Линия
@@ -142,71 +98,62 @@ data class ComposeLine(
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 2f,
-    override var isSelected: Boolean = false,
-    override var zIndex: Int = 0,
     var startX: Float = 0f,
     var startY: Float = 0f,
     var endX: Float = 100f,
     var endY: Float = 0f
 ) : ComposeShape {
-
-    override fun draw(drawScope: DrawScope) {
-        drawScope.withTransform({
-            translate(x, y)
-            rotate(rotation, Offset(width / 2, height / 2))
-        }) {
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        with(drawScope) {
+            // Основная линия
             drawLine(
-                color = strokeColor,
-                start = Offset(startX, startY),
-                end = Offset(endX, endY),
-                strokeWidth = strokeWidth,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                rotation = rotation,
+                startX = startX,
+                startY = startY,
+                endX = endX,
+                endY = endY,
+                strokeColor = strokeColor,
+                strokeWidth = strokeWidth
             )
 
+            // Маркер выделения
             if (isSelected) {
-                // Ручки на концах линии
-                val handleSize = 8f
-                drawCircle(
-                    color = Color.Blue,
-                    radius = handleSize,
-                    center = Offset(startX, startY)
-                )
-                drawCircle(
-                    color = Color.Blue,
-                    radius = handleSize,
-                    center = Offset(endX, endY)
-                )
-
-                // Маркер ресайза на конце
-                drawCircle(
-                    color = Color(0xFF2196F3),
-                    radius = 12f,
-                    center = Offset(endX, endY)
+                drawLineShapeSelectionMarker(
+                    startX = startX,
+                    startY = startY,
+                    endX = endX,
+                    endY = endY
                 )
             }
         }
     }
 
     override fun contains(point: Offset): Boolean {
-        val tolerance = strokeWidth + 5f
-        val lineStart = Offset(x + startX, y + startY)
-        val lineEnd = Offset(x + endX, y + endY)
+        val localPoint = transformPointToShapeSpace(
+            point = point,
+            shapeX = x,
+            shapeY = y,
+            shapeWidth = width,
+            shapeHeight = height,
+            rotation = rotation
+        )
 
-        val distance = distanceToSegment(point, lineStart, lineEnd)
-        return distance <= tolerance
-    }
+        // Вычисляем позиции концов линии в локальных координатах
+        val lineStartX = startX - width / 2
+        val lineStartY = startY - height / 2
+        val lineEndX = endX - width / 2
+        val lineEndY = endY - height / 2
 
-    private fun distanceToSegment(p: Offset, v: Offset, w: Offset): Float {
-        val l2 = (v.x - w.x) * (v.x - w.x) + (v.y - w.y) * (v.y - w.y)
-        if (l2 == 0f) return sqrt((p.x - v.x) * (p.x - v.x) + (p.y - v.y) * (p.y - v.y))
-
-        var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
-        t = t.coerceIn(0f, 1f)
-
-        val projection = Offset(v.x + t * (w.x - v.x), v.y + t * (w.y - v.y))
-        val dx = p.x - projection.x
-        val dy = p.y - projection.y
-        return sqrt(dx * dx + dy * dy)
+        return isPointInLine(
+            point = localPoint,
+            start = Offset(lineStartX, lineStartY),
+            end = Offset(lineEndX, lineEndY),
+            strokeWidth = strokeWidth
+        )
     }
 
     override fun copy(): ComposeLine =
@@ -214,6 +161,11 @@ data class ComposeLine(
 
     override fun copyWithId(): ComposeLine =
         this.copy(id = "line_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    override fun copyWithPosition(
+        x: Float,
+        y: Float
+    ): ComposeLine = this.copy(x = x, y = y)
 
     // Реализация новых методов
     override fun copyWithFillColor(color: Color): ComposeLine =
@@ -236,54 +188,42 @@ data class ComposeEllipse(
     override var rotation: Float = 0f,
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
-    override var strokeWidth: Float = 2f,
-    override var isSelected: Boolean = false,
-    override var zIndex: Int = 0
+    override var strokeWidth: Float = 2f
 ) : ComposeShape {
-
-    override fun draw(drawScope: DrawScope) {
-        drawScope.withTransform({
-            translate(x, y)
-            rotate(rotation, Offset(width / 2, height / 2))
-        }) {
-            drawOval(
-                color = fillColor,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(width, height)
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        with(drawScope) {
+            // Основная фигура
+            drawEllipse(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                rotation = rotation,
+                fillColor = fillColor,
+                strokeColor = strokeColor,
+                strokeWidth = strokeWidth
             )
 
-            drawOval(
-                color = strokeColor,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(width, height),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
-            )
-
+            // Маркер выделения
             if (isSelected) {
-                drawOval(
-                    color = Color.Blue.copy(alpha = 0.3f),
-                    topLeft = Offset.Zero,
-                    size = androidx.compose.ui.geometry.Size(width, height),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-
-                // Маркер ресайза
-                drawCircle(
-                    color = Color(0xFF2196F3),
-                    radius = 12f,
-                    center = Offset(width, height)
+                drawBasicShapeSelectionMarker(
+                    width = width,
+                    height = height
                 )
             }
         }
     }
 
     override fun contains(point: Offset): Boolean {
-        val centerX = x + width / 2
-        val centerY = y + height / 2
-        val dx = point.x - centerX
-        val dy = point.y - centerY
-
-        return (dx * dx) / (width * width / 4) + (dy * dy) / (height * height / 4) <= 1
+        val localPoint = transformPointToShapeSpace(
+            point = point,
+            shapeX = x,
+            shapeY = y,
+            shapeWidth = width,
+            shapeHeight = height,
+            rotation = rotation
+        )
+        return isPointInEllipse(localPoint, width, height)
     }
 
     override fun copy(): ComposeEllipse =
@@ -291,6 +231,11 @@ data class ComposeEllipse(
 
     override fun copyWithId(): ComposeEllipse =
         this.copy(id = "ellipse_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    override fun copyWithPosition(
+        x: Float,
+        y: Float
+    ): ComposeEllipse = this.copy(x = x, y = y)
 
     // Реализация новых методов
     override fun copyWithFillColor(color: Color): ComposeEllipse =
@@ -314,86 +259,51 @@ data class ComposeText(
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 1f,
-    override var isSelected: Boolean = false,
-    override var zIndex: Int = 0,
     var text: String = "Текст",
     var fontSize: Float = 16f,
     var textColor: Color = Color.Black,
     var isBold: Boolean = false,
     var isItalic: Boolean = false
 ) : ComposeShape {
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        with(drawScope) {
+            // Основной текст
+            drawText(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                rotation = rotation,
+                text = text,
+                fontSize = fontSize,
+                textColor = textColor,
+                fillColor = fillColor,
+                strokeColor = strokeColor,
+                strokeWidth = strokeWidth,
+                isBold = isBold,
+                isItalic = isItalic
+            )
 
-    override fun draw(drawScope: DrawScope) {
-        drawScope.withTransform({
-            translate(x, y)
-            rotate(rotation, Offset(width / 2, height / 2))
-        }) {
-            // Фон текста
-            if (fillColor != Color.Transparent) {
-                drawRect(
-                    color = fillColor,
-                    topLeft = Offset.Zero,
-                    size = androidx.compose.ui.geometry.Size(width, height)
-                )
-            }
-
-            // Отрисовка текста
-            drawIntoCanvas { canvas ->
-                val paint = AndroidPaint().apply {
-                    color = textColor.toArgb()
-                    textSize = fontSize
-                    isAntiAlias = true
-                    textAlign = AndroidPaint.Align.CENTER
-                    if (isBold) {
-                        isFakeBoldText = true
-                    }
-                    if (isItalic) {
-                        textSkewX = -0.25f
-                    }
-                }
-
-                val textBounds = android.graphics.Rect()
-                paint.getTextBounds(text, 0, text.length, textBounds)
-                val textY = height / 2 + (textBounds.height() / 2)
-
-                canvas.nativeCanvas.drawText(
-                    text,
-                    width / 2,
-                    textY,
-                    paint
-                )
-            }
-
-            // Обводка
-            if (strokeWidth > 0 && strokeColor != Color.Transparent) {
-                drawRect(
-                    color = strokeColor,
-                    topLeft = Offset.Zero,
-                    size = androidx.compose.ui.geometry.Size(width, height),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
-                )
-            }
-
+            // Маркер выделения
             if (isSelected) {
-                drawRect(
-                    color = Color.Blue.copy(alpha = 0.3f),
-                    topLeft = Offset.Zero,
-                    size = androidx.compose.ui.geometry.Size(width, height),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-
-                // Маркер ресайза
-                drawCircle(
-                    color = Color(0xFF2196F3),
-                    radius = 12f,
-                    center = Offset(width, height)
+                drawBasicShapeSelectionMarker(
+                    width = width,
+                    height = height
                 )
             }
         }
     }
 
     override fun contains(point: Offset): Boolean {
-        return point.x in x..(x + width) && point.y in y..(y + height)
+        val localPoint = transformPointToShapeSpace(
+            point = point,
+            shapeX = x,
+            shapeY = y,
+            shapeWidth = width,
+            shapeHeight = height,
+            rotation = rotation
+        )
+        return isPointInText(localPoint, width, height)
     }
 
     override fun copy(): ComposeText =
@@ -401,6 +311,11 @@ data class ComposeText(
 
     override fun copyWithId(): ComposeText =
         this.copy(id = "text_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    override fun copyWithPosition(
+        x: Float,
+        y: Float
+    ): ComposeText = this.copy(x = x, y = y)
 
     // Реализация новых методов
     override fun copyWithFillColor(color: Color): ComposeText =
@@ -423,60 +338,42 @@ data class ComposeRhombus(
     override var rotation: Float = 0f,
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
-    override var strokeWidth: Float = 2f,
-    override var isSelected: Boolean = false,
-    override var zIndex: Int = 0
+    override var strokeWidth: Float = 2f
 ) : ComposeShape {
-
-    override fun draw(drawScope: DrawScope) {
-        drawScope.withTransform({
-            translate(x, y)
-            rotate(rotation, Offset(width / 2, height / 2))
-        }) {
-            val path = Path().apply {
-                moveTo(width / 2, 0f)
-                lineTo(width, height / 2)
-                lineTo(width / 2, height)
-                lineTo(0f, height / 2)
-                close()
-            }
-
-            drawPath(
-                path = path,
-                color = fillColor
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        with(drawScope) {
+            // Основная фигура
+            drawRhombus(
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                rotation = rotation,
+                fillColor = fillColor,
+                strokeColor = strokeColor,
+                strokeWidth = strokeWidth
             )
 
-            drawPath(
-                path = path,
-                color = strokeColor,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidth)
-            )
-
+            // Маркер выделения
             if (isSelected) {
-                drawPath(
-                    path = path,
-                    color = Color.Blue.copy(alpha = 0.3f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-
-                // Маркер ресайза
-                drawCircle(
-                    color = Color(0xFF2196F3),
-                    radius = 12f,
-                    center = Offset(width, height)
+                drawBasicShapeSelectionMarker(
+                    width = width,
+                    height = height
                 )
             }
         }
     }
 
     override fun contains(point: Offset): Boolean {
-        val localX = point.x - x - width / 2
-        val localY = point.y - y - height / 2
-
-        val a = width / 2
-        val b = height / 2
-
-        return (abs(localX) / a + abs(localY) / b) <= 1
+        val localPoint = transformPointToShapeSpace(
+            point = point,
+            shapeX = x,
+            shapeY = y,
+            shapeWidth = width,
+            shapeHeight = height,
+            rotation = rotation
+        )
+        return isPointInRhombus(localPoint, width, height)
     }
 
     override fun copy(): ComposeRhombus =
@@ -484,6 +381,11 @@ data class ComposeRhombus(
 
     override fun copyWithId(): ComposeRhombus =
         this.copy(id = "rhombus_${System.currentTimeMillis()}")  // Новый ID для дублирования
+
+    override fun copyWithPosition(
+        x: Float,
+        y: Float
+    ): ComposeRhombus = this.copy(x = x, y = y)
 
     // Реализация новых методов
     override fun copyWithFillColor(color: Color): ComposeRhombus =
@@ -498,12 +400,23 @@ data class ComposeRhombus(
 
 // Фабрика фигур
 object ComposeShapeFactory {
+
+    fun create(shapeType: EditorMode): ComposeShape {
+        return when (shapeType) {
+            EditorMode.RECTANGLE -> createRectangle()
+            EditorMode.LINE -> createLine()
+            EditorMode.ELLIPSE -> createEllipse()
+            EditorMode.TEXT -> createText()
+            EditorMode.RHOMBUS -> createRhombus()
+            else -> throw IllegalArgumentException("Unsupported shape type")
+        }
+    }
+
     fun createRectangle(): ComposeRectangle {
         return ComposeRectangle(
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
             strokeWidth = 2f,
-            zIndex = 0
         )
     }
 
@@ -517,7 +430,6 @@ object ComposeShapeFactory {
             endY = 0f,
             width = 110f,
             height = 20f,
-            zIndex = 0
         )
     }
 
@@ -526,7 +438,6 @@ object ComposeShapeFactory {
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
             strokeWidth = 2f,
-            zIndex = 0
         )
     }
 
@@ -540,7 +451,6 @@ object ComposeShapeFactory {
             textColor = Color.Black,
             isBold = false,
             isItalic = false,
-            zIndex = 0
         )
     }
 
@@ -549,7 +459,6 @@ object ComposeShapeFactory {
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
             strokeWidth = 2f,
-            zIndex = 0
         )
     }
 

@@ -3,6 +3,7 @@ package com.kipia.management.mobile.ui.shared
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,6 +12,7 @@ class NotificationManager @Inject constructor() {
     sealed class Notification {
         data class DeviceSaved(val deviceName: String) : Notification()
         data class DeviceDeleted(val deviceName: String, val withScheme: Boolean = false) : Notification()
+        data class SchemeSaved(val schemeName: String) : Notification()
         data class Error(val message: String) : Notification()
         object None : Notification() // ← Пустое состояние
     }
@@ -30,6 +32,11 @@ class NotificationManager @Inject constructor() {
     suspend fun notifyDeviceDeleted(deviceName: String, withScheme: Boolean = false) {
         println("DEBUG NotificationManager: Отправка уведомления об удалении '$deviceName' withScheme=$withScheme")
         _notification.emit(Notification.DeviceDeleted(deviceName, withScheme))
+    }
+
+    suspend fun notifySchemeSaved(schemeName: String) {
+        Timber.d("NotificationManager: Отправка уведомления о сохранении схемы '$schemeName'")
+        _notification.emit(Notification.SchemeSaved(schemeName))
     }
 
     suspend fun notifyError(message: String) {

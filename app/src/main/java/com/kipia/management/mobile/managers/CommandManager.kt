@@ -2,10 +2,13 @@ package com.kipia.management.mobile.managers
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
-class CommandManager {
-    private val undoStack = ArrayDeque<Command>()
-    private val redoStack = ArrayDeque<Command>()
+class CommandManager(
+    private val maxHistorySize: Int = 50
+) {
+    private val undoStack = ArrayDeque<Command>(maxHistorySize)
+    private val redoStack = ArrayDeque<Command>(maxHistorySize)
 
     private val _canUndo = MutableStateFlow(false)
     val canUndo = _canUndo.asStateFlow()
@@ -16,6 +19,12 @@ class CommandManager {
     fun execute(command: Command) {
         command.execute()
         undoStack.addLast(command)
+
+        // Ограничиваем размер стека
+        while (undoStack.size > maxHistorySize) {
+            undoStack.removeFirst()
+        }
+
         redoStack.clear()
         updateState()
     }
@@ -39,8 +48,14 @@ class CommandManager {
     }
 
     private fun updateState() {
-        _canUndo.value = undoStack.isNotEmpty()
-        _canRedo.value = redoStack.isNotEmpty()
+        _canUndo.update { undoStack.isNotEmpty() }
+        _canRedo.update { redoStack.isNotEmpty() }
+    }
+
+    fun clear() {
+        undoStack.clear()
+        redoStack.clear()
+        updateState()
     }
 }
 

@@ -181,7 +181,7 @@ fun parseColor(colorHex: String): Color {
         }.toLong(16)
 
         Color(longColor)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         Color.Transparent
     }
 }

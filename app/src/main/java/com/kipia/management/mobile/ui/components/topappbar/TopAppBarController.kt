@@ -90,7 +90,7 @@ class TopAppBarController {
             "schemes" -> {
                 // Получаем параметры для фильтров схем
                 val searchQuery = additionalParams["searchQuery"] as? String ?: ""
-                val selectedFilter = additionalParams["selectedFilter"] as? String?
+                additionalParams["selectedFilter"] as? String?
                 val currentSort = additionalParams["currentSort"] as? SchemesSortBy // ← ИЗМЕНИЛИ
                     ?: SchemesSortBy.NAME_ASC // ← ИЗМЕНИЛИ
 
@@ -112,20 +112,17 @@ class TopAppBarController {
             }
 
             "scheme_editor" -> {
-                val isNewScheme = additionalParams["isNewScheme"] as? Boolean ?: true
-                val name = "Редактор схем"
-                if (isNewScheme) "Новая схема" else "Редактирование схемы"
+                val title = "Редактор"
 
                 _state.value = TopAppBarData(
-                    title = name,
+                    title = title,
                     showBackButton = true,
-                    showSettingsIcon = true,
+                    showSettingsIcon = false,
                     showThemeToggle = false,
                     showFilterMenu = false,
 
                     // ★ ПАРАМЕТРЫ ДЛЯ РЕДАКТОРА СХЕМ
                     showSchemeEditorActions = true,
-                    isNewScheme = isNewScheme,
                     canSave = additionalParams["canSave"] as? Boolean ?: true,
                     canUndo = additionalParams["canUndo"] as? Boolean ?: false,
                     canRedo = additionalParams["canRedo"] as? Boolean ?: false,

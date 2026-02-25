@@ -27,23 +27,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.ui.components.scheme.SchemesActiveFiltersBadge
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.DeleteResult
 import com.kipia.management.mobile.viewmodel.SchemeWithStatus
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchemesScreen(
-    onNavigateToSchemeEditor: (Int?) -> Unit,
+    onNavigateToSchemeEditor: (Int) -> Unit,
     updateBottomNavVisibility: (Boolean) -> Unit = {},
     topAppBarController: com.kipia.management.mobile.ui.components.topappbar.TopAppBarController? = null,
-    viewModel: SchemesViewModel = hiltViewModel()
+    viewModel: SchemesViewModel = hiltViewModel(),
+    notificationManager: NotificationManager
 ) {
     val schemesWithStatus by viewModel.getSchemesWithStatus()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
     val context = LocalContext.current
@@ -73,9 +77,9 @@ fun SchemesScreen(
         }
     }
 
-    // ★ Настраиваем TopAppBar через контроллер (аналогично PhotosScreen)
+    // ★ Настраиваем TopAppBar через контроллер
     LaunchedEffect(topAppBarController, uiState) {
-        topAppBarController?.setForScreen("schemes", buildMap<String, Any> { // ← ЯВНО УКАЗЫВАЕМ ТИП
+        topAppBarController?.setForScreen("schemes", buildMap { //
             put("title", "Учет приборов КИПиА")
             put("searchQuery", uiState.searchQuery)
             put("currentSort", uiState.sortBy)
@@ -93,96 +97,136 @@ fun SchemesScreen(
         })
     }
 
+    LaunchedEffect(Unit) {
+        notificationManager.notification.collect { notification ->
+            // Пропускаем пустые уведомления
+            if (notification is NotificationManager.Notification.None) {
+                return@collect
+            }
+
+            val message = when (notification) {
+                is NotificationManager.Notification.SchemeSaved -> {
+                    "Схема '${notification.schemeName}' сохранена"
+                }
+                is NotificationManager.Notification.Error -> {
+                    "Ошибка: ${notification.message}"
+                }
+                // Можно добавить обработку других типов, если нужно
+                else -> null
+            }
+
+            if (message != null) {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = SnackbarDuration.Short
+                    )
+                    // Очищаем replay cache после показа
+                    delay(100)
+                    notificationManager.clearLastNotification()
+                }
+            }
+        }
+    }
+
+
     val scrollToTop: () -> Unit = {
         scope.launch {
             scrollState.animateScrollToItem(0)
         }
     }
 
-    Scaffold(
-        floatingActionButton = {
-            Column(
-                modifier = Modifier
-                    .padding(end = 46.dp, bottom = 30.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // ★ КНОПКА "НАВЕРХ"
-                AnimatedVisibility(
-                    visible = showScrollToTopButton,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    FloatingActionButton(
-                        onClick = scrollToTop,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowUpward,
-                            contentDescription = "Наверх",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                // ★ КНОПКА ДОБАВЛЕНИЯ СХЕМЫ
-                FloatingActionButton(
-                    onClick = { onNavigateToSchemeEditor(null) },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Добавить схему")
-                }
-            }
-        }
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // АКТИВНЫЕ ФИЛЬТРЫ (как в PhotosScreen)
-                SchemesActiveFiltersBadge(
-                    searchQuery = uiState.searchQuery,
-                    currentSort = uiState.sortBy,
-                    onClearFilters = { viewModel.resetAllFilters() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Основной контент
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp)  // Тот же padding, что в DevicesScreen
+                .windowInsetsPadding(
+                    WindowInsets.navigationBars
+                        .only(WindowInsetsSides.Bottom)
+                        .add(WindowInsets(bottom = 0.dp))
                 )
+        ) {
+            // Активные фильтры
+            SchemesActiveFiltersBadge(
+                searchQuery = uiState.searchQuery,
+                currentSort = uiState.sortBy,
+                onClearFilters = { viewModel.resetAllFilters() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            )
 
-                when {
-                    uiState.isLoading -> {
-                        LoadingState()
-                    }
-                    schemesWithStatus.isEmpty() -> {
-                        EmptySchemesState(
-                            onCreateScheme = { onNavigateToSchemeEditor(null) },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    else -> {
-                        SchemesList(
-                            schemesWithStatus = schemesWithStatus,
-                            scrollState = scrollState,
-                            onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                            onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                            onDeleteScheme = { scheme ->
-                                if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
-                                    showDeleteDialog = scheme
-                                } else {
-                                    showError = "Нельзя удалить схему '$scheme.name'. " +
-                                            "К ней привязаны приборы."
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+            when {
+                uiState.isLoading -> {
+                    LoadingState()
+                }
+                schemesWithStatus.isEmpty() -> {
+                    EmptySchemesState(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> {
+                    SchemesList(
+                        schemesWithStatus = schemesWithStatus,
+                        scrollState = scrollState,
+                        onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                        onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                        onDeleteScheme = { scheme ->
+                            if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
+                                showDeleteDialog = scheme
+                            } else {
+                                showError = "Нельзя удалить схему '${scheme.name}'. " +
+                                        "К ней привязаны приборы."
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
+
+        // ★★★★ COLUMN ДЛЯ ВЕРТИКАЛЬНОГО РАСПОЛОЖЕНИЯ КНОПОК (как в DevicesScreen) ★★★★
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 46.dp,
+                    bottom = 30.dp
+                )
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ★★★★ КНОПКА "ВВЕРХ" (появляется когда навигация скрыта) ★★★★
+            AnimatedVisibility(
+                visible = showScrollToTopButton,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                FloatingActionButton(
+                    onClick = scrollToTop,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ArrowUpward,
+                        contentDescription = "Наверх",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
+        // Snackbar для уведомлений (поверх всего)
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
 
         // Диалог подтверждения удаления
         showDeleteDialog?.let { scheme ->
@@ -471,7 +515,6 @@ fun LoadingState() {
 
 @Composable
 fun EmptySchemesState(
-    onCreateScheme: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -497,20 +540,11 @@ fun EmptySchemesState(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Создайте первую схему для планировки помещений\nи размещения приборов",
+            text = "Схемы создаются автоматически на основе мест установки приборов.\nДобавьте прибор с новой локацией, чтобы создать схему.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = onCreateScheme,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Создать схему")
-        }
     }
 }
 
