@@ -42,6 +42,10 @@ fun SchemeCanvas(
         }
     }
 
+    // Сохраняем последние параметры отрисовки устройств
+    var lastDeviceDrawingScale by remember { mutableStateOf(1f) }
+    var lastDeviceDrawingOffset by remember { mutableStateOf(Offset.Zero) }
+
     // Ключи для каждого слоя
     val backgroundKey = remember(canvasState.backgroundColor, canvasState.width, canvasState.height, canvasState.backgroundImage, stableScale) {
         "bg_${canvasState.backgroundColor}_${canvasState.width}x${canvasState.height}_$stableScale"
@@ -84,17 +88,21 @@ fun SchemeCanvas(
             key = shapeKey
         )
 
-        // Устройства (третий слой) - теперь с key!
+        // Устройства (третий слой)
         DeviceLayer(
             devices = devices,
             allDevices = allDevices,
             selectedDeviceId = editorState.selection.selectedDeviceId,
             canvasState = canvasState,
+            onDrawingParams = { scale, offset ->
+                lastDeviceDrawingScale = scale
+                lastDeviceDrawingOffset = offset
+            },
             modifier = Modifier.matchParentSize(),
-            key = deviceKey  // ✅ Добавил использование key
+            key = deviceKey
         )
 
-        // Жесты (верхний слой, прозрачный для ввода)
+        // Жесты (верхний слой)
         GestureLayer(
             editorState = editorState,
             canvasState = canvasState,
@@ -106,12 +114,12 @@ fun SchemeCanvas(
             onShapeDrag = onShapeDrag,
             onDeviceDrag = onDeviceDrag,
             onTransform = onTransform,
+            debugMode = true,
             modifier = Modifier
                 .matchParentSize()
                 .pointerInteropFilter { motionEvent ->
-                    // Отладочный лог
                     Timber.d("📱 GestureLayer получил событие: ${motionEvent.actionMasked}")
-                    false // Возвращаем false, чтобы не блокировать
+                    false
                 },
             key = gestureKey
         )

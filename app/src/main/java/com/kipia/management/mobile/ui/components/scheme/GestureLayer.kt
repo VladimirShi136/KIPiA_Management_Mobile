@@ -3,6 +3,7 @@ package com.kipia.management.mobile.ui.components.scheme
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -10,11 +11,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.*
 import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.screenToCanvas
 import com.kipia.management.mobile.viewmodel.CanvasState
 import com.kipia.management.mobile.viewmodel.EditorMode
 import com.kipia.management.mobile.viewmodel.EditorState
 import timber.log.Timber
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -30,7 +31,8 @@ fun GestureLayer(
     onDeviceDrag: (Int, Offset) -> Unit,
     onTransform: (Float, Offset, Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    key: Any? = null
+    key: Any? = null,
+    debugMode: Boolean = false  // Включаем отладку
 ) {
     remember(key) { key }
 
@@ -38,13 +40,33 @@ fun GestureLayer(
     val isPanZoomMode = currentMode == EditorMode.PAN_ZOOM
     val dragTarget = remember { mutableStateOf<Pair<String, DragTargetType>?>(null) }
 
-    // Состояние для transformable жестов - живёт вне композиции!
+    // Отладочные состояния
+    val lastTapPoint = remember { mutableStateOf<Offset?>(null) }
+    val lastCalculatedTarget = remember { mutableStateOf<Pair<String, DragTargetType>?>(null) }
+
+    // Стабилизируем масштаб
+    val stableScale by remember(canvasState.scale) {
+        derivedStateOf {
+            (canvasState.scale / 0.05).roundToInt() * 0.05f
+        }
+    }
+
+    // Сохраняем актуальные колбэки
+    val currentOnShapeClick by rememberUpdatedState(onShapeClick)
+    val currentOnDeviceClick by rememberUpdatedState(onDeviceClick)
+    val currentOnCanvasClick by rememberUpdatedState(onCanvasClick)
+    val currentOnShapeDrag by rememberUpdatedState(onShapeDrag)
+    val currentOnDeviceDrag by rememberUpdatedState(onDeviceDrag)
+
+    // Актуальные списки
+    val currentShapes by rememberUpdatedState(shapes)
+    val currentDevices by rememberUpdatedState(devices)
+
+    // Состояние для transformable жестов
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        // Эта лямбда вызывается в ответ на жесты, но НЕ вызывает рекомпозицию сама по себе
         if (isPanZoomMode) {
             val newScale = (canvasState.scale * zoomChange).coerceIn(0.5f, 3.0f)
             val newOffset = canvasState.offset + panChange
-            Timber.d("🔄 Transform: zoom=$newScale, pan=$newOffset")
             onTransform(newScale, newOffset, false)
         }
     }
@@ -53,106 +75,185 @@ fun GestureLayer(
         modifier = modifier
             .run {
                 if (isPanZoomMode) {
-                    // РЕЖИМ PAN/ZOOM - используем transformable для непрерывных жестов
                     this.transformable(
                         state = transformState,
-                        canPan = { true },  // Всегда разрешаем панорамирование
-                        lockRotationOnZoomPan = true,  // Блокируем вращение при зуме
+                        canPan = { true },
+                        lockRotationOnZoomPan = true,
                         enabled = true
                     )
                 } else {
-                    // РЕЖИМ SELECT - обрабатываем через pointerInput
                     this
                 }
             }
-            .pointerInput(currentMode, canvasState.scale, canvasState.offset, shapes, devices) {
-                Timber.d("🔍 pointerInput запущен, mode=$currentMode, isPanZoomMode=$isPanZoomMode")
+            .pointerInput(currentMode, stableScale) {
                 if (!isPanZoomMode) {
-                    // Только в режиме SELECT обрабатываем нажатия через pointerInput
                     setupSelectionGestures(
-                        canvasState = canvasState,
-                        shapes = shapes,
-                        devices = devices,
+                        scale = stableScale,
+                        offset = canvasState.offset,  // Используем актуальный offset
+                        shapesProvider = { currentShapes },
+                        devicesProvider = { currentDevices },
                         dragTarget = dragTarget,
-                        onShapeClick = onShapeClick,
-                        onDeviceClick = onDeviceClick,
-                        onCanvasClick = onCanvasClick,
-                        onShapeDrag = onShapeDrag,
-                        onDeviceDrag = onDeviceDrag
+                        onShapeClick = { shapeId ->
+                            currentOnShapeClick(shapeId)
+                            if (debugMode) {
+                                lastCalculatedTarget.value = Pair(shapeId, DragTargetType.SHAPE)
+                            }
+                        },
+                        onDeviceClick = { deviceId ->
+                            currentOnDeviceClick(deviceId)
+                            if (debugMode) {
+                                lastCalculatedTarget.value = Pair(deviceId.toString(), DragTargetType.DEVICE)
+                            }
+                        },
+                        onCanvasClick = { canvasPoint ->
+                            currentOnCanvasClick(canvasPoint)
+                            if (debugMode) {
+                                lastCalculatedTarget.value = null
+                            }
+                        },
+                        onShapeDrag = currentOnShapeDrag,
+                        onDeviceDrag = currentOnDeviceDrag,
+                        debugMode = debugMode,
+                        onTapPoint = { screenPoint ->
+                            if (debugMode) {
+                                lastTapPoint.value = screenPoint
+                            }
+                        }
                     )
-                } else {
-                    Timber.d("🚫 Пропускаем selection gestures - режим PAN/ZOOM")
                 }
             }
     )
+
+    // Отладочный слой
+    if (debugMode) {
+        DebugHitTestLayer(
+            canvasState = canvasState,
+            devices = devices,
+            lastTapPoint = lastTapPoint.value,
+            lastCalculatedTarget = lastCalculatedTarget.value,
+            gestureScale = stableScale,  // передаем параметры из жестов
+            gestureOffset = canvasState.offset,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 private suspend fun PointerInputScope.setupSelectionGestures(
-    canvasState: CanvasState,
-    shapes: List<ComposeShape>,
-    devices: List<SchemeDevice>,
+    scale: Float,
+    offset: Offset,
+    shapesProvider: () -> List<ComposeShape>,
+    devicesProvider: () -> List<SchemeDevice>,
     dragTarget: MutableState<Pair<String, DragTargetType>?>,
     onShapeClick: (String) -> Unit,
     onDeviceClick: (Int) -> Unit,
     onCanvasClick: (Offset) -> Unit,
     onShapeDrag: (String, Offset) -> Unit,
-    onDeviceDrag: (Int, Offset) -> Unit
+    onDeviceDrag: (Int, Offset) -> Unit,
+    debugMode: Boolean,
+    onTapPoint: (Offset) -> Unit
 ) {
-    val deviceSize = 60f
-    var isDragging by mutableStateOf(false)
+    val baseDeviceSize = 60f
 
-    Timber.d("👆 setupSelectionGestures started")
+    Timber.d("👆 setupSelectionGestures: scale=$scale, offset=$offset")
 
-    // Единый обработчик pointerInput
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        val canvasPoint = screenToCanvas(down.position, canvasState)
-        val target = findTarget(canvasPoint, shapes, devices, deviceSize)
 
-        Timber.d("🎯 Down at ${down.position}, target=$target")
+        if (debugMode) {
+            onTapPoint(down.position)
+        }
 
-        // Отслеживаем движение для определения drag
+        val currentShapes = shapesProvider()
+        val currentDevices = devicesProvider()
+
+        // Подробное логирование для отладки
+        if (debugMode) {
+            Timber.d("🎯 DEBUG ========== TAP DETECTED ==========")
+            Timber.d("📱 Экранные координаты: (${down.position.x}, ${down.position.y})")
+            Timber.d("📐 Параметры: scale=$scale, offset=(${offset.x}, ${offset.y})")
+
+            currentDevices.forEach { device ->
+                // Неправильная формула (текущая)
+                val wrongScreenX = device.x + offset.x
+                val wrongScreenY = device.y + offset.y
+
+                // Правильная формула
+                val correctScreenX = device.x * scale + offset.x
+                val correctScreenY = device.y * scale + offset.y
+                val screenSize = baseDeviceSize * scale
+
+                val wrongRect = Rect(
+                    left = wrongScreenX,
+                    top = wrongScreenY,
+                    right = wrongScreenX + screenSize,
+                    bottom = wrongScreenY + screenSize
+                )
+
+                val correctRect = Rect(
+                    left = correctScreenX,
+                    top = correctScreenY,
+                    right = correctScreenX + screenSize,
+                    bottom = correctScreenY + screenSize
+                )
+
+                Timber.d("🔹 Device ${device.deviceId}:")
+                Timber.d("   Мировые: (${device.x}, ${device.y})")
+                Timber.d("   НЕПРАВИЛЬНЫЙ экран: ($wrongScreenX, $wrongScreenY) contains=${wrongRect.contains(down.position)}")
+                Timber.d("   ПРАВИЛЬНЫЙ экран:    ($correctScreenX, $correctScreenY) contains=${correctRect.contains(down.position)}")
+            }
+        }
+
+        // Используем правильную формулу для определения цели
+        val target = findTargetCorrect(
+            screenPoint = down.position,
+            scale = scale,
+            offset = offset,
+            devices = currentDevices,
+            shapes = currentShapes,
+            baseDeviceSize = baseDeviceSize
+        )
+
+        Timber.d("🎯 Target found: $target")
+
         var dragStarted = false
+        var lastDragTime = 0L
 
         do {
-            val event = awaitPointerEvent()
+            val event = awaitPointerEvent(pass = PointerEventPass.Main)
             val changes = event.changes.filter { it.id == down.id }
 
+            val currentTime = System.currentTimeMillis()
+
             when {
-                // Если палец двигается - это drag
                 changes.any { it.positionChanged() } && !dragStarted -> {
-                    if (target != null) {  // Проверяем один раз
-                        Timber.d("🖱️ Drag started for $target")
+                    if (target != null) {
                         dragStarted = true
-                        isDragging = true
                         dragTarget.value = target
                     }
                 }
 
-                // Обработка drag
                 dragStarted -> {
                     val change = changes.firstOrNull { it.pressed } ?: continue
                     val dragAmount = change.positionChange()
 
                     if (dragAmount != Offset.Zero) {
-                        val canvasDelta = Offset(
-                            x = dragAmount.x / canvasState.scale,
-                            y = dragAmount.y / canvasState.scale
-                        )
+                        if (currentTime - lastDragTime > 16) {
+                            val canvasDelta = Offset(
+                                x = dragAmount.x / scale,
+                                y = dragAmount.y / scale
+                            )
 
-                        // Здесь target гарантированно не null, потому что dragStarted=true
-                        // мы уже проверили target != null выше
-                        val currentTarget = dragTarget.value ?: continue
+                            val currentTarget = dragTarget.value ?: continue
 
-                        Timber.d("🔄 Dragging: $canvasDelta")
-
-                        when (currentTarget.second) {
-                            DragTargetType.SHAPE -> onShapeDrag(currentTarget.first, canvasDelta)
-                            DragTargetType.DEVICE -> {
-                                currentTarget.first.toIntOrNull()?.let { deviceId ->
-                                    onDeviceDrag(deviceId, canvasDelta)
+                            when (currentTarget.second) {
+                                DragTargetType.SHAPE -> onShapeDrag(currentTarget.first, canvasDelta)
+                                DragTargetType.DEVICE -> {
+                                    currentTarget.first.toIntOrNull()?.let { deviceId ->
+                                        onDeviceDrag(deviceId, canvasDelta)
+                                    }
                                 }
                             }
+                            lastDragTime = currentTime
                         }
                         change.consume()
                     }
@@ -163,55 +264,68 @@ private suspend fun PointerInputScope.setupSelectionGestures(
 
         } while (event.changes.any { it.pressed })
 
-        // Если не было drag - это tap
         if (!dragStarted) {
-            Timber.d("👆 Tap detected at ${down.position}")
-            val tapCanvasPoint = screenToCanvas(down.position, canvasState)
-            val tapTarget = findTarget(tapCanvasPoint, shapes, devices, deviceSize)
+            val canvasPoint = Offset(
+                x = (down.position.x - offset.x) / scale,
+                y = (down.position.y - offset.y) / scale
+            )
 
             when {
-                tapTarget == null -> {
-                    Timber.d("📌 Пустой клик, вызываем onCanvasClick")
-                    onCanvasClick(tapCanvasPoint)
+                target == null -> {
+                    Timber.d("📌 Пустой клик в canvas=$canvasPoint")
+                    onCanvasClick(canvasPoint)
                 }
-                tapTarget.second == DragTargetType.SHAPE -> {
-                    Timber.d("📌 Клик по фигуре: ${tapTarget.first}")
-                    onShapeClick(tapTarget.first)
+                target.second == DragTargetType.SHAPE -> {
+                    Timber.d("📌 Клик по фигуре: ${target.first}")
+                    onShapeClick(target.first)
                 }
-                tapTarget.second == DragTargetType.DEVICE -> {
-                    Timber.d("📌 Клик по прибору: ${tapTarget.first}")
-                    tapTarget.first.toIntOrNull()?.let { deviceId ->
+                target.second == DragTargetType.DEVICE -> {
+                    Timber.d("📌 Клик по прибору: ${target.first}")
+                    target.first.toIntOrNull()?.let { deviceId ->
                         onDeviceClick(deviceId)
                     }
                 }
             }
         }
 
-        isDragging = false
         dragTarget.value = null
     }
 }
 
-private fun findTarget(
-    canvasPoint: Offset,
-    shapes: List<ComposeShape>,
+private fun findTargetCorrect(
+    screenPoint: Offset,
+    scale: Float,
+    offset: Offset,
     devices: List<SchemeDevice>,
-    deviceSize: Float
+    shapes: List<ComposeShape>,
+    baseDeviceSize: Float
 ): Pair<String, DragTargetType>? {
-    // Сначала приборы (они выше)
+
+    // 1. Проверяем приборы с ПРАВИЛЬНОЙ формулой
     for (device in devices.reversed()) {
+        // (мировая_координата * scale) + offset
+        val screenX = device.x * scale + offset.x
+        val screenY = device.y * scale + offset.y
+        val screenSize = baseDeviceSize * scale
+
         val deviceRect = Rect(
-            left = device.x,
-            top = device.y,
-            right = device.x + deviceSize,
-            bottom = device.y + deviceSize
+            left = screenX,
+            top = screenY,
+            right = screenX + screenSize,
+            bottom = screenY + screenSize
         )
-        if (deviceRect.contains(canvasPoint)) {
+
+        if (deviceRect.contains(screenPoint)) {
             return Pair(device.deviceId.toString(), DragTargetType.DEVICE)
         }
     }
 
-    // Потом фигуры
+    // 2. Для фигур используем обратную трансформацию
+    val canvasPoint = Offset(
+        x = (screenPoint.x - offset.x) / scale,
+        y = (screenPoint.y - offset.y) / scale
+    )
+
     for (shape in shapes.reversed()) {
         if (shape.contains(canvasPoint)) {
             return Pair(shape.id, DragTargetType.SHAPE)

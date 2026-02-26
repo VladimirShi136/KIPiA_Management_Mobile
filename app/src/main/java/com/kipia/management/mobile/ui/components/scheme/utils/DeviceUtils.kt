@@ -9,10 +9,15 @@ import androidx.compose.ui.graphics.nativeCanvas
 import android.graphics.Paint
 import com.kipia.management.mobile.data.entities.Device
 
-fun DrawScope.drawDevice(device: Device, isSelected: Boolean) {
-    // Рисуем устройство относительно текущей позиции (0,0)
-    // Размер устройства
-    val size = 60f
+fun DrawScope.drawDevice(
+    device: Device,
+    isSelected: Boolean,
+    scale: Float = 1f  // Добавляем параметр scale
+) {
+    // Базовый размер
+    val baseSize = 60f
+    // Масштабированный размер
+    val size = baseSize * scale
 
     // Основной цвет устройства по типу
     val deviceColor = when (device.type) {
@@ -33,8 +38,8 @@ fun DrawScope.drawDevice(device: Device, isSelected: Boolean) {
     if (isSelected) {
         drawRect(
             color = Color.White,
-            topLeft = Offset(-2f, -2f),
-            size = Size(size + 4f, size + 4f),
+            topLeft = Offset(-2f * scale, -2f * scale),
+            size = Size(size + 4f * scale, size + 4f * scale),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
         )
     }
@@ -58,14 +63,14 @@ fun DrawScope.drawDevice(device: Device, isSelected: Boolean) {
     drawIntoCanvas { canvas ->
         val paint = Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 20f
+            textSize = 20f * scale
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
         canvas.nativeCanvas.drawText(
             device.id.toString(),
             size / 2,
-            size / 2 + 8,
+            size / 2 + 8 * scale,
             paint
         )
     }

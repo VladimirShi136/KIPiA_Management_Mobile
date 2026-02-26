@@ -4,8 +4,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.onSizeChanged
 import com.kipia.management.mobile.data.entities.Device
@@ -17,16 +19,16 @@ import kotlin.math.roundToInt
 
 @Composable
 fun DeviceLayer(
-    devices: List<SchemeDevice>,                    // Устройства на схеме (позиции)
-    allDevices: List<Device>,                       // ВСЕ устройства из БД (данные)
+    devices: List<SchemeDevice>,
+    allDevices: List<Device>,
     selectedDeviceId: Int?,
     canvasState: CanvasState,
+    onDrawingParams: (scale: Float, offset: Offset) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
-    key: Any? = null
+    key: Any? = null,
+    debugMode: Boolean = true
 ) {
     remember(key) { key }
-
-    Timber.d("📱 DeviceLayer: devices=${devices.size}, allDevices=${allDevices.size}")
 
     var canvasWidth by remember { mutableIntStateOf(0) }
     var canvasHeight by remember { mutableIntStateOf(0) }
@@ -48,8 +50,6 @@ fun DeviceLayer(
         }
     }
 
-    Timber.d("📐 DeviceLayer: visibleArea=$visibleArea, offset=${canvasState.offset}, scale=$stableScale")
-
     val device_size = 60f
 
     val visibleDevices by remember(devices, visibleArea) {
@@ -58,23 +58,14 @@ fun DeviceLayer(
                 val deviceRight = schemeDevice.x + device_size
                 val deviceBottom = schemeDevice.y + device_size
 
-                val isVisible = deviceRight >= visibleArea.left &&
+                deviceRight >= visibleArea.left &&
                         schemeDevice.x <= visibleArea.right &&
                         deviceBottom >= visibleArea.top &&
                         schemeDevice.y <= visibleArea.bottom
-
-                if (isVisible) {
-                    Timber.d("✅ Device ${schemeDevice.deviceId} visible at (${schemeDevice.x}, ${schemeDevice.y})")
-                }
-
-                isVisible
             }
         }
     }
 
-    Timber.d("👁️ DeviceLayer: visibleDevices=${visibleDevices.size} из ${devices.size}")
-
-    // Используем allDevices для поиска данных об устройстве, а не availableDevices
     val deviceMap by remember(allDevices) {
         derivedStateOf { allDevices.associateBy { it.id } }
     }
@@ -85,31 +76,40 @@ fun DeviceLayer(
             .onSizeChanged { size ->
                 canvasWidth = size.width
                 canvasHeight = size.height
-                Timber.d("📏 Canvas size: ${size.width}x${size.height}")
             }
     ) {
-        Timber.d("🎨 Drawing ${visibleDevices.size} devices")
+        onDrawingParams(stableScale, canvasState.offset)
 
-        withTransform({
-            translate(left = canvasState.offset.x, top = canvasState.offset.y)
-            scale(scaleX = stableScale, scaleY = stableScale)
-        }) {
-            // Рисуем отладочную точку в центре
-            drawCircle(
-                color = androidx.compose.ui.graphics.Color.Red,
-                radius = 10f,
-                center = androidx.compose.ui.geometry.Offset(500f, 500f)
-            )
+        Timber.d("Drawing ${visibleDevices.size} devices at scale=$stableScale, offset=${canvasState.offset}")
 
-            visibleDevices.forEach { schemeDevice ->
-                deviceMap[schemeDevice.deviceId]?.let { device ->
-                    translate(schemeDevice.x, schemeDevice.y) {
-                        drawDevice(
-                            device = device,
-                            isSelected = schemeDevice.deviceId == selectedDeviceId
-                        )
-                    }
-                } ?: Timber.w("❌ Device ${schemeDevice.deviceId} not found in allDevices. allDevices size=${allDevices.size}")
+        visibleDevices.forEach { schemeDevice ->
+            deviceMap[schemeDevice.deviceId]?.let { device ->
+                val screenX = schemeDevice.x * stableScale + canvasState.offset.x
+                val screenY = schemeDevice.y * stableScale + canvasState.offset.y
+                val screenSize = device_size * stableScale
+
+                Timber.d("Drawing device ${device.id} at screen($screenX, $screenY)")
+
+                // Просто translate, без scale
+                withTransform({
+                    translate(screenX, screenY)
+                }) {
+                    // Передаем scale в drawDevice
+                    drawDevice(
+                        device = device,
+                        isSelected = schemeDevice.deviceId == selectedDeviceId,
+                        scale = stableScale  // ← передаем масштаб
+                    )
+                }
+
+                if (debugMode) {
+                    drawRect(
+                        color = Color.Green.copy(alpha = 0.5f),
+                        topLeft = Offset(screenX, screenY),
+                        size = Size(screenSize, screenSize),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                    )
+                }
             }
         }
     }

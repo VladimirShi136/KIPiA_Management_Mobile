@@ -16,10 +16,9 @@ object ShapeUtils {
     // ====== ТРАНСФОРМАЦИИ ======
 
     fun screenToCanvas(screenPoint: Offset, canvasState: CanvasState): Offset {
-        val safeScale = if (canvasState.scale == 0f) 1f else canvasState.scale
         return Offset(
-            x = (screenPoint.x - canvasState.offset.x) / safeScale,
-            y = (screenPoint.y - canvasState.offset.y) / safeScale
+            x = (screenPoint.x - canvasState.offset.x) / canvasState.scale,  // точный scale!
+            y = (screenPoint.y - canvasState.offset.y) / canvasState.scale
         )
     }
 
