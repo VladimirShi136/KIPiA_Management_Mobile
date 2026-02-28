@@ -34,12 +34,16 @@ import javax.inject.Inject
 data class CanvasState(
     val scale: Float = 1f,
     val offset: Offset = Offset.Zero,
-    val width: Int = 1000,
-    val height: Int = 1000,
+    val width: Int = 2000,
+    val height: Int = 1200,
     val backgroundColor: Color = Color.White,
     val backgroundImage: String? = null,
-    val gridEnabled: Boolean = false,
-    val gridSize: Int = 50
+    val gridEnabled: Boolean = true,
+    val gridSize: Int = 50,
+    val showGrid: Boolean = true,
+    val dimOutsideBounds: Boolean = true,
+    val viewportWidth: Int = 0,  // Добавим
+    val viewportHeight: Int = 0   // Добавим
 )
 
 data class SelectionState(
@@ -177,8 +181,14 @@ class SchemeEditorViewModel @Inject constructor(
     // ============ ТРАНСФОРМАЦИЯ КАНВАСА ============
 
     fun updateCanvasTransform(scale: Float, offset: Offset, resetOffset: Boolean = false) {
-        val newOffset = if (resetOffset) Offset.Zero else offset
         val newScale = scale.coerceIn(0.5f, 3.0f)
+
+        // Если сброс вида - центрируем холст
+        val newOffset = if (resetOffset) {
+            calculateCenteredOffset(newScale)
+        } else {
+            clampOffsetToBounds(offset, newScale)
+        }
 
         val currentState = _editorState.value.canvasState
         if (currentState.scale == newScale && currentState.offset == newOffset) return
@@ -191,6 +201,107 @@ class SchemeEditorViewModel @Inject constructor(
                 )
             )
         }
+    }
+
+    // Функция для обновления viewport размеров
+    fun updateViewportSize(width: Int, height: Int) {
+        _editorState.update { state ->
+            state.copy(
+                canvasState = state.canvasState.copy(
+                    viewportWidth = width,
+                    viewportHeight = height
+                )
+            )
+        }
+    }
+
+    // Ограничение offset границами холста
+    private fun clampOffsetToBounds(offset: Offset, scale: Float): Offset {
+        val viewportWidth = _editorState.value.canvasState.viewportWidth.toFloat()
+        val viewportHeight = _editorState.value.canvasState.viewportHeight.toFloat()
+
+        if (viewportWidth == 0f || viewportHeight == 0f) return offset
+
+        val canvasWidth = _editorState.value.canvasState.width * scale
+        val canvasHeight = _editorState.value.canvasState.height * scale
+
+        Timber.d("🔒 clampOffsetToBounds:")
+        Timber.d("   viewport=($viewportWidth, $viewportHeight)")
+        Timber.d("   canvasSize=($canvasWidth, $canvasHeight)")
+        Timber.d("   offset in=$offset")
+
+        val panLimit = 200f
+
+        // Правильные границы для offset.x
+        val minX: Float
+        val maxX: Float
+
+        if (canvasWidth <= viewportWidth) {
+            // Холст меньше экрана - центрируем и разрешаем небольшой выход
+            minX = (viewportWidth - canvasWidth) / 2f - panLimit
+            maxX = (viewportWidth - canvasWidth) / 2f + panLimit
+        } else {
+            // Холст больше экрана - разрешаем панорамирование с ограничениями
+            minX = viewportWidth - canvasWidth - panLimit  // левая граница
+            maxX = panLimit  // правая граница
+            // ВАЖНО: minX должно быть МЕНЬШЕ maxX
+            // При canvasWidth > viewportWidth: minX отрицательный и меньше чем -panLimit
+            // maxX положительный, поэтому minX < maxX гарантированно
+        }
+
+        // Аналогично для Y
+        val minY: Float
+        val maxY: Float
+
+        if (canvasHeight <= viewportHeight) {
+            minY = (viewportHeight - canvasHeight) / 2f - panLimit
+            maxY = (viewportHeight - canvasHeight) / 2f + panLimit
+        } else {
+            minY = viewportHeight - canvasHeight - panLimit
+            maxY = panLimit
+        }
+
+        // Дополнительная проверка на корректность диапазона
+        require(minX <= maxX) { "minX=$minX > maxX=$maxX" }
+        require(minY <= maxY) { "minY=$minY > maxY=$maxY" }
+
+        val clampedX = offset.x.coerceIn(minX, maxX)
+        val clampedY = offset.y.coerceIn(minY, maxY)
+
+        Timber.d("   range X: [$minX, $maxX]")
+        Timber.d("   range Y: [$minY, $maxY]")
+        Timber.d("   clamped=($clampedX, $clampedY)")
+
+        return Offset(clampedX, clampedY)
+    }
+
+    // Центрирование холста
+    private fun calculateCenteredOffset(scale: Float): Offset {
+        val viewportWidth = _editorState.value.canvasState.viewportWidth.toFloat()
+        val viewportHeight = _editorState.value.canvasState.viewportHeight.toFloat()
+
+        if (viewportWidth == 0f || viewportHeight == 0f) return Offset.Zero
+
+        val canvasWidth = _editorState.value.canvasState.width * scale
+        val canvasHeight = _editorState.value.canvasState.height * scale
+
+        Timber.d("🎯 calculateCenteredOffset: scale=$scale")
+        Timber.d("   viewport=($viewportWidth, $viewportHeight)")
+        Timber.d("   canvasSize=($canvasWidth, $canvasHeight)")
+
+        // Если холст меньше экрана - центрируем
+        // Если холст больше экрана - показываем левый верхний угол
+        return Offset(
+            x = ((viewportWidth - canvasWidth) / 2f).coerceAtLeast(0f),
+            y = ((viewportHeight - canvasHeight) / 2f).coerceAtLeast(0f)
+        )
+    }
+
+    // Функция для сброса вида (будет вызываться из UI)
+    fun resetView() {
+        val newScale = 1f
+        val newOffset = calculateCenteredOffset(newScale)
+        updateCanvasTransform(newScale, newOffset, resetOffset = true)
     }
 
     // ============ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ ДАННЫХ ============
@@ -351,12 +462,38 @@ class SchemeEditorViewModel @Inject constructor(
     }
 
     fun moveDevice(deviceId: Int, delta: Offset) {
+        // Получаем текущую позицию устройства
+        val currentDevice = devices.value.find { it.deviceId == deviceId } ?: return
+
+        // Вычисляем новую позицию
+        val newX = currentDevice.x + delta.x
+        val newY = currentDevice.y + delta.y
+
+        // Ограничиваем границами холста с учетом размера устройства
+        val deviceSize = 60f
+        val maxX = _editorState.value.canvasState.width - deviceSize
+        val maxY = _editorState.value.canvasState.height - deviceSize
+
+        val clampedX = newX.coerceIn(0f, maxX)
+        val clampedY = newY.coerceIn(0f, maxY)
+
+        // Если позиция изменилась после ограничения, корректируем delta
+        val clampedDelta = Offset(clampedX - currentDevice.x, clampedY - currentDevice.y)
+
+        Timber.d("📦 moveDevice: ID=$deviceId")
+        Timber.d("   from (${currentDevice.x}, ${currentDevice.y})")
+        Timber.d("   delta in=$delta")
+        Timber.d("   new raw=($newX, $newY)")
+        Timber.d("   bounds: x=[0, $maxX], y=[0, $maxY]")
+        Timber.d("   clamped=($clampedX, $clampedY)")
+        Timber.d("   delta out=$clampedDelta")
+
         commandManager.execute(
             MoveDeviceCommand(
                 deviceManager = deviceManager,
                 onStateChange = { markAsDirty() },
                 deviceId = deviceId,
-                delta = delta
+                delta = clampedDelta  // Используем скорректированную delta
             )
         )
     }

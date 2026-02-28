@@ -58,8 +58,8 @@ data class Scheme(
 }
 
 data class SchemeData(
-    val width: Int = 1000,
-    val height: Int = 1000,
+    val width: Int = 2000,
+    val height: Int = 1200,
     val backgroundColor: String = "#FFFFFF",
     val backgroundImage: String? = null,
     val gridEnabled: Boolean = true,

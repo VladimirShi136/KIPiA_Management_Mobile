@@ -62,34 +62,60 @@ fun GestureLayer(
     val currentShapes by rememberUpdatedState(shapes)
     val currentDevices by rememberUpdatedState(devices)
 
-    // Состояние для transformable жестов
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        if (isPanZoomMode) {
-            val newScale = (canvasState.scale * zoomChange).coerceIn(0.5f, 3.0f)
-            val newOffset = canvasState.offset + panChange
-            onTransform(newScale, newOffset, false)
-        }
-    }
-
     Box(
         modifier = modifier
             .run {
                 if (isPanZoomMode) {
-                    this.transformable(
-                        state = transformState,
-                        canPan = { true },
-                        lockRotationOnZoomPan = true,
-                        enabled = true
-                    )
-                } else {
+                    this.pointerInput(Unit) {
+                        // Локальные переменные, которые будут обновляться в процессе жеста
+                        var currentScale = canvasState.scale
+                        var currentOffset = canvasState.offset
+
+                        detectTransformGestures(
+                            onGesture = { centroid, pan, zoom, _ ->
+                                if (zoom != 1f) {
+                                    val newScale = (currentScale * zoom).coerceIn(0.5f, 3.0f)
+
+                                    Timber.d("🎯 ZOOM: zoom=$zoom, centroid=$centroid")
+                                    Timber.d("   before: scale=$currentScale, offset=$currentOffset")
+
+                                    val newOffset = calculateOffsetWithPivot(
+                                        oldOffset = currentOffset,
+                                        oldScale = currentScale,
+                                        newScale = newScale,
+                                        pivotScreenPoint = centroid
+                                    )
+
+                                    Timber.d("   after: scale=$newScale, offset=$newOffset")
+
+                                    onTransform(newScale, newOffset, false)
+                                    currentScale = newScale
+                                    currentOffset = newOffset
+
+                                } else if (pan != Offset.Zero) {
+                                    Timber.d("🖱️ PAN: pan=$pan")
+                                    Timber.d("   before: offset=$currentOffset")
+
+                                    val newOffset = currentOffset + pan
+
+                                    Timber.d("   after: offset=$newOffset")
+
+                                    onTransform(currentScale, newOffset, false)
+                                    currentOffset = newOffset
+                                }
+                            }
+                        )
+                    }
+                }
+                else {
                     this
                 }
             }
             .pointerInput(currentMode, stableScale) {
                 if (!isPanZoomMode) {
                     setupSelectionGestures(
-                        scale = stableScale,
-                        offset = canvasState.offset,  // Используем актуальный offset
+                        scale = canvasState.scale,  // ← точный масштаб
+                        offset = canvasState.offset,
                         shapesProvider = { currentShapes },
                         devicesProvider = { currentDevices },
                         dragTarget = dragTarget,
@@ -131,11 +157,45 @@ fun GestureLayer(
             devices = devices,
             lastTapPoint = lastTapPoint.value,
             lastCalculatedTarget = lastCalculatedTarget.value,
-            gestureScale = stableScale,  // передаем параметры из жестов
+            gestureScale = canvasState.scale,
             gestureOffset = canvasState.offset,
             modifier = Modifier.fillMaxSize()
         )
     }
+}
+
+/**
+ * Вычисляет новый offset после масштабирования, чтобы точка под пальцами оставалась на месте
+ */
+private fun calculateOffsetWithPivot(
+    oldOffset: Offset,
+    oldScale: Float,
+    newScale: Float,
+    pivotScreenPoint: Offset
+): Offset {
+    Timber.d("📐 Масштабирование: oldScale=$oldScale, newScale=$newScale, pivot=$pivotScreenPoint")
+    // Конвертируем экранные координаты pivot в мировые координаты ДО масштабирования
+    val worldPivot = Offset(
+        x = (pivotScreenPoint.x - oldOffset.x) / oldScale,
+        y = (pivotScreenPoint.y - oldOffset.y) / oldScale
+    )
+
+    Timber.d("   worldPivot=$worldPivot")
+
+    // Вычисляем, где эта мировая точка должна быть на экране ПОСЛЕ масштабирования
+    val newScreenPivot = Offset(
+        x = worldPivot.x * newScale,
+        y = worldPivot.y * newScale
+    )
+
+    // Вычисляем новый offset, чтобы мировая точка оказалась под пальцами
+    val newOffset = Offset(
+        x = pivotScreenPoint.x - newScreenPivot.x,
+        y = pivotScreenPoint.y - newScreenPivot.y
+    )
+
+    Timber.d("   newOffset=$newOffset")
+    return newOffset
 }
 
 private suspend fun PointerInputScope.setupSelectionGestures(

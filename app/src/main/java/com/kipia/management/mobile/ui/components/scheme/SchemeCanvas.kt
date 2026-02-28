@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
@@ -33,6 +34,7 @@ fun SchemeCanvas(
     onShapeDrag: (String, Offset) -> Unit,
     onDeviceDrag: (Int, Offset) -> Unit,
     onTransform: (Float, Offset, Boolean) -> Unit,
+    onViewportSizeChanged: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Стабилизируем масштаб для фоновых элементов
@@ -41,6 +43,9 @@ fun SchemeCanvas(
             (canvasState.scale / 0.05).roundToInt() * 0.05f
         }
     }
+
+    var viewportWidth by remember { mutableStateOf(0) }
+    var viewportHeight by remember { mutableStateOf(0) }
 
     // Сохраняем последние параметры отрисовки устройств
     var lastDeviceDrawingScale by remember { mutableStateOf(1f) }
@@ -70,7 +75,12 @@ fun SchemeCanvas(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(8.dp))
+            .onSizeChanged { size ->  // ← size передается как параметр
+                viewportWidth = size.width
+                viewportHeight = size.height
+                onViewportSizeChanged(viewportWidth, viewportHeight)
+                Timber.d("📐 Viewport size changed: $viewportWidth x $viewportHeight")
+            }
     ) {
         // Фон (самый нижний слой)
         BackgroundLayer(

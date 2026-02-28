@@ -1,6 +1,11 @@
 package com.kipia.management.mobile.ui.screens.schemes
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -117,55 +122,56 @@ fun SchemeEditorScreen(
     }
 
     Scaffold { paddingValues ->
-        Column(
+        // Используем Box для наложения элементов
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f)
-            ) {
-                SchemeCanvasContainer(
-                    editorState = editorState,
-                    viewModel = viewModel,
-                    selectedDeviceForPlacement = selectedDeviceForPlacement,
-                    onDeviceForPlacementChange = { selectedDeviceForPlacement = it },
-                    onAddDeviceDialogChange = { showAddDeviceDialog = it },
-                    modifier = Modifier.fillMaxSize()
-                )
+            // Канвас на заднем плане (занимает весь экран)
+            SchemeCanvasContainer(
+                editorState = editorState,
+                viewModel = viewModel,
+                selectedDeviceForPlacement = selectedDeviceForPlacement,
+                onDeviceForPlacementChange = { selectedDeviceForPlacement = it },
+                onAddDeviceDialogChange = { showAddDeviceDialog = it },
+                modifier = Modifier.fillMaxSize()
+            )
 
-                ShapePropertiesPanel(
-                    editorState = editorState,
-                    shapes = viewModel.shapes.collectAsStateWithLifecycle().value,
-                    viewModel = viewModel,
-                    onColorPickerChange = { showColorPicker = it },
-                    onColorPickerTypeChange = { colorPickerType = it }
-                )
-
-                DevicePropertiesPanel(
-                    editorState = editorState,
-                    allDevices = viewModel.allDevices.collectAsStateWithLifecycle().value,
-                    devices = viewModel.devices.collectAsStateWithLifecycle().value,
-                    viewModel = viewModel
-                )
-            }
-
-            BottomShapeToolbarContainer(
+            // Плавающая панель инструментов ВСЕГДА внизу
+            FloatingBottomToolbar(
                 canUndo = canUndo,
                 canRedo = canRedo,
                 editorState = editorState,
                 viewModel = viewModel,
                 onAddDeviceDialogChange = { showAddDeviceDialog = it },
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+                    .padding(horizontal = 16.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            Text(
-                text = "Режим: ${editorState.uiState.mode}",
-                modifier = Modifier.padding(8.dp)
+            // Панели свойств (плавающие сверху)
+            ShapePropertiesPanel(
+                editorState = editorState,
+                shapes = viewModel.shapes.collectAsStateWithLifecycle().value,
+                viewModel = viewModel,
+                onColorPickerChange = { showColorPicker = it },
+                onColorPickerTypeChange = { colorPickerType = it },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+            )
+
+            DevicePropertiesPanel(
+                editorState = editorState,
+                allDevices = viewModel.allDevices.collectAsStateWithLifecycle().value,
+                devices = viewModel.devices.collectAsStateWithLifecycle().value,
+                viewModel = viewModel,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
             )
         }
 
@@ -235,9 +241,15 @@ fun SchemeEditorScreen(
                 },
                 onColorSelected = { color ->
                     if (colorPickerType == "fill") {
-                        viewModel.updateShapeFillColor(editorState.selection.selectedShapeId!!, color)
+                        viewModel.updateShapeFillColor(
+                            editorState.selection.selectedShapeId!!,
+                            color
+                        )
                     } else {
-                        viewModel.updateShapeStrokeColor(editorState.selection.selectedShapeId!!, color)
+                        viewModel.updateShapeStrokeColor(
+                            editorState.selection.selectedShapeId!!,
+                            color
+                        )
                     }
                     showColorPicker = false
                 },
@@ -263,46 +275,78 @@ private fun SchemeCanvasContainer(
     val availableDevices by viewModel.availableDevices.collectAsStateWithLifecycle()
     val allDevices by viewModel.allDevices.collectAsStateWithLifecycle()
 
-    val onTransform = remember { { scale: Float, offset: Offset, _: Boolean ->
-        viewModel.updateCanvasTransform(scale, offset)
+    val onViewportSizeChanged = remember(viewModel) { { width: Int, height: Int ->
+        viewModel.updateViewportSize(width, height)
     } }
 
-    val onCanvasClick = remember(editorState.uiState.mode, selectedDeviceForPlacement) { { position: Offset ->
-        Timber.d("🖱️ onCanvasClick: mode=${editorState.uiState.mode}, position=$position")
-        when (editorState.uiState.mode) {
-            EditorMode.RECTANGLE, EditorMode.LINE, EditorMode.ELLIPSE,
-            EditorMode.RHOMBUS, EditorMode.TEXT -> viewModel.addShape(editorState.uiState.mode, position)
-            EditorMode.DEVICE -> {
-                if (selectedDeviceForPlacement != null) {
-                    viewModel.addDevice(selectedDeviceForPlacement.id, position)
-                    onDeviceForPlacementChange(null)
-                    viewModel.setMode(EditorMode.SELECT)
-                } else {
-                    onAddDeviceDialogChange(true)
+    val onTransform = remember {
+        { scale: Float, offset: Offset, _: Boolean ->
+            viewModel.updateCanvasTransform(scale, offset)
+        }
+    }
+
+    val onCanvasClick = remember(editorState.uiState.mode, selectedDeviceForPlacement) {
+        { position: Offset ->
+            Timber.d("🖱️ onCanvasClick: mode=${editorState.uiState.mode}, position=$position")
+            when (editorState.uiState.mode) {
+                EditorMode.RECTANGLE, EditorMode.LINE, EditorMode.ELLIPSE,
+                EditorMode.RHOMBUS, EditorMode.TEXT -> viewModel.addShape(
+                    editorState.uiState.mode,
+                    position
+                )
+
+                EditorMode.DEVICE -> {
+                    if (selectedDeviceForPlacement != null) {
+                        viewModel.addDevice(selectedDeviceForPlacement.id, position)
+                        onDeviceForPlacementChange(null)
+                        viewModel.setMode(EditorMode.SELECT)
+                    } else {
+                        onAddDeviceDialogChange(true)
+                    }
+                }
+
+                else -> {
+                    Timber.d("🧹 Вызов clearSelection()")
+                    viewModel.clearSelection()  // ← Это должно вызываться в SELECT режиме
                 }
             }
-            else -> {
-                Timber.d("🧹 Вызов clearSelection()")
-                viewModel.clearSelection()  // ← Это должно вызываться в SELECT режиме
-            }
         }
-    } }
-
-    SchemeCanvas(
-        editorState = editorState,
-        canvasState = editorState.canvasState,
-        shapes = shapes,
-        devices = devices,
-        allDevices = allDevices,
-        availableDevices = availableDevices,
-        onShapeClick = { shapeId -> viewModel.selectShape(shapeId) },
-        onDeviceClick = { deviceId -> viewModel.selectDevice(deviceId) },
-        onCanvasClick = onCanvasClick,
-        onShapeDrag = { shapeId, delta -> viewModel.moveShape(shapeId, delta) },
-        onDeviceDrag = { deviceId, delta -> viewModel.moveDevice(deviceId, delta) },
-        onTransform = onTransform,
-        modifier = modifier
-    )
+    }
+    Box(modifier = modifier) {
+        SchemeCanvas(
+            editorState = editorState,
+            canvasState = editorState.canvasState,
+            shapes = shapes,
+            devices = devices,
+            allDevices = allDevices,
+            availableDevices = availableDevices,
+            onShapeClick = { shapeId -> viewModel.selectShape(shapeId) },
+            onDeviceClick = { deviceId -> viewModel.selectDevice(deviceId) },
+            onCanvasClick = onCanvasClick,
+            onShapeDrag = { shapeId, delta -> viewModel.moveShape(shapeId, delta) },
+            onDeviceDrag = { deviceId, delta -> viewModel.moveDevice(deviceId, delta) },
+            onTransform = onTransform,
+            onViewportSizeChanged = onViewportSizeChanged,
+            modifier = modifier
+        )
+        // Кнопка сброса вида
+        FloatingActionButton(
+            onClick = { viewModel.resetView() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 100.dp)  // отступ снизу
+                .padding(end = 16.dp)
+                .size(48.dp),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            elevation = FloatingActionButtonDefaults.elevation(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Fullscreen,
+                contentDescription = "Сбросить вид",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
 }
 
 @Composable
@@ -311,7 +355,8 @@ private fun ShapePropertiesPanel(
     shapes: List<ComposeShape>,
     viewModel: SchemeEditorViewModel,
     onColorPickerChange: (Boolean) -> Unit,
-    onColorPickerTypeChange: (String) -> Unit
+    onColorPickerTypeChange: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val selectedShape = editorState.selection.selectedShapeId?.let { id ->
         shapes.find { it.id == id }
@@ -319,12 +364,15 @@ private fun ShapePropertiesPanel(
 
     if (selectedShape != null &&
         editorState.uiState.showShapeProperties &&
-        editorState.uiState.mode != EditorMode.PAN_ZOOM) {
-
+        editorState.uiState.mode != EditorMode.PAN_ZOOM
+    ) {
         Card(
-            modifier = Modifier
-                .padding(16.dp)
-                .width(240.dp)
+            modifier = modifier.width(240.dp),  // Используем переданный modifier
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            ),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -332,7 +380,6 @@ private fun ShapePropertiesPanel(
             ) {
                 Text("Свойства фигуры", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider()
-
                 Button(
                     onClick = {
                         onColorPickerTypeChange("fill")
@@ -385,7 +432,8 @@ private fun DevicePropertiesPanel(
     editorState: EditorState,
     allDevices: List<Device>,
     devices: List<SchemeDevice>,
-    viewModel: SchemeEditorViewModel
+    viewModel: SchemeEditorViewModel,
+    modifier: Modifier = Modifier
 ) {
     val selectedDeviceInfo = editorState.selection.selectedDeviceId?.let { id ->
         val device = allDevices.find { it.id == id }
@@ -395,12 +443,16 @@ private fun DevicePropertiesPanel(
 
     if (selectedDeviceInfo != null &&
         editorState.uiState.showDeviceProperties &&
-        editorState.uiState.mode != EditorMode.PAN_ZOOM) {
+        editorState.uiState.mode != EditorMode.PAN_ZOOM
+    ) {
 
         Card(
-            modifier = Modifier
-                .padding(16.dp)
-                .width(240.dp)
+            modifier = modifier.width(240.dp),  // Используем переданный modifier
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            ),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -438,7 +490,7 @@ private fun DevicePropertiesPanel(
 }
 
 @Composable
-private fun BottomShapeToolbarContainer(
+private fun FloatingBottomToolbar(
     canUndo: Boolean,
     canRedo: Boolean,
     editorState: EditorState,
@@ -460,34 +512,45 @@ private fun BottomShapeToolbarContainer(
         if (device != null && schemeDevice != null) device to schemeDevice else null
     }
 
-    val onModeChanged = remember(viewModel, onAddDeviceDialogChange) { { mode: EditorMode ->
+    val onModeChanged = { mode: EditorMode ->
         viewModel.setMode(mode)
         when (mode) {
             EditorMode.DEVICE -> onAddDeviceDialogChange(true)
             EditorMode.SELECT, EditorMode.PAN_ZOOM -> viewModel.clearSelection()
             else -> {}
         }
-    } }
+    }
 
-    BottomShapeToolbar(
-        canUndo = canUndo,
-        canRedo = canRedo,
-        onUndo = { viewModel.undo() },
-        onRedo = { viewModel.redo() },
-        editorMode = editorState.uiState.mode,
-        selectedShape = selectedShape,
-        selectedDevice = selectedDeviceInfo,
-        onModeChanged = onModeChanged,
-        onAddDevice = { viewModel.setMode(EditorMode.DEVICE) },
-        onShapeMenuClick = { viewModel.toggleShapeProperties() },
-        onDeviceMenuClick = { viewModel.toggleDeviceProperties() },
-        onDuplicateShape = { selectedShape?.let { viewModel.duplicateShape(it.id) } },
-        onDeleteSelected = {
-            if (selectedShape != null) viewModel.deleteSelectedShape()
-            else selectedDeviceInfo?.first?.let { viewModel.removeDevice(it.id) }
-        },
-        modifier = modifier
-    )
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 8.dp
+        )
+    ) {
+        BottomShapeToolbar(
+            canUndo = canUndo,
+            canRedo = canRedo,
+            onUndo = { viewModel.undo() },
+            onRedo = { viewModel.redo() },
+            editorMode = editorState.uiState.mode,
+            selectedShape = selectedShape,
+            selectedDevice = selectedDeviceInfo,
+            onModeChanged = onModeChanged,
+            onAddDevice = { viewModel.setMode(EditorMode.DEVICE) },
+            onShapeMenuClick = { viewModel.toggleShapeProperties() },
+            onDeviceMenuClick = { viewModel.toggleDeviceProperties() },
+            onDuplicateShape = { selectedShape?.let { viewModel.duplicateShape(it.id) } },
+            onDeleteSelected = {
+                if (selectedShape != null) viewModel.deleteSelectedShape()
+                else selectedDeviceInfo?.first?.let { viewModel.removeDevice(it.id) }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 // ============ ДИАЛОГИ ============
@@ -510,7 +573,10 @@ private fun SimpleAddDeviceDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Схема: $schemeLocation", style = MaterialTheme.typography.titleSmall)
-                Text("Доступно приборов: ${devices.size}", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Доступно приборов: ${devices.size}",
+                    style = MaterialTheme.typography.bodySmall
+                )
 
                 if (devices.isEmpty()) {
                     Box(

@@ -31,8 +31,9 @@ fun IndicatorLayer(
             ZoomIndicator(
                 scale = canvasState.scale,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp)
+                    .padding(end = 16.dp)
             )
         }
 
