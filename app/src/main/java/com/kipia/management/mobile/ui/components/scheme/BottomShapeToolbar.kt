@@ -42,6 +42,7 @@ fun BottomShapeToolbar(
     onDeviceMenuClick: () -> Unit,
     onDuplicateShape: () -> Unit,
     onDeleteSelected: () -> Unit,
+    onShapeSelectedForPlacement: (EditorMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showShapeCreationMenu by remember { mutableStateOf(false) }
@@ -142,7 +143,7 @@ fun BottomShapeToolbar(
     ShapeCreationDropdownMenu(
         expanded = showShapeCreationMenu,
         onDismiss = { showShapeCreationMenu = false },
-        onModeSelected = onModeChanged
+        onShapeSelected = onShapeSelectedForPlacement
     )
 }
 
@@ -177,14 +178,13 @@ private fun ShapeCreationButton(
 private fun ShapeCreationDropdownMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    onModeSelected: (EditorMode) -> Unit
+    onShapeSelected: (EditorMode) -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         modifier = Modifier.width(240.dp)
     ) {
-        // Используем список для итерации вместо повторяющегося кода
         val menuItems = remember {
             listOf(
                 Triple(EditorMode.RECTANGLE, "Прямоугольник", Icons.Default.CropSquare),
@@ -199,7 +199,7 @@ private fun ShapeCreationDropdownMenu(
             DropdownMenuItem(
                 text = { Text(label) },
                 onClick = {
-                    onModeSelected(mode)
+                    onShapeSelected(mode)  // ← Вызываем колбэк с выбранной фигурой
                     onDismiss()
                 },
                 leadingIcon = {

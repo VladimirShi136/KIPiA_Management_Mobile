@@ -4,13 +4,20 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
-import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
+import com.kipia.management.mobile.ui.components.scheme.shapes.*
 import com.kipia.management.mobile.viewmodel.CanvasState
 import com.kipia.management.mobile.viewmodel.EditorState
-import kotlin.math.roundToInt
 
 @Composable
 fun ShapeLayer(
@@ -18,31 +25,29 @@ fun ShapeLayer(
     canvasState: CanvasState,
     editorState: EditorState,
     modifier: Modifier = Modifier,
-    key: Any? = null
+    key: Any? = null,
+    debugMode: Boolean = false  // По умолчанию false
 ) {
-    // Правильное использование remember
     remember(key) { key }
 
     var canvasWidth by remember { mutableIntStateOf(0) }
     var canvasHeight by remember { mutableIntStateOf(0) }
 
-    val stableScale by remember(canvasState.scale) {
-        derivedStateOf { (canvasState.scale / 0.05).roundToInt() * 0.05f }
-    }
-
-    val visibleArea by remember(canvasState, canvasWidth, canvasHeight, stableScale) {
+    // Видимая область в мировых координатах
+    val visibleArea by remember(canvasState, canvasWidth, canvasHeight) {
         derivedStateOf {
             if (canvasWidth == 0 || canvasHeight == 0) return@derivedStateOf Rect.Zero
 
             Rect(
-                left = -canvasState.offset.x / stableScale,
-                top = -canvasState.offset.y / stableScale,
-                right = (-canvasState.offset.x + canvasWidth) / stableScale,
-                bottom = (-canvasState.offset.y + canvasHeight) / stableScale
+                left = -canvasState.offset.x / canvasState.scale,
+                top = -canvasState.offset.y / canvasState.scale,
+                right = (-canvasState.offset.x + canvasWidth) / canvasState.scale,
+                bottom = (-canvasState.offset.y + canvasHeight) / canvasState.scale
             )
         }
     }
 
+    // Фильтруем видимые фигуры
     val visibleShapes by remember(shapes, visibleArea) {
         derivedStateOf {
             shapes.filter { shape ->
@@ -64,14 +69,203 @@ fun ShapeLayer(
                 canvasHeight = size.height
             }
     ) {
-        withTransform({
-            translate(left = canvasState.offset.x, top = canvasState.offset.y)
-            scale(scaleX = stableScale, scaleY = stableScale)
-        }) {
-            visibleShapes.forEach { shape ->
-                val isSelected = editorState.selection.selectedShapeId == shape.id
-                shape.draw(this, isSelected)
+        // Рисуем каждую видимую фигуру
+        visibleShapes.forEach { shape ->
+            val isSelected = editorState.selection.selectedShapeId == shape.id
+
+            // Вычисляем экранные координаты
+            val screenX = shape.x * canvasState.scale + canvasState.offset.x
+            val screenY = shape.y * canvasState.scale + canvasState.offset.y
+
+            // Масштабируем размер фигуры
+            val scaledWidth = shape.width * canvasState.scale
+            val scaledHeight = shape.height * canvasState.scale
+            val scaledStrokeWidth = shape.strokeWidth * canvasState.scale
+
+            // Применяем глобальную трансформацию
+            withTransform({
+                translate(screenX, screenY)
+                rotate(
+                    degrees = shape.rotation,
+                    pivot = Offset(scaledWidth / 2, scaledHeight / 2)
+                )
+            }) {
+                // Рисуем фигуру
+                drawShapeWithGlobalTransform(
+                    shape = shape,
+                    scaledWidth = scaledWidth,
+                    scaledHeight = scaledHeight,
+                    scaledStrokeWidth = scaledStrokeWidth,
+                    scaleFactor = canvasState.scale
+                )
+
+                // Рисуем маркер выделения (только для выбранной фигуры)
+                if (isSelected) {
+                    drawSelectionMarker(shape, scaledWidth, scaledHeight, scaleFactor = canvasState.scale)
+                }
             }
+        }
+    }
+}
+
+/**
+ * Рисует фигуру (только саму фигуру, без маркеров выделения)
+ */
+private fun DrawScope.drawShapeWithGlobalTransform(
+    shape: ComposeShape,
+    scaledWidth: Float,
+    scaledHeight: Float,
+    scaledStrokeWidth: Float,
+    scaleFactor: Float
+) {
+    when (shape) {
+        is ComposeRectangle -> {
+            val scaledCornerRadius = shape.cornerRadius * scaleFactor
+
+            // Заливка
+            if (shape.fillColor != Color.Transparent) {
+                drawRoundRect(
+                    color = shape.fillColor,
+                    topLeft = Offset.Zero,
+                    size = Size(scaledWidth, scaledHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(scaledCornerRadius)
+                )
+            }
+
+            // Обводка
+            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+                drawRoundRect(
+                    color = shape.strokeColor,
+                    topLeft = Offset.Zero,
+                    size = Size(scaledWidth, scaledHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(scaledCornerRadius),
+                    style = Stroke(width = scaledStrokeWidth)
+                )
+            }
+        }
+
+        is ComposeLine -> {
+            val scaledStartX = shape.startX * scaleFactor
+            val scaledStartY = shape.startY * scaleFactor
+            val scaledEndX = shape.endX * scaleFactor
+            val scaledEndY = shape.endY * scaleFactor
+
+            drawLine(
+                color = shape.strokeColor,
+                start = Offset(scaledStartX, scaledStartY),
+                end = Offset(scaledEndX, scaledEndY),
+                strokeWidth = scaledStrokeWidth,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+
+        is ComposeEllipse -> {
+            // Заливка
+            if (shape.fillColor != Color.Transparent) {
+                drawOval(
+                    color = shape.fillColor,
+                    topLeft = Offset.Zero,
+                    size = Size(scaledWidth, scaledHeight)
+                )
+            }
+
+            // Обводка
+            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+                drawOval(
+                    color = shape.strokeColor,
+                    topLeft = Offset.Zero,
+                    size = Size(scaledWidth, scaledHeight),
+                    style = Stroke(width = scaledStrokeWidth)
+                )
+            }
+        }
+
+        is ComposeRhombus -> {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(scaledWidth / 2, 0f)
+                lineTo(scaledWidth, scaledHeight / 2)
+                lineTo(scaledWidth / 2, scaledHeight)
+                lineTo(0f, scaledHeight / 2)
+                close()
+            }
+
+            if (shape.fillColor != Color.Transparent) {
+                drawPath(path = path, color = shape.fillColor)
+            }
+            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+                drawPath(
+                    path = path,
+                    color = shape.strokeColor,
+                    style = Stroke(width = scaledStrokeWidth)
+                )
+            }
+        }
+
+        is ComposeText -> {
+            // ТОЛЬКО ТЕКСТ, без фона и рамки
+            drawIntoCanvas { canvas ->
+                val paint = android.graphics.Paint().apply {
+                    color = shape.textColor.toArgb()
+                    textSize = shape.fontSize * scaleFactor
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    if (shape.isBold) {
+                        isFakeBoldText = true
+                    }
+                    if (shape.isItalic) {
+                        textSkewX = -0.25f
+                    }
+                }
+
+                val textBounds = android.graphics.Rect()
+                paint.getTextBounds(shape.text, 0, shape.text.length, textBounds)
+                val textY = scaledHeight / 2 + (textBounds.height() / 2)
+
+                canvas.nativeCanvas.drawText(
+                    shape.text,
+                    scaledWidth / 2,
+                    textY,
+                    paint
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Рисует маркер выделения (синяя обводка, как у устройств)
+ */
+private fun DrawScope.drawSelectionMarker(
+    shape: ComposeShape,
+    scaledWidth: Float,
+    scaledHeight: Float,
+    scaleFactor: Float
+) {
+    when (shape) {
+        is ComposeLine -> {
+            val scaledStartX = shape.startX * scaleFactor
+            val scaledStartY = shape.startY * scaleFactor
+            val scaledEndX = shape.endX * scaleFactor
+            val scaledEndY = shape.endY * scaleFactor
+
+            // Синяя обводка вокруг линии (как у устройств)
+            drawLine(
+                color = Color.Cyan.copy(alpha = 0.8f),
+                start = Offset(scaledStartX, scaledStartY),
+                end = Offset(scaledEndX, scaledEndY),
+                strokeWidth = 3f * scaleFactor,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+
+        else -> {
+            // Для остальных фигур - синяя рамка (как у устройств)
+            drawRect(
+                color = Color.Cyan.copy(alpha = 0.8f),
+                topLeft = Offset.Zero,
+                size = Size(scaledWidth, scaledHeight),
+                style = Stroke(width = 2f * scaleFactor)
+            )
         }
     }
 }

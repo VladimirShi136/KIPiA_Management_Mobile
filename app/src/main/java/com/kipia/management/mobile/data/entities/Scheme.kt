@@ -11,6 +11,7 @@ import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeRectangle
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeRhombus
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeText
+import timber.log.Timber
 
 
 /**
@@ -88,6 +89,12 @@ data class ShapeData(
 ) {
     // Конвертация в ComposeShape
     fun toComposeShape(): ComposeShape {
+        Timber.d("💾 Загрузка фигуры из JSON:")
+        Timber.d("   id: $id")
+        Timber.d("   type: $type")
+        Timber.d("   position: ($x, $y)")
+        Timber.d("   rotation: $rotation")  // Это ключевое!
+        Timber.d("   size: ${width}x${height}")
         return when (type) {
             "rectangle" -> ComposeRectangle(
                 id = id,
@@ -188,6 +195,10 @@ fun parseColor(colorHex: String): Color {
 
 // Расширение для конвертации ComposeShape → ShapeData
 fun ComposeShape.toShapeData(): ShapeData {
+    Timber.d("💾 Сохранение фигуры в JSON:")
+    Timber.d("   id: $id")
+    Timber.d("   rotation: $rotation")  // Проверяем, что rotation сохраняется
+    Timber.d("   position: ($x, $y)")
     return ShapeData(
         type = when (this) {
             is ComposeRectangle -> "rectangle"

@@ -6,6 +6,7 @@ import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import timber.log.Timber
 
 class ShapeManager {
     private val _shapes = MutableStateFlow<List<ComposeShape>>(emptyList())
@@ -22,7 +23,19 @@ class ShapeManager {
     fun updateShape(shapeId: String, update: (ComposeShape) -> ComposeShape) {
         _shapes.update { shapes ->
             shapes.map { shape ->
-                if (shape.id == shapeId) update(shape) else shape
+                if (shape.id == shapeId) {
+                    val oldShape = shape
+                    val newShape = update(shape)
+
+                    // Важно: newShape должна быть другой фигурой, не той же ссылкой!
+                    if (oldShape === newShape) {
+                        Timber.e("⚠️ CRITICAL: updateShape вернул ту же самую фигуру!")
+                    }
+
+                    Timber.d("   ShapeManager: updating shape ${shape.id}")
+                    Timber.d("      old rotation=${oldShape.rotation}, new rotation=${newShape.rotation}")
+                    newShape
+                } else shape
             }
         }
     }

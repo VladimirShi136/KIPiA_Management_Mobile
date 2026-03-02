@@ -4,27 +4,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import android.graphics.Paint
 import com.kipia.management.mobile.data.entities.Device
 
 fun DrawScope.drawDevice(
     device: Device,
     isSelected: Boolean,
-    scale: Float = 1f  // Добавляем параметр scale
+    scale: Float = 1f
 ) {
-    // Базовый размер
     val baseSize = 60f
-    // Масштабированный размер
     val size = baseSize * scale
 
-    // Основной цвет устройства по типу
     val deviceColor = when (device.type) {
-        "Датчик" -> Color(0xFF2196F3) // Синий
-        "Контроллер" -> Color(0xFF4CAF50) // Зеленый
-        "Исполнительное устройство" -> Color(0xFFFF9800) // Оранжевый
-        else -> Color(0xFF9C27B0) // Фиолетовый
+        "Датчик" -> Color(0xFF2196F3)
+        "Контроллер" -> Color(0xFF4CAF50)
+        "Исполнительное устройство" -> Color(0xFFFF9800)
+        else -> Color(0xFF9C27B0)
     }
 
     // Основной прямоугольник
@@ -34,44 +28,39 @@ fun DrawScope.drawDevice(
         size = Size(size, size)
     )
 
-    // Обводка выделения
+    // Если выделен - рисуем градиентную обводку через несколько слоев
     if (isSelected) {
+        val pulse = ((System.currentTimeMillis() % 2000) / 2000f * 0.5f + 0.5f)
+
+        // Внешняя обводка (полупрозрачная)
         drawRect(
-            color = Color.White,
+            color = Color.White.copy(alpha = pulse * 0.3f),
+            topLeft = Offset(-4f * scale, -4f * scale),
+            size = Size(size + 8f * scale, size + 8f * scale),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f * scale)
+        )
+
+        // Основная светящаяся обводка
+        drawRect(
+            color = Color.Cyan.copy(alpha = pulse),
             topLeft = Offset(-2f * scale, -2f * scale),
             size = Size(size + 4f * scale, size + 4f * scale),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f * scale)
+        )
+    } else {
+        // Обычная тонкая рамка
+        drawRect(
+            color = Color.Black.copy(alpha = 0.3f),
+            topLeft = Offset.Zero,
+            size = Size(size, size),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f * scale)
         )
     }
 
-    // Черная рамка
-    drawRect(
-        color = Color.Black,
-        topLeft = Offset.Zero,
-        size = Size(size, size),
-        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f)
-    )
-
-    // Кружок внутри
+    // Минималистичный кружок
     drawCircle(
-        color = Color.White,
-        radius = size / 6,
+        color = Color.White.copy(alpha = 0.8f),
+        radius = size / 8,
         center = Offset(size / 2, size / 2)
     )
-
-    // ID прибора (для отладки)
-    drawIntoCanvas { canvas ->
-        val paint = Paint().apply {
-            color = android.graphics.Color.WHITE
-            textSize = 20f * scale
-            textAlign = Paint.Align.CENTER
-            isAntiAlias = true
-        }
-        canvas.nativeCanvas.drawText(
-            device.id.toString(),
-            size / 2,
-            size / 2 + 8 * scale,
-            paint
-        )
-    }
 }

@@ -55,9 +55,37 @@ fun IndicatorLayer(
                         .padding(8.dp)
                 )
             }
+            EditorMode.DEVICE -> {
+                if (editorState.uiState.pendingDeviceId != null) {
+                    // Режим ожидания размещения
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF4CAF50).copy(alpha = 0.9f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "👆 Нажмите на канвас для размещения прибора",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    ModeChip(
+                        mode = editorState.uiState.mode,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(8.dp)
+                    )
+                }
+            }
             EditorMode.RECTANGLE, EditorMode.LINE,
             EditorMode.ELLIPSE, EditorMode.RHOMBUS,
-            EditorMode.TEXT, EditorMode.DEVICE -> {
+            EditorMode.TEXT -> {
                 ModeChip(
                     mode = editorState.uiState.mode,
                     modifier = Modifier

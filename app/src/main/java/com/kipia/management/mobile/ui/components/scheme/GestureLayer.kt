@@ -361,9 +361,8 @@ private fun findTargetCorrect(
     baseDeviceSize: Float
 ): Pair<String, DragTargetType>? {
 
-    // 1. Проверяем приборы с ПРАВИЛЬНОЙ формулой
+    // 1. Проверяем приборы (уже правильно)
     for (device in devices.reversed()) {
-        // (мировая_координата * scale) + offset
         val screenX = device.x * scale + offset.x
         val screenY = device.y * scale + offset.y
         val screenSize = baseDeviceSize * scale
@@ -380,13 +379,14 @@ private fun findTargetCorrect(
         }
     }
 
-    // 2. Для фигур используем обратную трансформацию
+    // 2. Проверяем фигуры - используем обратную трансформацию для получения мировых координат
     val canvasPoint = Offset(
         x = (screenPoint.x - offset.x) / scale,
         y = (screenPoint.y - offset.y) / scale
     )
 
     for (shape in shapes.reversed()) {
+        // Важно: shape.contains ожидает мировые координаты!
         if (shape.contains(canvasPoint)) {
             return Pair(shape.id, DragTargetType.SHAPE)
         }

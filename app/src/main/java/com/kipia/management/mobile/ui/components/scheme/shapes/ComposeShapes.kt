@@ -3,16 +3,9 @@ package com.kipia.management.mobile.ui.components.scheme.shapes
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawBasicShapeSelectionMarker
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawEllipse
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawLine
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawLineShapeSelectionMarker
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawRectangle
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawRhombus
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.drawText
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInEllipse
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInLine
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInRectangle
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInRhombus
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInText
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.transformPointToShapeSpace
@@ -30,7 +23,13 @@ interface ComposeShape {
     var strokeColor: Color
     var strokeWidth: Float
 
+    /**
+     * ВНИМАНИЕ: Этот метод больше не используется для отрисовки!
+     * Отрисовка происходит в ShapeLayer через drawShapeWithGlobalTransform.
+     * Метод оставлен для обратной совместимости и может быть пустым.
+     */
     fun draw(drawScope: DrawScope, isSelected: Boolean)
+
     fun contains(point: Offset): Boolean
 
     fun copy(): ComposeShape
@@ -54,32 +53,30 @@ data class ComposeRectangle(
     override var strokeWidth: Float = 2f,
     var cornerRadius: Float = 0f
 ) : ComposeShape {
-    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        with(drawScope) {
-            drawRectangle(
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = fillColor,
-                strokeColor = strokeColor,
-                strokeWidth = strokeWidth,
-                cornerRadius = cornerRadius
-            )
 
-            if (isSelected) {
-                drawBasicShapeSelectionMarker(width, height)
-            }
-        }
+    // Метод больше не используется для отрисовки
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        // Оставляем пустым или можно добавить комментарий
     }
 
     override fun contains(point: Offset): Boolean {
         val localPoint = transformPointToShapeSpace(point, x, y, width, height, rotation)
-        return ShapeUtils.isPointInRectangle(localPoint, width, height)
+        return isPointInRectangle(localPoint, width, height)
     }
 
-    override fun copy(): ComposeRectangle = this.copy(id = this.id)
+    override fun copy(): ComposeRectangle = ComposeRectangle(
+        id = this.id,
+        x = this.x,
+        y = this.y,
+        width = this.width,
+        height = this.height,
+        rotation = this.rotation,
+        fillColor = this.fillColor,
+        strokeColor = this.strokeColor,
+        strokeWidth = this.strokeWidth,
+        cornerRadius = this.cornerRadius
+    )
+
     override fun copyWithId(): ComposeRectangle = this.copy(id = "rect_${System.currentTimeMillis()}")
     override fun copyWithPosition(x: Float, y: Float): ComposeRectangle = this.copy(x = x, y = y)
     override fun copyWithFillColor(color: Color): ComposeRectangle = this.copy(fillColor = color)
@@ -103,33 +100,10 @@ data class ComposeLine(
     var endX: Float = 100f,
     var endY: Float = 0f
 ) : ComposeShape {
-    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        with(drawScope) {
-            // Основная линия
-            drawLine(
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                startX = startX,
-                startY = startY,
-                endX = endX,
-                endY = endY,
-                strokeColor = strokeColor,
-                strokeWidth = strokeWidth
-            )
 
-            // Маркер выделения
-            if (isSelected) {
-                drawLineShapeSelectionMarker(
-                    startX = startX,
-                    startY = startY,
-                    endX = endX,
-                    endY = endY
-                )
-            }
-        }
+    // Метод больше не используется для отрисовки
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        // Оставляем пустым
     }
 
     override fun contains(point: Offset): Boolean {
@@ -142,40 +116,38 @@ data class ComposeLine(
             rotation = rotation
         )
 
-        // Вычисляем позиции концов линии в локальных координатах
-        val lineStartX = startX - width / 2
-        val lineStartY = startY - height / 2
-        val lineEndX = endX - width / 2
-        val lineEndY = endY - height / 2
-
+        // ВАЖНО: Эти вычисления должны соответствовать тому, как линия рисуется в ShapeLayer
+        // В ShapeLayer линия рисуется от (startX, startY) до (endX, endY) в локальных координатах
+        // Без дополнительных смещений, так как мы уже применили translate
         return isPointInLine(
             point = localPoint,
-            start = Offset(lineStartX, lineStartY),
-            end = Offset(lineEndX, lineEndY),
+            start = Offset(startX, startY),
+            end = Offset(endX, endY),
             strokeWidth = strokeWidth
         )
     }
 
-    override fun copy(): ComposeLine =
-        this.copy(id = this.id)  // Сохраняем ID для обновлений
+    override fun copy(): ComposeLine = ComposeLine(
+        id = this.id,
+        x = this.x,
+        y = this.y,
+        width = this.width,
+        height = this.height,
+        rotation = this.rotation,
+        fillColor = this.fillColor,
+        strokeColor = this.strokeColor,
+        strokeWidth = this.strokeWidth,
+        startX = this.startX,
+        startY = this.startY,
+        endX = this.endX,
+        endY = this.endY
+    )
 
-    override fun copyWithId(): ComposeLine =
-        this.copy(id = "line_${System.currentTimeMillis()}")  // Новый ID для дублирования
-
-    override fun copyWithPosition(
-        x: Float,
-        y: Float
-    ): ComposeLine = this.copy(x = x, y = y)
-
-    // Реализация новых методов
-    override fun copyWithFillColor(color: Color): ComposeLine =
-        this.copy(fillColor = color)
-
-    override fun copyWithStrokeColor(color: Color): ComposeLine =
-        this.copy(strokeColor = color)
-
-    override fun copyWithStrokeWidth(width: Float): ComposeLine =
-        this.copy(strokeWidth = width)
+    override fun copyWithId(): ComposeLine = this.copy(id = "line_${System.currentTimeMillis()}")
+    override fun copyWithPosition(x: Float, y: Float): ComposeLine = this.copy(x = x, y = y)
+    override fun copyWithFillColor(color: Color): ComposeLine = this.copy(fillColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeLine = this.copy(strokeColor = color)
+    override fun copyWithStrokeWidth(width: Float): ComposeLine = this.copy(strokeWidth = width)
 }
 
 // Эллипс
@@ -190,28 +162,9 @@ data class ComposeEllipse(
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 2f
 ) : ComposeShape {
-    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        with(drawScope) {
-            // Основная фигура
-            drawEllipse(
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = fillColor,
-                strokeColor = strokeColor,
-                strokeWidth = strokeWidth
-            )
 
-            // Маркер выделения
-            if (isSelected) {
-                drawBasicShapeSelectionMarker(
-                    width = width,
-                    height = height
-                )
-            }
-        }
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        // Оставляем пустым
     }
 
     override fun contains(point: Offset): Boolean {
@@ -226,26 +179,23 @@ data class ComposeEllipse(
         return isPointInEllipse(localPoint, width, height)
     }
 
-    override fun copy(): ComposeEllipse =
-        this.copy(id = this.id)  // Сохраняем ID для обновлений
+    override fun copy(): ComposeEllipse = ComposeEllipse(
+        id = this.id,
+        x = this.x,
+        y = this.y,
+        width = this.width,
+        height = this.height,
+        rotation = this.rotation,
+        fillColor = this.fillColor,
+        strokeColor = this.strokeColor,
+        strokeWidth = this.strokeWidth
+    )
 
-    override fun copyWithId(): ComposeEllipse =
-        this.copy(id = "ellipse_${System.currentTimeMillis()}")  // Новый ID для дублирования
-
-    override fun copyWithPosition(
-        x: Float,
-        y: Float
-    ): ComposeEllipse = this.copy(x = x, y = y)
-
-    // Реализация новых методов
-    override fun copyWithFillColor(color: Color): ComposeEllipse =
-        this.copy(fillColor = color)
-
-    override fun copyWithStrokeColor(color: Color): ComposeEllipse =
-        this.copy(strokeColor = color)
-
-    override fun copyWithStrokeWidth(width: Float): ComposeEllipse =
-        this.copy(strokeWidth = width)
+    override fun copyWithId(): ComposeEllipse = this.copy(id = "ellipse_${System.currentTimeMillis()}")
+    override fun copyWithPosition(x: Float, y: Float): ComposeEllipse = this.copy(x = x, y = y)
+    override fun copyWithFillColor(color: Color): ComposeEllipse = this.copy(fillColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeEllipse = this.copy(strokeColor = color)
+    override fun copyWithStrokeWidth(width: Float): ComposeEllipse = this.copy(strokeWidth = width)
 }
 
 // Текст
@@ -265,33 +215,9 @@ data class ComposeText(
     var isBold: Boolean = false,
     var isItalic: Boolean = false
 ) : ComposeShape {
-    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        with(drawScope) {
-            // Основной текст
-            drawText(
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                text = text,
-                fontSize = fontSize,
-                textColor = textColor,
-                fillColor = fillColor,
-                strokeColor = strokeColor,
-                strokeWidth = strokeWidth,
-                isBold = isBold,
-                isItalic = isItalic
-            )
 
-            // Маркер выделения
-            if (isSelected) {
-                drawBasicShapeSelectionMarker(
-                    width = width,
-                    height = height
-                )
-            }
-        }
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        // Оставляем пустым
     }
 
     override fun contains(point: Offset): Boolean {
@@ -306,26 +232,28 @@ data class ComposeText(
         return isPointInText(localPoint, width, height)
     }
 
-    override fun copy(): ComposeText =
-        this.copy(id = this.id)  // Сохраняем ID для обновлений
+    override fun copy(): ComposeText = ComposeText(
+        id = this.id,
+        x = this.x,
+        y = this.y,
+        width = this.width,
+        height = this.height,
+        rotation = this.rotation,
+        fillColor = this.fillColor,
+        strokeColor = this.strokeColor,
+        strokeWidth = this.strokeWidth,
+        text = this.text,
+        fontSize = this.fontSize,
+        textColor = this.textColor,
+        isBold = this.isBold,
+        isItalic = this.isItalic
+    )
 
-    override fun copyWithId(): ComposeText =
-        this.copy(id = "text_${System.currentTimeMillis()}")  // Новый ID для дублирования
-
-    override fun copyWithPosition(
-        x: Float,
-        y: Float
-    ): ComposeText = this.copy(x = x, y = y)
-
-    // Реализация новых методов
-    override fun copyWithFillColor(color: Color): ComposeText =
-        this.copy(fillColor = color)
-
-    override fun copyWithStrokeColor(color: Color): ComposeText =
-        this.copy(strokeColor = color)
-
-    override fun copyWithStrokeWidth(width: Float): ComposeText =
-        this.copy(strokeWidth = width)
+    override fun copyWithId(): ComposeText = this.copy(id = "text_${System.currentTimeMillis()}")
+    override fun copyWithPosition(x: Float, y: Float): ComposeText = this.copy(x = x, y = y)
+    override fun copyWithFillColor(color: Color): ComposeText = this.copy(fillColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeText = this.copy(strokeColor = color)
+    override fun copyWithStrokeWidth(width: Float): ComposeText = this.copy(strokeWidth = width)
 }
 
 // Ромб
@@ -340,28 +268,9 @@ data class ComposeRhombus(
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 2f
 ) : ComposeShape {
-    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        with(drawScope) {
-            // Основная фигура
-            drawRhombus(
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = fillColor,
-                strokeColor = strokeColor,
-                strokeWidth = strokeWidth
-            )
 
-            // Маркер выделения
-            if (isSelected) {
-                drawBasicShapeSelectionMarker(
-                    width = width,
-                    height = height
-                )
-            }
-        }
+    override fun draw(drawScope: DrawScope, isSelected: Boolean) {
+        // Оставляем пустым
     }
 
     override fun contains(point: Offset): Boolean {
@@ -376,31 +285,27 @@ data class ComposeRhombus(
         return isPointInRhombus(localPoint, width, height)
     }
 
-    override fun copy(): ComposeRhombus =
-        this.copy(id = this.id)  // Сохраняем ID для обновлений
+    override fun copy(): ComposeRhombus = ComposeRhombus(
+        id = this.id,
+        x = this.x,
+        y = this.y,
+        width = this.width,
+        height = this.height,
+        rotation = this.rotation,
+        fillColor = this.fillColor,
+        strokeColor = this.strokeColor,
+        strokeWidth = this.strokeWidth
+    )
 
-    override fun copyWithId(): ComposeRhombus =
-        this.copy(id = "rhombus_${System.currentTimeMillis()}")  // Новый ID для дублирования
-
-    override fun copyWithPosition(
-        x: Float,
-        y: Float
-    ): ComposeRhombus = this.copy(x = x, y = y)
-
-    // Реализация новых методов
-    override fun copyWithFillColor(color: Color): ComposeRhombus =
-        this.copy(fillColor = color)
-
-    override fun copyWithStrokeColor(color: Color): ComposeRhombus =
-        this.copy(strokeColor = color)
-
-    override fun copyWithStrokeWidth(width: Float): ComposeRhombus =
-        this.copy(strokeWidth = width)
+    override fun copyWithId(): ComposeRhombus = this.copy(id = "rhombus_${System.currentTimeMillis()}")
+    override fun copyWithPosition(x: Float, y: Float): ComposeRhombus = this.copy(x = x, y = y)
+    override fun copyWithFillColor(color: Color): ComposeRhombus = this.copy(fillColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeRhombus = this.copy(strokeColor = color)
+    override fun copyWithStrokeWidth(width: Float): ComposeRhombus = this.copy(strokeWidth = width)
 }
 
 // Фабрика фигур
 object ComposeShapeFactory {
-
     fun create(shapeType: EditorMode): ComposeShape {
         return when (shapeType) {
             EditorMode.RECTANGLE -> createRectangle()
@@ -408,7 +313,7 @@ object ComposeShapeFactory {
             EditorMode.ELLIPSE -> createEllipse()
             EditorMode.TEXT -> createText()
             EditorMode.RHOMBUS -> createRhombus()
-            else -> throw IllegalArgumentException("Unsupported shape type")
+            else -> throw IllegalArgumentException("Unsupported shape type: $shapeType")
         }
     }
 
@@ -416,7 +321,7 @@ object ComposeShapeFactory {
         return ComposeRectangle(
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
-            strokeWidth = 2f,
+            strokeWidth = 2f
         )
     }
 
@@ -428,8 +333,8 @@ object ComposeShapeFactory {
             startY = 0f,
             endX = 100f,
             endY = 0f,
-            width = 110f,
-            height = 20f,
+            width = 100f,  // Установите width = endX, если линия должна занимать всю ширину
+            height = 20f
         )
     }
 
@@ -437,13 +342,13 @@ object ComposeShapeFactory {
         return ComposeEllipse(
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
-            strokeWidth = 2f,
+            strokeWidth = 2f
         )
     }
 
     fun createText(): ComposeText {
         return ComposeText(
-            text = "Новый текст",
+            text = "",
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
             strokeWidth = 1f,
@@ -451,6 +356,8 @@ object ComposeShapeFactory {
             textColor = Color.Black,
             isBold = false,
             isItalic = false,
+            width = 50f,  // Минимальная ширина
+            height = 24f  // Минимальная высота
         )
     }
 
@@ -458,7 +365,7 @@ object ComposeShapeFactory {
         return ComposeRhombus(
             fillColor = Color.Transparent,
             strokeColor = Color.Black,
-            strokeWidth = 2f,
+            strokeWidth = 2f
         )
     }
 

@@ -124,7 +124,7 @@ fun SchemeCanvas(
             onShapeDrag = onShapeDrag,
             onDeviceDrag = onDeviceDrag,
             onTransform = onTransform,
-            debugMode = true,
+            debugMode = false,
             modifier = Modifier
                 .matchParentSize()
                 .pointerInteropFilter { motionEvent ->

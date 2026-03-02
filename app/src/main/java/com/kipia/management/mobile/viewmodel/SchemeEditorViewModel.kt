@@ -57,7 +57,9 @@ data class EditorUIState(
     val showShapeProperties: Boolean = false,
     val showDeviceProperties: Boolean = false,
     val showTextInputDialog: Boolean = false,
-    val textInputPosition: Offset? = null
+    val textInputPosition: Offset? = null,
+    val pendingDeviceId: Int? = null,
+    val pendingShapeMode: EditorMode? = null
 )
 
 data class EditorState(
@@ -142,6 +144,12 @@ class SchemeEditorViewModel @Inject constructor(
                     scheme?.let {
                         val schemeData = it.getSchemeData()
 
+                        Timber.d("💾 ЗАГРУЗКА СХЕМЫ:")
+                        Timber.d("   Фигур в JSON: ${schemeData.shapes.size}")
+                        schemeData.shapes.forEach { shapeData ->
+                            Timber.d("   📥 ${shapeData.type}: rotation=${shapeData.rotation}, pos=(${shapeData.x}, ${shapeData.y})")
+                        }
+
                         // Сначала обновляем editorState с правильным именем схемы
                         _editorState.update { state ->
                             state.copy(
@@ -160,7 +168,9 @@ class SchemeEditorViewModel @Inject constructor(
 
                         // 3. Теперь загружаем фигуры и устройства
                         schemeData.shapes.forEach { shapeData ->
-                            shapeManager.addShape(shapeData.toComposeShape())
+                            val shape = shapeData.toComposeShape()
+                            Timber.d("   → Создана фигура с rotation=${shape.rotation}")
+                            shapeManager.addShape(shape)
                         }
 
                         val locations = deviceLocationRepository.getLocationsForScheme(id)
@@ -297,13 +307,6 @@ class SchemeEditorViewModel @Inject constructor(
         )
     }
 
-    // Функция для сброса вида (будет вызываться из UI)
-    fun resetView() {
-        val newScale = 1f
-        val newOffset = calculateCenteredOffset(newScale)
-        updateCanvasTransform(newScale, newOffset, resetOffset = true)
-    }
-
     // ============ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ ДАННЫХ ============
 
     fun markAsDirty() {
@@ -327,6 +330,12 @@ class SchemeEditorViewModel @Inject constructor(
                 x = position.x - width / 2
                 y = position.y - height / 2
             }
+
+            // Ограничиваем позицию при создании
+            val maxX = _editorState.value.canvasState.width - width
+            val maxY = _editorState.value.canvasState.height - height
+            x = x.coerceIn(0f, maxX)
+            y = y.coerceIn(0f, maxY)
         }
 
         commandManager.execute(
@@ -338,13 +347,21 @@ class SchemeEditorViewModel @Inject constructor(
         )
     }
 
-    fun addTextShape(text: String, position: Offset) {
+    fun addTextShape(text: String, position: Offset, fontSize: Float = 16f) {
         val textShape = ComposeShapeFactory.createText().apply {
             this.text = text
-            this.width = (text.length * 10f + 30f).coerceAtLeast(50f)
-            this.height = 40f
+            this.fontSize = fontSize
+            // Рассчитываем размеры на основе текста
+            this.width = (text.length * fontSize * 0.6f + 20f).coerceAtLeast(50f)
+            this.height = fontSize * 1.5f
             x = position.x
             y = position.y
+
+            // Ограничиваем позицию
+            val maxX = _editorState.value.canvasState.width - width
+            val maxY = _editorState.value.canvasState.height - height
+            x = x.coerceIn(0f, maxX)
+            y = y.coerceIn(0f, maxY)
         }
 
         commandManager.execute(
@@ -357,12 +374,33 @@ class SchemeEditorViewModel @Inject constructor(
     }
 
     fun moveShape(shapeId: String, delta: Offset) {
+        // Получаем текущую фигуру
+        val currentShape = shapes.value.find { it.id == shapeId } ?: return
+
+        // Вычисляем новую позицию
+        val newX = currentShape.x + delta.x
+        val newY = currentShape.y + delta.y
+
+        // Ограничиваем границами холста
+        // Для фигур координаты x,y - это левый верхний угол
+        val maxX = _editorState.value.canvasState.width - currentShape.width
+        val maxY = _editorState.value.canvasState.height - currentShape.height
+
+        val clampedX = newX.coerceIn(0f, maxX)
+        val clampedY = newY.coerceIn(0f, maxY)
+
+        // Если позиция изменилась после ограничения, корректируем delta
+        val clampedDelta = Offset(clampedX - currentShape.x, clampedY - currentShape.y)
+
+        // Если реального перемещения нет - выходим
+        if (clampedDelta == Offset.Zero) return
+
         commandManager.execute(
             MoveShapeCommand(
                 shapeManager = shapeManager,
                 onStateChange = { markAsDirty() },
                 shapeId = shapeId,
-                delta = delta
+                delta = clampedDelta
             )
         )
     }
@@ -379,6 +417,35 @@ class SchemeEditorViewModel @Inject constructor(
             )
         )
     }
+
+    fun updateShape(shape: ComposeShape) {
+        // Находим старую версию фигуры
+        val oldShape = shapes.value.find { it.id == shape.id }?.copy()
+
+        Timber.d("🔄 Updating shape ${shape.id}:")
+        Timber.d("   new rotation=${shape.rotation}, old rotation=${oldShape?.rotation}")
+        Timber.d("   new width=${shape.width}, old width=${oldShape?.width}")
+        Timber.d("   new height=${shape.height}, old height=${oldShape?.height}")
+
+        commandManager.execute(object : Command {
+            override fun execute() {
+                shapeManager.updateShape(shape.id) {
+                    Timber.d("   Executing update: setting rotation=${shape.rotation}")
+                    shape
+                }
+                markAsDirty()
+            }
+
+            override fun undo() {
+                oldShape?.let { it ->
+                    Timber.d("   Undoing shape update: restoring rotation=${it.rotation}")
+                    shapeManager.updateShape(shape.id) { it }
+                    markAsDirty()
+                }
+            }
+        })
+    }
+
 
     fun updateShapeFillColor(shapeId: String, color: Color) {
         val shape = shapes.value.find { it.id == shapeId } ?: return
@@ -397,6 +464,7 @@ class SchemeEditorViewModel @Inject constructor(
     fun updateShapeStrokeColor(shapeId: String, color: Color) {
         val shape = shapes.value.find { it.id == shapeId } ?: return
 
+        // Для текста strokeColor - это цвет текста
         commandManager.execute(
             UpdateShapeStrokeColorCommand(
                 shapeManager = shapeManager,
@@ -508,6 +576,97 @@ class SchemeEditorViewModel @Inject constructor(
         )
     }
 
+    // ============ РАЗМЕЩЕНИЕ УСТРОЙСТВ НА КАНВАСЕ ============
+
+    fun selectDeviceForPlacement(deviceId: Int) {
+        Timber.d("📱 Выбран прибор ID=$deviceId для размещения")
+        _editorState.update { state ->
+            state.copy(
+                uiState = state.uiState.copy(
+                    mode = EditorMode.DEVICE,
+                    pendingDeviceId = deviceId
+                )
+            )
+        }
+    }
+
+    fun placeDeviceAtPosition(position: Offset) {
+        val pendingDeviceId = _editorState.value.uiState.pendingDeviceId
+        if (pendingDeviceId != null) {
+            Timber.d("📍 Размещаем прибор ID=$pendingDeviceId на позиции $position")
+            addDevice(pendingDeviceId, position)
+
+            // Сбрасываем состояние
+            _editorState.update { state ->
+                state.copy(
+                    uiState = state.uiState.copy(
+                        mode = EditorMode.SELECT,
+                        pendingDeviceId = null
+                    )
+                )
+            }
+        }
+    }
+
+    // ============ РАЗМЕЩЕНИЕ ФИГУР ============
+
+    fun selectShapeForPlacement(shapeMode: EditorMode) {
+        Timber.d("📐 Выбрана фигура $shapeMode для размещения")
+        _editorState.update { state ->
+            state.copy(
+                uiState = state.uiState.copy(
+                    mode = shapeMode,
+                    pendingShapeMode = shapeMode
+                )
+            )
+        }
+    }
+
+    fun placeShapeAtPosition(position: Offset) {
+        val pendingShapeMode = _editorState.value.uiState.pendingShapeMode
+        if (pendingShapeMode != null) {
+            Timber.d("📍 Размещаем фигуру $pendingShapeMode на позиции $position")
+
+            // Для текста показываем диалог ввода, а не создаем сразу
+            if (pendingShapeMode == EditorMode.TEXT) {
+                // Показываем диалог ввода текста
+                _editorState.update { state ->
+                    state.copy(
+                        uiState = state.uiState.copy(
+                            showTextInputDialog = true,
+                            textInputPosition = position,
+                            pendingShapeMode = null // Сбрасываем pending режим
+                        )
+                    )
+                }
+            } else {
+                // Для остальных фигур создаем сразу
+                val newShape = ComposeShapeFactory.create(pendingShapeMode).apply {
+                    x = position.x
+                    y = position.y
+                }
+
+                commandManager.execute(
+                    AddShapeCommand(
+                        shapeManager = shapeManager,
+                        onStateChange = { markAsDirty() },
+                        shape = newShape
+                    )
+                )
+
+                // Сбрасываем состояние
+                _editorState.update { state ->
+                    state.copy(
+                        uiState = state.uiState.copy(
+                            mode = EditorMode.SELECT,
+                            pendingShapeMode = null
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     // ============ ВЫДЕЛЕНИЕ ============
 
     fun selectShape(shapeId: String?) {
@@ -518,7 +677,7 @@ class SchemeEditorViewModel @Inject constructor(
                     selectedDeviceId = null
                 ),
                 uiState = state.uiState.copy(
-                    showShapeProperties = shapeId != null,
+                    showShapeProperties = false,
                     showDeviceProperties = false
                 )
             )
@@ -534,7 +693,7 @@ class SchemeEditorViewModel @Inject constructor(
                 ),
                 uiState = state.uiState.copy(
                     showShapeProperties = false,
-                    showDeviceProperties = deviceId != null
+                    showDeviceProperties = false
                 )
             )
         }
@@ -590,7 +749,9 @@ class SchemeEditorViewModel @Inject constructor(
             state.copy(
                 uiState = state.uiState.copy(
                     showTextInputDialog = false,
-                    textInputPosition = null
+                    textInputPosition = null,
+                    mode = EditorMode.SELECT,  // Возвращаем режим SELECT
+                    pendingShapeMode = null     // Сбрасываем pending режим
                 )
             )
         }
@@ -604,6 +765,13 @@ class SchemeEditorViewModel @Inject constructor(
             val currentShapes = shapes.value
             val currentDevices = devices.value
 
+            // Отладка перед сохранением
+            Timber.d("💾 СОХРАНЕНИЕ СХЕМЫ:")
+            Timber.d("   Фигур: ${currentShapes.size}")
+            currentShapes.forEach { shape ->
+                Timber.d("   📐 ${shape.id}: rotation=${shape.rotation}, pos=(${shape.x}, ${shape.y})")
+            }
+
             val schemeData = SchemeData(
                 width = currentState.canvasState.width,
                 height = currentState.canvasState.height,
@@ -612,7 +780,11 @@ class SchemeEditorViewModel @Inject constructor(
                 gridEnabled = currentState.canvasState.gridEnabled,
                 gridSize = currentState.canvasState.gridSize,
                 devices = currentDevices,
-                shapes = currentShapes.map { it.toShapeData() }
+                shapes = currentShapes.map {
+                    it.toShapeData().also { shapeData ->
+                        Timber.d("   → ShapeData rotation=${shapeData.rotation}")
+                    }
+                }
             )
 
             val updatedScheme = currentState.scheme.setSchemeData(schemeData)

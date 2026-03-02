@@ -13,7 +13,6 @@ import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.utils.drawDevice
 import com.kipia.management.mobile.viewmodel.CanvasState
 import timber.log.Timber
-import kotlin.math.roundToInt
 
 @Composable
 fun DeviceLayer(
@@ -72,6 +71,10 @@ fun DeviceLayer(
         derivedStateOf { allDevices.associateBy { it.id } }
     }
 
+    LaunchedEffect(selectedDeviceId) {
+        Timber.d("🔴🔴🔴 DeviceLayer: selectedDeviceId = $selectedDeviceId")
+    }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -90,6 +93,11 @@ fun DeviceLayer(
                 val screenX = schemeDevice.x * canvasState.scale + canvasState.offset.x
                 val screenY = schemeDevice.y * canvasState.scale + canvasState.offset.y
                 val screenSize = device_size * canvasState.scale
+
+                val isSelected = schemeDevice.deviceId == selectedDeviceId
+                if (isSelected) {
+                    Timber.d("✨✨✨ Рисуем ВЫДЕЛЕННЫЙ прибор ${device.id}")
+                }
 
                 Timber.d("   Drawing device ${device.id} at screen($screenX, $screenY)")
 
