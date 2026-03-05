@@ -267,12 +267,14 @@ fun KIPiAApp(
             val topAppBarController = rememberTopAppBarController()
             val topAppBarState = topAppBarController.state.value
 
+            LaunchedEffect(Unit) {
+                topAppBarController.resetToDefault()
+            }
+
             // ★★★★ Колбэк для кнопки назад (мемоизирован) ★★★★
-            val onBackClick: () -> Unit = remember {
-                {
-                    Timber.d("Нажата кнопка 'Назад'")
-                    topAppBarState.onBackClick?.invoke() ?: navController.navigateUp()
-                }
+            val onBackClick: () -> Unit = {
+                Timber.d("Нажата кнопка 'Назад'")
+                topAppBarController.state.value.onBackClick?.invoke() ?: navController.navigateUp()
             }
 
             // ★★★★ Функция обновления BottomNav (мемоизирована) ★★★★
@@ -315,6 +317,10 @@ fun KIPiAApp(
                                 "deviceName" to "Прибор #${deviceId ?: "?"}",
                                 "onEdit" to { navController.navigate("device_edit/$deviceId") }
                             ))
+                        }
+
+                        route == "devices" -> {
+                            topAppBarController.resetToDefault()
                         }
 
                         route == "settings" -> {

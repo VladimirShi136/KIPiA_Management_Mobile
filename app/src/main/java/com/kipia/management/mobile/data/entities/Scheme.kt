@@ -134,19 +134,35 @@ data class ShapeData(
                 strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth
             )
-            "text" -> ComposeText(
-                id = id,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = parseColor(fillColor),
-                strokeColor = parseColor(strokeColor),
-                strokeWidth = strokeWidth,
-                text = properties["text"] as? String ?: "",
-                fontSize = properties["fontSize"] as? Float ?: 16f
-            )
+            "text" -> {
+                val fontSize = when (val value = properties["fontSize"]) {
+                    is Double -> value.toFloat()
+                    is Float -> value
+                    is Int -> value.toFloat()
+                    else -> 16f
+                }
+
+                val isBold = properties["isBold"] as? Boolean ?: false
+                val isItalic = properties["isItalic"] as? Boolean ?: false
+                val textColorStr = properties["textColor"] as? String ?: "#FF000000"
+
+                ComposeText(
+                    id = id,
+                    x = x,
+                    y = y,
+                    width = width,
+                    height = height,
+                    rotation = rotation,
+                    fillColor = parseColor(fillColor),
+                    strokeColor = parseColor(strokeColor),
+                    strokeWidth = strokeWidth,
+                    text = properties["text"] as? String ?: "",
+                    fontSize = fontSize,
+                    textColor = parseColor(textColorStr),
+                    isBold = isBold,
+                    isItalic = isItalic
+                )
+            }
             "rhombus" -> ComposeRhombus(
                 id = id,
                 x = x,
@@ -197,9 +213,10 @@ fun parseColor(colorHex: String): Color {
 fun ComposeShape.toShapeData(): ShapeData {
     Timber.d("💾 Сохранение фигуры в JSON:")
     Timber.d("   id: $id")
-    Timber.d("   rotation: $rotation")  // Проверяем, что rotation сохраняется
+    Timber.d("   rotation: $rotation")
     Timber.d("   position: ($x, $y)")
-    return ShapeData(
+
+    val shapeData = ShapeData(
         type = when (this) {
             is ComposeRectangle -> "rectangle"
             is ComposeLine -> "line"
@@ -227,11 +244,17 @@ fun ComposeShape.toShapeData(): ShapeData {
             )
             is ComposeText -> mapOf(
                 "text" to text,
-                "fontSize" to fontSize
+                "fontSize" to fontSize,
+                "textColor" to textColor.toArgbHex(),
+                "isBold" to isBold,
+                "isItalic" to isItalic
             )
             else -> emptyMap()
         }
     )
+
+    Timber.d("   properties: ${shapeData.properties}")
+    return shapeData
 }
 
 // Расширение для конвертации Compose Color в hex строку

@@ -128,6 +128,11 @@ class TopAppBarController {
                     canRedo = additionalParams["canRedo"] as? Boolean ?: false,
                     isDirty = additionalParams["isDirty"] as? Boolean ?: false,
 
+                    // ★ ПАРАМЕТРЫ ДЛЯ КНОПКИ «ОЧИСТИТЬ»
+                    showClearButton = true,  // По умолчанию показываем кнопку
+                    canClear = additionalParams["canClear"] as? Boolean ?: true,  // Можно переопределить
+                    onClearClick = additionalParams["onClearClick"] as? (() -> Unit),  // Колбэк из SchemeEditorScreen
+
                     // ★ КОЛБЭКИ
                     onBackClick = additionalParams["onBackClick"] as? (() -> Unit),
                     onSaveClick = additionalParams["onSaveClick"] as? (() -> Unit),
@@ -163,6 +168,9 @@ data class TopAppBarData(
     val isGridView: Boolean = true,
     val selectedLocation: String? = null,
     val selectedDeviceId: Int? = null,
+    // ★ ПОЛЯ ДЛЯ КНОПКИ ОЧИСТКИ В РЕДАКТОРЕ СХЕМ
+    val showClearButton: Boolean = false,
+    val canClear: Boolean = true,
     // ★ Общий колбэк
     val onSaveClick: (() -> Unit)? = null,
     // ★ КОЛБЭКИ ДЛЯ ПРИБОРОВ
@@ -195,7 +203,9 @@ data class TopAppBarData(
     val onUndoClick: (() -> Unit)? = null,
     val onRedoClick: (() -> Unit)? = null,
     val onPropertiesClick: (() -> Unit)? = null,
-    val onEditorSettingsClick: (() -> Unit)? = null
+    val onEditorSettingsClick: (() -> Unit)? = null,
+    // ★ КОЛБЭК ДЛЯ ОЧИСТКИ СХЕМЫ
+    val onClearClick: (() -> Unit)? = null
 ) {
     companion object {
         fun getDefault(): TopAppBarData {

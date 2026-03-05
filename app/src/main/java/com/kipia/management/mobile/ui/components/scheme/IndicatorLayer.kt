@@ -31,8 +31,8 @@ fun IndicatorLayer(
             ZoomIndicator(
                 scale = canvasState.scale,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 8.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 100.dp)
                     .padding(end = 16.dp)
             )
         }
@@ -41,7 +41,7 @@ fun IndicatorLayer(
         when (editorState.uiState.mode) {
             EditorMode.PAN_ZOOM -> {
                 ModeIndicator(
-                    text = "🔍 Режим панорамирования/зума",
+                    text = "🔍 Режим полета/зума",
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(8.dp)
@@ -110,13 +110,13 @@ fun ZoomIndicator(
         colors = CardDefaults.cardColors(
             containerColor = Color.Black.copy(alpha = 0.7f)
         ),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Text(
             text = "${displayScale}%",
             color = Color.White,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         )
     }
 }
@@ -150,8 +150,8 @@ fun ModeChip(
     val text = when (mode) {
         EditorMode.RECTANGLE -> "Режим: Прямоугольник"
         EditorMode.LINE -> "Режим: Линия"
-        EditorMode.ELLIPSE -> "Режим: Эллипс"
-        EditorMode.RHOMBUS -> "Режим: Ромб"
+        EditorMode.ELLIPSE -> "Режим: Круг"
+        EditorMode.RHOMBUS -> "Режим: Кран"
         EditorMode.TEXT -> "Режим: Текст"
         EditorMode.DEVICE -> "Режим: Добавление прибора"
         else -> ""

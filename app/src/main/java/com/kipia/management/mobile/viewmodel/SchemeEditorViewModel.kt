@@ -23,6 +23,7 @@ import com.kipia.management.mobile.repository.DeviceLocationRepository
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.repository.SchemeRepository
 import com.kipia.management.mobile.ui.components.scheme.shapes.*
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -123,6 +124,19 @@ class SchemeEditorViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // ============ isSchemeEmpty ============
+
+    val isSchemeEmpty: StateFlow<Boolean> = combine(
+        shapeManager.shapes,
+        deviceManager.devices
+    ) { shapes, devices ->
+        shapes.isEmpty() && devices.isEmpty()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
     )
 
     // ============ ЗАГРУЗКА ДАННЫХ ============
@@ -330,12 +344,16 @@ class SchemeEditorViewModel @Inject constructor(
                 x = position.x - width / 2
                 y = position.y - height / 2
             }
+        }
 
-            // Ограничиваем позицию при создании
-            val maxX = _editorState.value.canvasState.width - width
-            val maxY = _editorState.value.canvasState.height - height
-            x = x.coerceIn(0f, maxX)
-            y = y.coerceIn(0f, maxY)
+        val canvasWidth = _editorState.value.canvasState.width.toFloat()
+        val canvasHeight = _editorState.value.canvasState.height.toFloat()
+
+        // Проверяем, находится ли фигура в пределах канваса (с учетом поворота)
+        if (!ShapeUtils.isShapeWithinBounds(newShape, canvasWidth, canvasHeight)) {
+            Timber.d("❌ Cannot create shape outside canvas bounds")
+            // Можно показать сообщение пользователю
+            return
         }
 
         commandManager.execute(
@@ -351,17 +369,18 @@ class SchemeEditorViewModel @Inject constructor(
         val textShape = ComposeShapeFactory.createText().apply {
             this.text = text
             this.fontSize = fontSize
-            // Рассчитываем размеры на основе текста
             this.width = (text.length * fontSize * 0.6f + 20f).coerceAtLeast(50f)
             this.height = fontSize * 1.5f
             x = position.x
             y = position.y
+        }
 
-            // Ограничиваем позицию
-            val maxX = _editorState.value.canvasState.width - width
-            val maxY = _editorState.value.canvasState.height - height
-            x = x.coerceIn(0f, maxX)
-            y = y.coerceIn(0f, maxY)
+        val canvasWidth = _editorState.value.canvasState.width.toFloat()
+        val canvasHeight = _editorState.value.canvasState.height.toFloat()
+
+        if (!ShapeUtils.isShapeWithinBounds(textShape, canvasWidth, canvasHeight)) {
+            Timber.d("❌ Cannot create text shape outside canvas bounds")
+            return
         }
 
         commandManager.execute(
@@ -374,25 +393,28 @@ class SchemeEditorViewModel @Inject constructor(
     }
 
     fun moveShape(shapeId: String, delta: Offset) {
-        // Получаем текущую фигуру
         val currentShape = shapes.value.find { it.id == shapeId } ?: return
 
-        // Вычисляем новую позицию
         val newX = currentShape.x + delta.x
         val newY = currentShape.y + delta.y
 
-        // Ограничиваем границами холста
-        // Для фигур координаты x,y - это левый верхний угол
-        val maxX = _editorState.value.canvasState.width - currentShape.width
-        val maxY = _editorState.value.canvasState.height - currentShape.height
+        val canvasWidth = _editorState.value.canvasState.width.toFloat()
+        val canvasHeight = _editorState.value.canvasState.height.toFloat()
 
-        val clampedX = newX.coerceIn(0f, maxX)
-        val clampedY = newY.coerceIn(0f, maxY)
+        // Используем новую функцию для ограничения с учетом поворота
+        val clampedPosition = ShapeUtils.clampShapePosition(
+            shape = currentShape,
+            targetX = newX,
+            targetY = newY,
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight
+        )
 
-        // Если позиция изменилась после ограничения, корректируем delta
-        val clampedDelta = Offset(clampedX - currentShape.x, clampedY - currentShape.y)
+        val clampedDelta = Offset(
+            x = clampedPosition.x - currentShape.x,
+            y = clampedPosition.y - currentShape.y
+        )
 
-        // Если реального перемещения нет - выходим
         if (clampedDelta == Offset.Zero) return
 
         commandManager.execute(
@@ -464,7 +486,11 @@ class SchemeEditorViewModel @Inject constructor(
     fun updateShapeStrokeColor(shapeId: String, color: Color) {
         val shape = shapes.value.find { it.id == shapeId } ?: return
 
-        // Для текста strokeColor - это цвет текста
+        Timber.d("🎨 Updating stroke color for shape $shapeId:")
+        Timber.d("   old color=${shape.strokeColor}")
+        Timber.d("   new color=$color")
+        Timber.d("   shape type=${shape::class.simpleName}")
+
         commandManager.execute(
             UpdateShapeStrokeColorCommand(
                 shapeManager = shapeManager,
@@ -576,6 +602,15 @@ class SchemeEditorViewModel @Inject constructor(
         )
     }
 
+    fun clearScheme() {
+        shapes.value.toList().forEach { shapeManager.removeShape(it.id) }
+        devices.value.toList().forEach { deviceManager.removeDevice(it.deviceId) }
+        commandManager.clear()
+        clearSelection()
+        markAsDirty()
+        Timber.d("🧹 clearScheme: выполнено")
+    }
+
     // ============ РАЗМЕЩЕНИЕ УСТРОЙСТВ НА КАНВАСЕ ============
 
     fun selectDeviceForPlacement(deviceId: Int) {
@@ -593,10 +628,27 @@ class SchemeEditorViewModel @Inject constructor(
     fun placeDeviceAtPosition(position: Offset) {
         val pendingDeviceId = _editorState.value.uiState.pendingDeviceId
         if (pendingDeviceId != null) {
-            Timber.d("📍 Размещаем прибор ID=$pendingDeviceId на позиции $position")
+            val deviceSize = 60f
+            val canvasWidth = _editorState.value.canvasState.width.toFloat()
+            val canvasHeight = _editorState.value.canvasState.height.toFloat()
+
+            // Проверяем, что устройство помещается в канвас
+            if (position.x < 0 || position.x + deviceSize > canvasWidth ||
+                position.y < 0 || position.y + deviceSize > canvasHeight) {
+                Timber.d("❌ Cannot place device outside canvas bounds")
+                _editorState.update { state ->
+                    state.copy(
+                        uiState = state.uiState.copy(
+                            mode = EditorMode.SELECT,
+                            pendingDeviceId = null
+                        )
+                    )
+                }
+                return
+            }
+
             addDevice(pendingDeviceId, position)
 
-            // Сбрасываем состояние
             _editorState.update { state ->
                 state.copy(
                     uiState = state.uiState.copy(
@@ -627,23 +679,39 @@ class SchemeEditorViewModel @Inject constructor(
         if (pendingShapeMode != null) {
             Timber.d("📍 Размещаем фигуру $pendingShapeMode на позиции $position")
 
-            // Для текста показываем диалог ввода, а не создаем сразу
             if (pendingShapeMode == EditorMode.TEXT) {
-                // Показываем диалог ввода текста
                 _editorState.update { state ->
                     state.copy(
                         uiState = state.uiState.copy(
                             showTextInputDialog = true,
                             textInputPosition = position,
-                            pendingShapeMode = null // Сбрасываем pending режим
+                            pendingShapeMode = null
                         )
                     )
                 }
             } else {
-                // Для остальных фигур создаем сразу
                 val newShape = ComposeShapeFactory.create(pendingShapeMode).apply {
-                    x = position.x
-                    y = position.y
+                    x = position.x - width / 2
+                    y = position.y - height / 2
+                }
+
+                val canvasWidth = _editorState.value.canvasState.width.toFloat()
+                val canvasHeight = _editorState.value.canvasState.height.toFloat()
+
+                // Проверяем, что фигура помещается в канвас
+                if (!ShapeUtils.isShapeWithinBounds(newShape, canvasWidth, canvasHeight)) {
+                    Timber.d("❌ Cannot place shape outside canvas bounds")
+                    // Сбрасываем состояние
+                    _editorState.update { state ->
+                        state.copy(
+                            uiState = state.uiState.copy(
+                                mode = EditorMode.SELECT,
+                                pendingShapeMode = null
+                            )
+                        )
+                    }
+                    // Можно показать Toast или Snackbar
+                    return
                 }
 
                 commandManager.execute(
@@ -654,7 +722,6 @@ class SchemeEditorViewModel @Inject constructor(
                     )
                 )
 
-                // Сбрасываем состояние
                 _editorState.update { state ->
                     state.copy(
                         uiState = state.uiState.copy(

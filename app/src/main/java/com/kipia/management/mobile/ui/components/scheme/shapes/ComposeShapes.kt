@@ -3,10 +3,10 @@ package com.kipia.management.mobile.ui.components.scheme.shapes
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInButterfly
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInEllipse
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInLine
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInRectangle
-import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInRhombus
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.isPointInText
 import com.kipia.management.mobile.ui.components.scheme.utils.ShapeUtils.transformPointToShapeSpace
 import com.kipia.management.mobile.viewmodel.EditorMode
@@ -91,7 +91,7 @@ data class ComposeLine(
     override var y: Float = 0f,
     override var width: Float = 100f,
     override var height: Float = 20f,
-    override var rotation: Float = 0f,
+    override var rotation: Float = 0f,  // Угол поворота всей фигуры
     override var fillColor: Color = Color.Transparent,
     override var strokeColor: Color = Color.Black,
     override var strokeWidth: Float = 2f,
@@ -101,9 +101,8 @@ data class ComposeLine(
     var endY: Float = 0f
 ) : ComposeShape {
 
-    // Метод больше не используется для отрисовки
     override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        // Оставляем пустым
+        // Не используется - отрисовка через ShapeLayer
     }
 
     override fun contains(point: Offset): Boolean {
@@ -113,12 +112,9 @@ data class ComposeLine(
             shapeY = y,
             shapeWidth = width,
             shapeHeight = height,
-            rotation = rotation
+            rotation = rotation  // Учитываем поворот
         )
 
-        // ВАЖНО: Эти вычисления должны соответствовать тому, как линия рисуется в ShapeLayer
-        // В ShapeLayer линия рисуется от (startX, startY) до (endX, endY) в локальных координатах
-        // Без дополнительных смещений, так как мы уже применили translate
         return isPointInLine(
             point = localPoint,
             start = Offset(startX, startY),
@@ -240,7 +236,7 @@ data class ComposeText(
         height = this.height,
         rotation = this.rotation,
         fillColor = this.fillColor,
-        strokeColor = this.strokeColor,
+        strokeColor = this.strokeColor,  // Это поле должно быть!
         strokeWidth = this.strokeWidth,
         text = this.text,
         fontSize = this.fontSize,
@@ -252,7 +248,9 @@ data class ComposeText(
     override fun copyWithId(): ComposeText = this.copy(id = "text_${System.currentTimeMillis()}")
     override fun copyWithPosition(x: Float, y: Float): ComposeText = this.copy(x = x, y = y)
     override fun copyWithFillColor(color: Color): ComposeText = this.copy(fillColor = color)
-    override fun copyWithStrokeColor(color: Color): ComposeText = this.copy(strokeColor = color)
+    override fun copyWithStrokeColor(color: Color): ComposeText = this.copy(
+        strokeColor = color  // Убедитесь, что это правильно!
+    )
     override fun copyWithStrokeWidth(width: Float): ComposeText = this.copy(strokeWidth = width)
 }
 
@@ -270,7 +268,7 @@ data class ComposeRhombus(
 ) : ComposeShape {
 
     override fun draw(drawScope: DrawScope, isSelected: Boolean) {
-        // Оставляем пустым
+        // Не используется - отрисовка через ShapeLayer
     }
 
     override fun contains(point: Offset): Boolean {
@@ -282,7 +280,9 @@ data class ComposeRhombus(
             shapeHeight = height,
             rotation = rotation
         )
-        return isPointInRhombus(localPoint, width, height)
+
+        // Проверка попадания в фигуру "песочные часы"
+        return isPointInButterfly(localPoint, width, height)
     }
 
     override fun copy(): ComposeRhombus = ComposeRhombus(
@@ -298,9 +298,13 @@ data class ComposeRhombus(
     )
 
     override fun copyWithId(): ComposeRhombus = this.copy(id = "rhombus_${System.currentTimeMillis()}")
+
     override fun copyWithPosition(x: Float, y: Float): ComposeRhombus = this.copy(x = x, y = y)
+
     override fun copyWithFillColor(color: Color): ComposeRhombus = this.copy(fillColor = color)
+
     override fun copyWithStrokeColor(color: Color): ComposeRhombus = this.copy(strokeColor = color)
+
     override fun copyWithStrokeWidth(width: Float): ComposeRhombus = this.copy(strokeWidth = width)
 }
 

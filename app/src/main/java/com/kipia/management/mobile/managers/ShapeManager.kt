@@ -50,7 +50,12 @@ class ShapeManager {
     }
 
     fun updateStrokeColor(shapeId: String, color: Color) {
-        updateShape(shapeId) { it.copyWithStrokeColor(color) }
+        Timber.d("🎨 ShapeManager.updateStrokeColor: $shapeId -> $color")
+        updateShape(shapeId) {
+            it.copyWithStrokeColor(color).also { updatedShape ->
+                Timber.d("   Updated shape stroke color: ${updatedShape.strokeColor}")
+            }
+        }
     }
 
     fun updateFillColor(shapeId: String, color: Color) {

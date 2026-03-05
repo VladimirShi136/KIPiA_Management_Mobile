@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,12 +55,5 @@ class PreferencesRepository @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[DYNAMIC_COLORS_KEY] = enabled
         }
-    }
-
-    // Получить текущий режим синхронно (для не-Compose кода)
-    suspend fun getThemeModeSync(): Int {
-        return context.dataStore.data
-            .map { it[THEME_MODE_KEY] ?: THEME_FOLLOW_SYSTEM }
-            .first()
     }
 }

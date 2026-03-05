@@ -91,13 +91,13 @@ fun BottomShapeToolbar(
 
             item(key = "select") {
                 IconButton(onClick = { onModeChanged(EditorMode.SELECT) }) {
-                    Icon(Icons.Default.ArrowOutward, null)
+                    Icon(Icons.Default.TouchApp, null)
                 }
             }
 
             item(key = "panzoom") {
                 IconButton(onClick = { onModeChanged(EditorMode.PAN_ZOOM) }) {
-                    Icon(Icons.Default.ZoomIn, null)
+                    Icon(Icons.Default.SwipeVertical, null)
                 }
             }
 
@@ -113,7 +113,7 @@ fun BottomShapeToolbar(
                     onModeChanged(EditorMode.DEVICE)
                     onAddDevice()
                 }) {
-                    Icon(Icons.Default.DeviceHub, null)
+                    Icon(Icons.Default.Attachment, null)
                 }
             }
 
@@ -167,7 +167,7 @@ private fun ShapeCreationButton(
         )
     ) {
         Icon(
-            Icons.Default.Add,
+            Icons.Default.Category,
             contentDescription = "Создать фигуру",
             modifier = Modifier.size(20.dp)
         )
@@ -187,10 +187,10 @@ private fun ShapeCreationDropdownMenu(
     ) {
         val menuItems = remember {
             listOf(
-                Triple(EditorMode.RECTANGLE, "Прямоугольник", Icons.Default.CropSquare),
+                Triple(EditorMode.RECTANGLE, "Прямоугольник", Icons.Default.Rectangle),
                 Triple(EditorMode.LINE, "Линия", Icons.Default.HorizontalRule),
-                Triple(EditorMode.ELLIPSE, "Эллипс", Icons.Default.Circle),
-                Triple(EditorMode.RHOMBUS, "Ромб", Icons.Default.Diamond),
+                Triple(EditorMode.ELLIPSE, "Круг", Icons.Default.Circle),
+                Triple(EditorMode.RHOMBUS, "Кран", Icons.Default.HourglassFull),
                 Triple(EditorMode.TEXT, "Текст", Icons.Default.TextFields)
             )
         }
@@ -224,7 +224,7 @@ private fun ShapeActionsMenu(
             modifier = Modifier.size(40.dp)
         ) {
             Icon(
-                Icons.Default.ShapeLine,
+                Icons.Default.Construction,
                 contentDescription = "Действия с фигурой",
                 modifier = Modifier.size(20.dp)
             )
@@ -293,7 +293,7 @@ private fun DeviceActionsMenu(
             modifier = Modifier.size(40.dp)
         ) {
             Icon(
-                Icons.Default.Devices,
+                Icons.Default.Construction,
                 contentDescription = "Действия с прибором",
                 modifier = Modifier.size(20.dp)
             )

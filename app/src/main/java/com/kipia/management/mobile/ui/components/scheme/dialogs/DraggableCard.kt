@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,13 +25,12 @@ fun DraggableCard(
     ),
     elevation: CardElevation = CardDefaults.cardElevation(8.dp),
     showDragHandle: Boolean = true,
+    onClose: (() -> Unit)? = null,  // Добавляем опциональную кнопку закрытия
     onDrag: (Offset) -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
-
-    // Флаг для отслеживания, перетаскивается ли сейчас карточка
     var isDragging by remember { mutableStateOf(false) }
 
     Box(
@@ -60,30 +61,46 @@ fun DraggableCard(
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
-                if (showDragHandle) {
-                    // Визуальный индикатор для перетаскивания
-                    Box(
+                if (showDragHandle || onClose != null) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
-                        contentAlignment = Alignment.Center
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Три полоски - индикатор перетаскивания
-                        Row(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            repeat(3) { _ ->
-                                Box(
-                                    modifier = Modifier
-                                        .width(24.dp)
-                                        .height(4.dp)
-                                        .background(
-                                            color = MaterialTheme.colorScheme.primary.copy(
-                                                alpha = if (isDragging) 0.8f else 0.3f
-                                            ),
-                                            shape = RoundedCornerShape(2.dp)
-                                        )
+                        if (showDragHandle) {
+                            // Индикатор перетаскивания
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                repeat(3) { _ ->
+                                    Box(
+                                        modifier = Modifier
+                                            .width(24.dp)
+                                            .height(4.dp)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.primary.copy(
+                                                    alpha = if (isDragging) 0.8f else 0.3f
+                                                ),
+                                                shape = RoundedCornerShape(2.dp)
+                                            )
+                                    )
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier)
+                        }
+
+                        if (onClose != null) {
+                            IconButton(
+                                onClick = onClose,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }

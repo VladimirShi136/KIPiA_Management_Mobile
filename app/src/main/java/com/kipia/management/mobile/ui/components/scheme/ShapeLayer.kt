@@ -182,16 +182,31 @@ private fun DrawScope.drawShapeWithGlobalTransform(
 
         is ComposeRhombus -> {
             val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(scaledWidth / 2, 0f)
-                lineTo(scaledWidth, scaledHeight / 2)
-                lineTo(scaledWidth / 2, scaledHeight)
-                lineTo(0f, scaledHeight / 2)
+                val centerX = scaledWidth / 2
+                val centerY = scaledHeight / 2
+
+                // Левый треугольник - от левого верха до центра до левого низа
+                moveTo(0f, 0f)              // Левый верх (0,0)
+                lineTo(centerX, centerY)    // Центр
+                lineTo(0f, scaledHeight)    // Левый низ (0, height)
+                close()
+
+                // Правый треугольник - от правого верха до центра до правого низа
+                moveTo(scaledWidth, 0f)          // Правый верх (width,0)
+                lineTo(centerX, centerY)         // Центр
+                lineTo(scaledWidth, scaledHeight) // Правый низ (width, height)
                 close()
             }
 
+            // Заливка
             if (shape.fillColor != Color.Transparent) {
-                drawPath(path = path, color = shape.fillColor)
+                drawPath(
+                    path = path,
+                    color = shape.fillColor
+                )
             }
+
+            // Обводка
             if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
                 drawPath(
                     path = path,
@@ -205,7 +220,7 @@ private fun DrawScope.drawShapeWithGlobalTransform(
             // ТОЛЬКО ТЕКСТ, без фона и рамки
             drawIntoCanvas { canvas ->
                 val paint = android.graphics.Paint().apply {
-                    color = shape.textColor.toArgb()
+                    color = shape.strokeColor.toArgb()  // ← Здесь используется strokeColor!
                     textSize = shape.fontSize * scaleFactor
                     isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.CENTER
@@ -233,7 +248,7 @@ private fun DrawScope.drawShapeWithGlobalTransform(
 }
 
 /**
- * Рисует маркер выделения (синяя обводка, как у устройств)
+ * Рисует маркер выделения (синяя обводка по контуру фигуры)
  */
 private fun DrawScope.drawSelectionMarker(
     shape: ComposeShape,
@@ -248,7 +263,7 @@ private fun DrawScope.drawSelectionMarker(
             val scaledEndX = shape.endX * scaleFactor
             val scaledEndY = shape.endY * scaleFactor
 
-            // Синяя обводка вокруг линии (как у устройств)
+            // Синяя обводка вокруг линии
             drawLine(
                 color = Color.Cyan.copy(alpha = 0.8f),
                 start = Offset(scaledStartX, scaledStartY),
@@ -258,8 +273,63 @@ private fun DrawScope.drawSelectionMarker(
             )
         }
 
+        is ComposeEllipse -> {
+            // Для эллипса - рисуем овальную обводку по контуру
+            if (shape.fillColor != Color.Transparent) {
+                // Рисуем полупрозрачную заливку для лучшей видимости выделения
+                drawOval(
+                    color = Color.Cyan.copy(alpha = 0.2f),
+                    topLeft = Offset.Zero,
+                    size = Size(scaledWidth, scaledHeight)
+                )
+            }
+
+            // Рисуем синий контур по краю эллипса
+            drawOval(
+                color = Color.Cyan.copy(alpha = 0.8f),
+                topLeft = Offset.Zero,
+                size = Size(scaledWidth, scaledHeight),
+                style = Stroke(width = 2f * scaleFactor)
+            )
+        }
+
+        is ComposeRhombus -> {
+            // Для ромба - рисуем контур в форме песочных часов
+            val path = androidx.compose.ui.graphics.Path().apply {
+                val centerX = scaledWidth / 2
+                val centerY = scaledHeight / 2
+
+                // Левый треугольник
+                moveTo(0f, 0f)
+                lineTo(centerX, centerY)
+                lineTo(0f, scaledHeight)
+                close()
+
+                // Правый треугольник
+                moveTo(scaledWidth, 0f)
+                lineTo(centerX, centerY)
+                lineTo(scaledWidth, scaledHeight)
+                close()
+            }
+
+            // Рисуем полупрозрачную заливку
+            if (shape.fillColor != Color.Transparent) {
+                drawPath(
+                    path = path,
+                    color = Color.Cyan.copy(alpha = 0.2f)
+                )
+            }
+
+            // Рисуем синий контур
+            drawPath(
+                path = path,
+                color = Color.Cyan.copy(alpha = 0.8f),
+                style = Stroke(width = 2f * scaleFactor)
+            )
+        }
+
         else -> {
-            // Для остальных фигур - синяя рамка (как у устройств)
+            // Для остальных фигур (прямоугольник, текст) - синяя рамка
             drawRect(
                 color = Color.Cyan.copy(alpha = 0.8f),
                 topLeft = Offset.Zero,

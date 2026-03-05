@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.components.scheme.SchemesFilterMenu
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
@@ -98,9 +99,10 @@ private fun KeyedTopAppBarActions(
     topAppBarContent: Color,
     navController: NavController
 ) {
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+
     // Используем key чтобы гарантировать пересоздание при изменении типа экрана
     when {
-        // Редактор схем
         topAppBarState.showSchemeEditorActions -> {
             SchemeEditorActions(
                 topAppBarState = topAppBarState,
@@ -108,8 +110,7 @@ private fun KeyedTopAppBarActions(
             )
         }
 
-        // Экран схем с фильтрами
-        navController.currentDestination?.route == "schemes" -> {
+        currentRoute == "schemes" -> {
             SchemesScreenActions(
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent,
@@ -117,8 +118,7 @@ private fun KeyedTopAppBarActions(
             )
         }
 
-        // Экран фото
-        navController.currentDestination?.route == "photos" -> {
+        currentRoute == "photos" -> {
             PhotosScreenActions(
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent,
@@ -126,15 +126,13 @@ private fun KeyedTopAppBarActions(
             )
         }
 
-        // Главный экран приборов
-        navController.currentDestination?.route == "devices" -> {
+        currentRoute == "devices" -> {
             DevicesScreenActions(
                 topAppBarContent = topAppBarContent,
                 navController = navController
             )
         }
 
-        // Экран с кнопкой назад (device_edit, device_detail и т.д.)
         topAppBarState.showBackButton -> {
             BackButtonScreenActions(
                 topAppBarState = topAppBarState,
@@ -153,6 +151,24 @@ private fun SchemeEditorActions(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(end = 4.dp)
     ) {
+        // ★ КНОПКА «ОЧИСТИТЬ СХЕМУ»
+        if (topAppBarState.showClearButton) {
+            IconButton(
+                onClick = {
+                    Timber.d("Кнопка очистки схемы нажата")
+                    topAppBarState.onClearClick?.invoke()
+                },
+                enabled = topAppBarState.canClear
+            ) {
+                Icon(
+                    Icons.Default.Delete,  // Или другой подходящий икон
+                    contentDescription = "Очистить схему",
+                    tint = if (topAppBarState.canClear) topAppBarContent
+                    else topAppBarContent.copy(alpha = 0.35f)
+                )
+            }
+        }
+
         // Кнопка свойств схемы
         if (topAppBarState.showSchemeEditorActions) {
             IconButton(
@@ -272,8 +288,6 @@ private fun DevicesScreenActions(
     navController: NavController
 ) {
     val devicesViewModel: DevicesViewModel = hiltViewModel()
-
-    // Подписываемся только на нужные стейты
     val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
     val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
     val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()

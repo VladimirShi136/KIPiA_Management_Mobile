@@ -51,10 +51,12 @@ fun SchemeEditorScreen(
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val isSchemeEmpty by viewModel.isSchemeEmpty.collectAsStateWithLifecycle()
 
     // Локальные состояния диалогов
     var showAddDeviceDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showPropertiesDialog by remember { mutableStateOf(false) }
     var showShapePropertiesDialog by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
@@ -66,6 +68,7 @@ fun SchemeEditorScreen(
     // Колбэки
     val onBackClick = remember {
         {
+            Timber.d("🔙 onBackClick: isDirty=${editorState.uiState.isDirty}")
             if (editorState.uiState.isDirty) showExitDialog = true
             else onNavigateBack()
         }
@@ -84,13 +87,15 @@ fun SchemeEditorScreen(
         }
     }
 
+    val onClearClick = remember { { showClearConfirmDialog = true } }
+
     val onPropertiesClick = remember { { showPropertiesDialog = true } }
 
     // BackHandler
     BackHandler { onBackClick() }
 
     // TopAppBar
-    LaunchedEffect(schemeId, editorState.uiState.isDirty) {
+    LaunchedEffect(schemeId, editorState.uiState.isDirty, isSchemeEmpty) {
         topAppBarController?.setForScreen(
             screenRoute = "scheme_editor",
             additionalParams = mapOf(
@@ -99,7 +104,9 @@ fun SchemeEditorScreen(
                 "isDirty" to editorState.uiState.isDirty,
                 "onBackClick" to onBackClick,
                 "onSaveClick" to onSaveClick,
-                "onPropertiesClick" to onPropertiesClick
+                "onPropertiesClick" to onPropertiesClick,
+                "canClear" to !isSchemeEmpty,
+                "onClearClick" to onClearClick
             )
         )
     }
@@ -225,6 +232,26 @@ fun SchemeEditorScreen(
             )
         }
 
+        // Диалог очистки схемы
+        if (showClearConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirmDialog = false },
+                title = { Text("Очистка схемы") },
+                text = { Text("Все фигуры будут удалены, а устройства убраны со схемы. Продолжить?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.clearScheme()
+                        showClearConfirmDialog = false
+                    }) { Text("Очистить") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearConfirmDialog = false }) {
+                        Text("Отмена")
+                    }
+                }
+            )
+        }
+
         if (editorState.uiState.showTextInputDialog && editorState.uiState.textInputPosition != null) {
             SimpleTextInputDialog(
                 position = editorState.uiState.textInputPosition!!,
@@ -252,7 +279,7 @@ fun SchemeEditorScreen(
                         if (type == "fill") {
                             viewModel.updateShapeFillColor(shapeId, color)
                         } else {
-                            viewModel.updateShapeStrokeColor(shapeId, color)
+                            viewModel.updateShapeStrokeColor(shapeId, color)  // ← Для текста это сюда попадает
                         }
                         showColorPicker = false
                         colorPickerTarget = null
@@ -299,9 +326,11 @@ private fun SchemeCanvasContainer(
     val availableDevices by viewModel.availableDevices.collectAsStateWithLifecycle()
     val allDevices by viewModel.allDevices.collectAsStateWithLifecycle()
 
-    val onViewportSizeChanged = remember(viewModel) { { width: Int, height: Int ->
-        viewModel.updateViewportSize(width, height)
-    } }
+    val onViewportSizeChanged = remember(viewModel) {
+        { width: Int, height: Int ->
+            viewModel.updateViewportSize(width, height)
+        }
+    }
 
     val onTransform = remember {
         { scale: Float, offset: Offset, _: Boolean ->
@@ -309,7 +338,11 @@ private fun SchemeCanvasContainer(
         }
     }
 
-    val onCanvasClick = remember(editorState.uiState.mode, editorState.uiState.pendingDeviceId, editorState.uiState.pendingShapeMode) {
+    val onCanvasClick = remember(
+        editorState.uiState.mode,
+        editorState.uiState.pendingDeviceId,
+        editorState.uiState.pendingShapeMode
+    ) {
         { position: Offset ->
             Timber.d("🖱️ onCanvasClick: mode=${editorState.uiState.mode}, position=$position")
 
@@ -329,9 +362,11 @@ private fun SchemeCanvasContainer(
                         EditorMode.RHOMBUS, EditorMode.TEXT -> {
                             viewModel.addShape(editorState.uiState.mode, position)
                         }
+
                         EditorMode.DEVICE -> {
                             onAddDeviceDialogChange(true)
                         }
+
                         else -> {
                             Timber.d("🧹 Вызов clearSelection()")
                             viewModel.clearSelection()
@@ -656,169 +691,165 @@ private fun SimpleAddDeviceDialog(
     onDeviceSelected: (Device) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .wrapContentSize(Alignment.Center)
     ) {
-        Box(
+        DraggableCard(
             modifier = Modifier
-                .fillMaxSize()
-                .wrapContentSize(Alignment.Center)
+                .widthIn(min = 260.dp, max = 300.dp)  // Уменьшенная ширина
+                .heightIn(max = 450.dp),  // Ограничение высоты
+            showDragHandle = true,
+            onClose = onDismiss
         ) {
-            DraggableCard(
+            val scrollState = rememberScrollState()
+
+            Column(
                 modifier = Modifier
-                    .widthIn(min = 260.dp, max = 300.dp)  // Уменьшенная ширина
-                    .heightIn(max = 450.dp),  // Ограничение высоты
-                showDragHandle = true
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 8.dp)
             ) {
-                val scrollState = rememberScrollState()
+                // Заголовок
+                Text(
+                    text = "Выберите прибор",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                        .padding(horizontal = 8.dp)
-                ) {
-                    // Заголовок
-                    Text(
-                        text = "Выберите прибор",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                Text(
+                    text = "Схема: $schemeLocation",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
 
-                    Text(
-                        text = "Схема: $schemeLocation",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    if (devices.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
+                if (devices.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    Icons.Default.Info,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(40.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Нет доступных приборов",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    text = "Все приборы уже размещены",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Нет доступных приборов",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = "Все приборы уже размещены",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
                         }
-                    } else {
-                        // Счетчик доступных приборов
+                    }
+                } else {
+                    // Счетчик доступных приборов
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Text(
+                            text = "Доступно: ${devices.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .align(Alignment.CenterHorizontally)
+                        )
+                    }
+
+                    // Список приборов
+                    devices.forEach { device ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp),
+                                .padding(vertical = 4.dp)
+                                .clickable {
+                                    onDeviceSelected(device)
+                                    onDismiss()
+                                },
+                            shape = RoundedCornerShape(8.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 1.dp,
+                                pressedElevation = 4.dp
                             )
                         ) {
-                            Text(
-                                text = "Доступно: ${devices.size}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    .align(Alignment.CenterHorizontally)
-                            )
-                        }
-
-                        // Список приборов
-                        devices.forEach { device ->
-                            Card(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable {
-                                        onDeviceSelected(device)
-                                        onDismiss()
-                                    },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                elevation = CardDefaults.cardElevation(
-                                    defaultElevation = 1.dp,
-                                    pressedElevation = 4.dp
-                                )
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                Column(
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Column(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = device.name ?: device.type,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${device.type} • №${device.inventoryNumber}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = "Выбрать",
-                                        modifier = Modifier.size(20.dp),
-                                        tint = MaterialTheme.colorScheme.primary
+                                    Text(
+                                        text = device.name ?: device.type,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${device.type} • №${device.inventoryNumber}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = 0.7f
+                                        ),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
+
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "Выбрать",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Кнопка закрытия
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                    ) {
-                        Text("Отмена")
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Кнопка закрытия
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                ) {
+                    Text("Отмена")
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

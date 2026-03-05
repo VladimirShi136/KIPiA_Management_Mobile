@@ -32,7 +32,7 @@ fun GestureLayer(
     onTransform: (Float, Offset, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     key: Any? = null,
-    debugMode: Boolean = false  // Включаем отладку
+    debugMode: Boolean = false
 ) {
     remember(key) { key }
 
@@ -119,6 +119,8 @@ fun GestureLayer(
                         shapesProvider = { currentShapes },
                         devicesProvider = { currentDevices },
                         dragTarget = dragTarget,
+                        canvasWidth = canvasState.width.toFloat(),  // Добавляем
+                        canvasHeight = canvasState.height.toFloat(),
                         onShapeClick = { shapeId ->
                             currentOnShapeClick(shapeId)
                             if (debugMode) {
@@ -204,6 +206,8 @@ private suspend fun PointerInputScope.setupSelectionGestures(
     shapesProvider: () -> List<ComposeShape>,
     devicesProvider: () -> List<SchemeDevice>,
     dragTarget: MutableState<Pair<String, DragTargetType>?>,
+    canvasWidth: Float,  // Добавляем параметр
+    canvasHeight: Float, // Добавляем параметр
     onShapeClick: (String) -> Unit,
     onDeviceClick: (Int) -> Unit,
     onCanvasClick: (Offset) -> Unit,
@@ -231,6 +235,7 @@ private suspend fun PointerInputScope.setupSelectionGestures(
             Timber.d("🎯 DEBUG ========== TAP DETECTED ==========")
             Timber.d("📱 Экранные координаты: (${down.position.x}, ${down.position.y})")
             Timber.d("📐 Параметры: scale=$scale, offset=(${offset.x}, ${offset.y})")
+            Timber.d("📏 Canvas bounds: width=$canvasWidth, height=$canvasHeight")
 
             currentDevices.forEach { device ->
                 // Неправильная формула (текущая)
@@ -330,21 +335,27 @@ private suspend fun PointerInputScope.setupSelectionGestures(
                 y = (down.position.y - offset.y) / scale
             )
 
-            when {
-                target == null -> {
-                    Timber.d("📌 Пустой клик в canvas=$canvasPoint")
-                    onCanvasClick(canvasPoint)
-                }
-                target.second == DragTargetType.SHAPE -> {
-                    Timber.d("📌 Клик по фигуре: ${target.first}")
-                    onShapeClick(target.first)
-                }
-                target.second == DragTargetType.DEVICE -> {
-                    Timber.d("📌 Клик по прибору: ${target.first}")
-                    target.first.toIntOrNull()?.let { deviceId ->
-                        onDeviceClick(deviceId)
+            // Проверяем, находится ли точка в пределах канваса (используем переданные параметры)
+            if (canvasPoint.x in 0f..canvasWidth && canvasPoint.y in 0f..canvasHeight) {
+                when {
+                    target == null -> {
+                        Timber.d("📌 Пустой клик в canvas=$canvasPoint")
+                        onCanvasClick(canvasPoint)
+                    }
+                    target.second == DragTargetType.SHAPE -> {
+                        Timber.d("📌 Клик по фигуре: ${target.first}")
+                        onShapeClick(target.first)
+                    }
+                    target.second == DragTargetType.DEVICE -> {
+                        Timber.d("📌 Клик по прибору: ${target.first}")
+                        target.first.toIntOrNull()?.let { deviceId ->
+                            onDeviceClick(deviceId)
+                        }
                     }
                 }
+            } else {
+                Timber.d("📌 Клик вне канваса ($canvasPoint), игнорируем")
+                // Игнорируем клик - не вызываем onCanvasClick
             }
         }
 

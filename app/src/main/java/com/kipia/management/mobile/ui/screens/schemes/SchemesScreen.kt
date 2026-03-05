@@ -141,7 +141,6 @@ fun SchemesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp)  // Тот же padding, что в DevicesScreen
                 .windowInsetsPadding(
                     WindowInsets.navigationBars
                         .only(WindowInsetsSides.Bottom)
@@ -313,8 +312,8 @@ fun SchemesList(
     LazyColumn(
         state = scrollState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(16.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(6.dp)
     ) {
         items(schemesWithStatus.size, key = { index -> schemesWithStatus[index].scheme.id }) { index ->
             val item = schemesWithStatus[index]
