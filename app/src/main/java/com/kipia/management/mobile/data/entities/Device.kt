@@ -60,7 +60,10 @@ data class Device(
     val additionalInfo: String?,
 
     @ColumnInfo(name = "photos")
-    val photos: List<String> = emptyList()  // Room сам конвертирует через TypeConverter
+    val photos: List<String> = emptyList(),
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis()  // timestamp в миллисекундах
 ) {
     companion object {
         // Статусы из единого источника
@@ -92,5 +95,10 @@ data class Device(
 
     fun removePhoto(fileName: String): Device {
         return this.copy(photos = photos - fileName)
+    }
+
+    // метод для обновления времени
+    fun withUpdatedNow(): Device {
+        return this.copy(updatedAt = System.currentTimeMillis())
     }
 }

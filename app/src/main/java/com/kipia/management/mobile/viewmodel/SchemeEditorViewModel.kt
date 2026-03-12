@@ -182,9 +182,13 @@ class SchemeEditorViewModel @Inject constructor(
 
                         // 3. Теперь загружаем фигуры и устройства
                         schemeData.shapes.forEach { shapeData ->
-                            val shape = shapeData.toComposeShape()
-                            Timber.d("   → Создана фигура с rotation=${shape.rotation}")
-                            shapeManager.addShape(shape)
+                            try {
+                                val shape = shapeData.toComposeShape()
+                                shapeManager.addShape(shape)
+                                Timber.d("✅ Фигура добавлена: ${shapeData.type}")
+                            } catch (e: Exception) {
+                                Timber.e(e, "❌ Ошибка загрузки фигуры: type=${shapeData.type}, data=$shapeData")
+                            }
                         }
 
                         val locations = deviceLocationRepository.getLocationsForScheme(id)
@@ -529,30 +533,25 @@ class SchemeEditorViewModel @Inject constructor(
         val device = availableDevices.value.find { it.id == deviceId }
         if (device == null) {
             Timber.e("❌ Устройство с ID=$deviceId не найдено в availableDevices")
-            Timber.e("   availableDevices: ${availableDevices.value.map { it.id }}")
             return
         }
 
         Timber.d("✅ Устройство найдено: ${device.name}")
-        Timber.d("   Текущее кол-во устройств на схеме: ${deviceManager.devices.value.size}")
 
         commandManager.execute(
             AddDeviceCommand(
                 deviceManager = deviceManager,
-                onStateChange = { markAsDirty() },
+                onStateChange = {
+                    markAsDirty()
+                    // ✅ ВАЖНО: При добавлении устройства на схему, обновляем timestamp устройства
+                    viewModelScope.launch {
+                        deviceRepository.updateDeviceWithTimestamp(device)
+                    }
+                },
                 deviceId = deviceId,
                 position = position
             )
         )
-
-        // Проверяем после добавления
-        viewModelScope.launch {
-            delay(100) // Даем время на обновление
-            Timber.d("📊 После добавления: устройств на схеме = ${deviceManager.devices.value.size}")
-            deviceManager.devices.value.forEach {
-                Timber.d("   - ID=${it.deviceId} на (${it.x}, ${it.y})")
-            }
-        }
     }
 
     fun moveDevice(deviceId: Int, delta: Offset) {
@@ -585,9 +584,17 @@ class SchemeEditorViewModel @Inject constructor(
         commandManager.execute(
             MoveDeviceCommand(
                 deviceManager = deviceManager,
-                onStateChange = { markAsDirty() },
+                onStateChange = {
+                    markAsDirty()
+                    // ✅ ВАЖНО: При перемещении устройства на схеме, обновляем timestamp устройства
+                    viewModelScope.launch {
+                        deviceRepository.getDeviceByIdSync(deviceId)?.let { device ->
+                            deviceRepository.updateDeviceWithTimestamp(device)
+                        }
+                    }
+                },
                 deviceId = deviceId,
-                delta = clampedDelta  // Используем скорректированную delta
+                delta = clampedDelta
             )
         )
     }
@@ -596,7 +603,15 @@ class SchemeEditorViewModel @Inject constructor(
         commandManager.execute(
             RemoveDeviceCommand(
                 deviceManager = deviceManager,
-                onStateChange = { markAsDirty() },
+                onStateChange = {
+                    markAsDirty()
+                    // ✅ ВАЖНО: При удалении устройства со схемы, обновляем timestamp устройства
+                    viewModelScope.launch {
+                        deviceRepository.getDeviceByIdSync(deviceId)?.let { device ->
+                            deviceRepository.updateDeviceWithTimestamp(device)
+                        }
+                    }
+                },
                 deviceId = deviceId
             )
         )
@@ -857,12 +872,15 @@ class SchemeEditorViewModel @Inject constructor(
             val updatedScheme = currentState.scheme.setSchemeData(schemeData)
 
             val id = if (currentState.scheme.id == 0) {
-                schemeRepository.insertScheme(updatedScheme).toInt()
+                // Новая схема
+                schemeRepository.insertSchemeWithTimestamp(updatedScheme).toInt()
             } else {
-                schemeRepository.updateScheme(updatedScheme)
+                // Обновление существующей
+                schemeRepository.updateSchemeWithTimestamp(updatedScheme)
                 currentState.scheme.id
             }
 
+            // Сохраняем позиции устройств (это обновит device_locations)
             currentDevices.forEach { device ->
                 deviceLocationRepository.saveLocation(
                     DeviceLocation(
@@ -873,6 +891,10 @@ class SchemeEditorViewModel @Inject constructor(
                         rotation = device.rotation
                     )
                 )
+                // ✅ ВАЖНО: Обновляем timestamp самого устройства, так как изменилась его позиция
+                deviceRepository.getDeviceByIdSync(device.deviceId)?.let { fullDevice ->
+                    deviceRepository.updateDeviceWithTimestamp(fullDevice)
+                }
             }
 
             _editorState.update {

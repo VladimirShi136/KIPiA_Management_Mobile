@@ -30,4 +30,29 @@ interface SchemeDao {
 
     @Query("SELECT * FROM schemes")
     suspend fun getAllSchemesSync(): List<Scheme>
+
+    @Query("SELECT * FROM schemes ORDER BY id")
+    suspend fun getAllSchemesForExport(): List<Scheme>
+
+    @Transaction
+    suspend fun insertOrUpdateScheme(scheme: Scheme) {
+        val existingScheme = getSchemeById(scheme.id)
+        if (existingScheme == null) {
+            insertScheme(scheme)
+        } else {
+            if (scheme.updatedAt > existingScheme.updatedAt) {
+                updateScheme(scheme)
+            }
+        }
+    }
+
+    @Transaction
+    suspend fun insertOrUpdateSchemes(schemes: List<Scheme>) {
+        schemes.forEach { scheme ->
+            insertOrUpdateScheme(scheme)
+        }
+    }
+
+    @Query("SELECT MAX(updated_at) FROM schemes")
+    suspend fun getMaxUpdatedAt(): Long?
 }

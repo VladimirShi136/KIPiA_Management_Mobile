@@ -26,4 +26,23 @@ class SchemeRepositoryImpl @Inject constructor(
     override suspend fun getSchemeByName(name: String): Scheme? {
         return schemeDao.getSchemeByName(name)
     }
+
+    // Обёртки с авто-обновлением timestamp
+    override suspend fun insertSchemeWithTimestamp(scheme: Scheme): Long {
+        return schemeDao.insertScheme(scheme.withUpdatedNow())
+    }
+
+    override suspend fun updateSchemeWithTimestamp(scheme: Scheme) {
+        schemeDao.updateScheme(scheme.withUpdatedNow())
+    }
+
+    // Для экспорта
+    override suspend fun getAllSchemesForExport(): List<Scheme> = schemeDao.getAllSchemesForExport()
+
+    // Для импорта
+    override suspend fun importSchemes(schemes: List<Scheme>) {
+        schemeDao.insertOrUpdateSchemes(schemes)
+    }
+
+    override suspend fun getMaxUpdatedAt(): Long? = schemeDao.getMaxUpdatedAt()
 }

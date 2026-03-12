@@ -223,46 +223,11 @@ object ShapeUtils {
      * Получить границы линии с учетом поворота
      */
     private fun getLineBounds(shape: ComposeLine): Rect {
-        if (shape.rotation == 0f) {
-            return Rect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height)
-        }
-
-        val centerX = shape.x + shape.width / 2
-        val centerY = shape.y + shape.height / 2
-        val radians = Math.toRadians(shape.rotation.toDouble()).toFloat()
-
-        // Точки линии + учет толщины
-        val halfStroke = shape.strokeWidth / 2
-        val points = listOf(
-            Offset(shape.startX, shape.startY),
-            Offset(shape.endX, shape.endY),
-            Offset(shape.startX, shape.startY - halfStroke),
-            Offset(shape.startX, shape.startY + halfStroke),
-            Offset(shape.endX, shape.endY - halfStroke),
-            Offset(shape.endX, shape.endY + halfStroke)
-        )
-
-        var minX = Float.MAX_VALUE
-        var minY = Float.MAX_VALUE
-        var maxX = -Float.MAX_VALUE
-        var maxY = -Float.MAX_VALUE
-
-        points.forEach { point ->
-            val relX = point.x - shape.width / 2
-            val relY = point.y - shape.height / 2
-
-            val rotatedX = relX * cos(radians) - relY * sin(radians)
-            val rotatedY = relX * sin(radians) + relY * cos(radians)
-
-            val worldX = centerX + rotatedX
-            val worldY = centerY + rotatedY
-
-            minX = min(minX, worldX)
-            minY = min(minY, worldY)
-            maxX = max(maxX, worldX)
-            maxY = max(maxY, worldY)
-        }
-
+        // startX/endX — абсолютные координаты на холсте, используем их напрямую
+        val minX = min(shape.startX, shape.endX) - shape.strokeWidth
+        val minY = min(shape.startY, shape.endY) - shape.strokeWidth
+        val maxX = max(shape.startX, shape.endX) + shape.strokeWidth
+        val maxY = max(shape.startY, shape.endY) + shape.strokeWidth
         return Rect(minX, minY, maxX, maxY)
     }
 
@@ -293,7 +258,17 @@ object ShapeUtils {
             is ComposeRectangle -> shape.copy(x = targetX, y = targetY)
             is ComposeEllipse -> shape.copy(x = targetX, y = targetY)
             is ComposeRhombus -> shape.copy(x = targetX, y = targetY)
-            is ComposeLine -> shape.copy(x = targetX, y = targetY)
+            is ComposeLine -> {
+                val dx = targetX - shape.x
+                val dy = targetY - shape.y
+                shape.copy(
+                    x = targetX, y = targetY,
+                    startX = shape.startX + dx,
+                    startY = shape.startY + dy,
+                    endX = shape.endX + dx,
+                    endY = shape.endY + dy
+                )
+            }
             is ComposeText -> shape.copy(x = targetX, y = targetY)
             else -> shape
         }

@@ -123,7 +123,8 @@ class DeviceEditViewModel @Inject constructor(
                 }
 
                 val result = if (currentDevice.id > 0) {
-                    val rowsUpdated = repository.updateDevice(currentDevice)
+                    // Обновление существующего
+                    val rowsUpdated = repository.updateDeviceWithTimestamp(currentDevice)
                     if (rowsUpdated > 0) {
                         println("DEBUG: Устройство обновлено, затронуто строк: $rowsUpdated")
                         currentDevice
@@ -131,7 +132,8 @@ class DeviceEditViewModel @Inject constructor(
                         throw IllegalStateException("Устройство не найдено для обновления")
                     }
                 } else {
-                    val newId = repository.insertDevice(currentDevice)
+                    // Создание нового
+                    val newId = repository.insertDeviceWithTimestamp(currentDevice)
                     println("DEBUG: Устройство вставлено, новый ID: $newId")
                     currentDevice.copy(id = newId.toInt())
                 }

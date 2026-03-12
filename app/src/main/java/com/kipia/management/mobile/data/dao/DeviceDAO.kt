@@ -48,4 +48,34 @@ interface DeviceDao {
 
     @Query("SELECT COUNT(*) FROM devices WHERE location = :location")
     suspend fun countDevicesByLocation(location: String): Int
+
+    @Query("SELECT * FROM devices ORDER BY id")
+    suspend fun getAllDevicesForExport(): List<Device>
+
+    // Для импорта: вставить или обновить с проверкой updated_at
+    @Transaction
+    suspend fun insertOrUpdateDevice(device: Device) {
+        val existingDevice = getDeviceByIdSync(device.id)
+        if (existingDevice == null) {
+            // Новое устройство - вставляем
+            insertDevice(device)
+        } else {
+            // Существующее - обновляем только если новее
+            if (device.updatedAt > existingDevice.updatedAt) {
+                updateDevice(device)
+            }
+        }
+    }
+
+    // Для импорта: массовая вставка/обновление
+    @Transaction
+    suspend fun insertOrUpdateDevices(devices: List<Device>) {
+        devices.forEach { device ->
+            insertOrUpdateDevice(device)
+        }
+    }
+
+    // Получить максимальную дату обновления (для быстрой проверки нужна ли синхронизация)
+    @Query("SELECT MAX(updated_at) FROM devices")
+    suspend fun getMaxUpdatedAt(): Long?
 }

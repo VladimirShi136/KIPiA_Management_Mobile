@@ -15,18 +15,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.managers.CameraManager
+import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.shared.NotificationManager
-import com.kipia.management.mobile.managers.PhotoManager
-import com.kipia.management.mobile.viewmodel.DeviceEditViewModel
 import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
+import com.kipia.management.mobile.viewmodel.DeviceEditViewModel
 import kotlinx.coroutines.launch
+
+// =============================================================================
+// DeviceEditScreen
+// =============================================================================
 
 @Composable
 fun DeviceEditScreen(
@@ -36,54 +42,90 @@ fun DeviceEditScreen(
     viewModel: DeviceEditViewModel = hiltViewModel(),
     notificationManager: NotificationManager,
     deleteViewModel: DeviceDeleteViewModel = hiltViewModel(),
-    photoManager: PhotoManager // ✅ ИСПРАВЛЕНО: убираем hiltViewModel() так как PhotoManager не ViewModel
+    photoManager: PhotoManager
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    // Устанавливаем колбэки для TopAppBar
+    // Менеджер камеры — живёт столько же, сколько экран
+    val cameraManager = remember { CameraManager(context) }
+
+    // ------------------------------------------------------------------
+    // Лончеры
+    // ------------------------------------------------------------------
+
+    // Съёмка фото камерой
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            val uri = cameraManager.consumePendingUri()
+            uri?.let { capturedUri ->
+                scope.launch {
+                    handlePhotoSelected(
+                        uri = capturedUri,
+                        device = device,
+                        photoManager = photoManager,
+                        onUpdate = { photos -> viewModel.updateDevice { it.copy(photos = photos) } },
+                        onError = { msg -> snackbarHostState.showSnackbar(msg) }
+                    )
+                    // Удаляем временный файл после сохранения
+                    cameraManager.cleanupTempFile(capturedUri)
+                }
+            }
+        } else {
+            // Пользователь отменил съёмку — очищаем pending URI
+            cameraManager.consumePendingUri()
+        }
+    }
+
+    // Запрос разрешения камеры
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val launched = cameraManager.onPermissionResult(isGranted, cameraLauncher)
+        if (!launched) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Нет разрешения на использование камеры")
+            }
+        }
+    }
+
+    // Выбор фото из галереи
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { selectedUri ->
+            scope.launch {
+                handlePhotoSelected(
+                    uri = selectedUri,
+                    device = device,
+                    photoManager = photoManager,
+                    onUpdate = { photos -> viewModel.updateDevice { it.copy(photos = photos) } },
+                    onError = { msg -> snackbarHostState.showSnackbar(msg) }
+                )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Колбэки TopAppBar
+    // ------------------------------------------------------------------
+
     LaunchedEffect(viewModel) {
         topAppBarController.updateState(
             topAppBarController.state.value.copy(
-                onSaveClick = {
-                    println("DEBUG: Сохранение вызвано из TopAppBar")
-                    viewModel.saveDevice()
-                },
+                onSaveClick = { viewModel.saveDevice() },
                 onDeleteClick = {
-                    println("DEBUG: Удаление вызвано из TopAppBar")
-                    scope.launch {
-                        deleteViewModel.checkAndShowDialog(device)
-                    }
+                    scope.launch { deleteViewModel.checkAndShowDialog(device) }
                 }
             )
         )
     }
 
-    // Обработчик состояния
-    LaunchedEffect(uiState) {
-        when {
-            uiState.isSaved -> {
-                println("DEBUG: Устройство сохранено - возвращаемся назад")
-                onNavigateBack()
-            }
-
-            uiState.isDeleted -> {
-                println("DEBUG: Устройство удалено")
-                onNavigateBack()
-            }
-
-            uiState.error != null -> {
-                scope.launch {
-                    snackbarHostState.showSnackbar("Ошибка: ${uiState.error}")
-                }
-                viewModel.clearError()
-            }
-        }
-    }
-
-    // Сбрасываем колбэки при выходе
     DisposableEffect(Unit) {
         onDispose {
             topAppBarController.updateState(
@@ -95,154 +137,106 @@ fun DeviceEditScreen(
         }
     }
 
-    // Инициализация
-    LaunchedEffect(key1 = deviceId) {
-        println("DEBUG DeviceEditScreen: инициализация, deviceId=$deviceId")
-        if (deviceId != null && deviceId > 0) {
-            viewModel.loadDevice(deviceId)
-        } else {
-            // Для нового устройства
-            viewModel.updateDevice {
-                Device.createEmpty().copy(
-                    type = "Манометр",
-                    status = "В работе"
-                )
+    // ------------------------------------------------------------------
+    // Реакция на состояние ViewModel
+    // ------------------------------------------------------------------
+
+    LaunchedEffect(uiState) {
+        when {
+            uiState.isSaved -> onNavigateBack()
+            uiState.isDeleted -> onNavigateBack()
+            uiState.error != null -> {
+                scope.launch { snackbarHostState.showSnackbar("Ошибка: ${uiState.error}") }
+                viewModel.clearError()
             }
         }
     }
 
-    // Диалог удаления из deleteViewModel
+    // ------------------------------------------------------------------
+    // Инициализация
+    // ------------------------------------------------------------------
+
+    LaunchedEffect(deviceId) {
+        if (deviceId != null && deviceId > 0) {
+            viewModel.loadDevice(deviceId)
+        } else {
+            viewModel.updateDevice {
+                Device.createEmpty().copy(type = "Манометр", status = "В работе")
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // UI
+    // ------------------------------------------------------------------
+
     val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
 
-    // UI
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        // Форма редактирования
+    Box(modifier = Modifier.fillMaxSize()) {
         DeviceEditForm(
             device = device,
             uiState = uiState,
-            onTypeChanged = { type ->
-                println("DEBUG: onTypeChanged called with: '$type'")
-                viewModel.updateDevice { it.copy(type = type) }
-            },
-            onNameChanged = { name ->
-                println("DEBUG: onNameChanged called with: '$name'")
-                viewModel.updateDevice { it.copy(name = name) }
-            },
-            onManufacturerChanged = { manufacturer ->
-                println("DEBUG: onManufacturerChanged called with: '$manufacturer'")
-                viewModel.updateDevice { it.copy(manufacturer = manufacturer) }
-            },
-            onInventoryNumberChanged = { inventoryNumber ->
-                println("DEBUG: onInventoryNumberChanged called with: '$inventoryNumber'")
-                viewModel.updateDevice { it.copy(inventoryNumber = inventoryNumber) }
-            },
-            onYearChanged = { yearStr ->
-                println("DEBUG: onYearChanged called with: '$yearStr'")
-                val year = yearStr.takeIf { it.isNotBlank() }?.toIntOrNull()
-                viewModel.updateDevice { it.copy(year = year) }
-            },
-            onMeasurementLimitChanged = { measurementLimit ->
-                println("DEBUG: onMeasurementLimitChanged called with: '$measurementLimit'")
-                viewModel.updateDevice { it.copy(measurementLimit = measurementLimit) }
-            },
-            onAccuracyClassChanged = { accuracyStr ->
-                println("DEBUG: onAccuracyClassChanged called with: '$accuracyStr'")
-                val accuracy = accuracyStr.takeIf { it.isNotBlank() }?.toDoubleOrNull()
-                viewModel.updateDevice { it.copy(accuracyClass = accuracy) }
-            },
-            onLocationChanged = { location ->
-                println("DEBUG: onLocationChanged called with: '$location'")
-                viewModel.updateDevice { it.copy(location = location) }
-            },
-            onValveNumberChanged = { valveNumber ->
-                println("DEBUG: onValveNumberChanged called with: '$valveNumber'")
-                viewModel.updateDevice { it.copy(valveNumber = valveNumber) }
-            },
-            onStatusChanged = { status ->
-                println("DEBUG: onStatusChanged called with: '$status'")
-                viewModel.updateDevice { it.copy(status = status) }
-            },
-            onAdditionalInfoChanged = { additionalInfo ->
-                println("DEBUG: onAdditionalInfoChanged called with: '$additionalInfo'")
-                viewModel.updateDevice { it.copy(additionalInfo = additionalInfo) }
-            },
-            onPhotoSelected = { uri ->
-                scope.launch {
-                    // ✅ ИСПРАВЛЕНО: используем Device напрямую
-                    val currentDevice = device ?: return@launch
-                    val result = photoManager.savePhotoForDevice(currentDevice, uri)
-
-                    result.onSuccess { photoResult ->
-                        // Обновляем устройство с новым фото
-                        viewModel.updateDevice {
-                            it.copy(photos = photoResult.device.photos)
-                        }
-                    }.onFailure { error ->
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Ошибка сохранения фото: ${error.message}")
-                        }
-                    }
-                }
-            },
+            photoManager = photoManager,
+            onTypeChanged = { viewModel.updateDevice { d -> d.copy(type = it) } },
+            onNameChanged = { viewModel.updateDevice { d -> d.copy(name = it) } },
+            onManufacturerChanged = { viewModel.updateDevice { d -> d.copy(manufacturer = it) } },
+            onInventoryNumberChanged = { viewModel.updateDevice { d -> d.copy(inventoryNumber = it) } },
+            onYearChanged = { viewModel.updateDevice { d -> d.copy(year = it.toIntOrNull()) } },
+            onMeasurementLimitChanged = { viewModel.updateDevice { d -> d.copy(measurementLimit = it) } },
+            onAccuracyClassChanged = { viewModel.updateDevice { d -> d.copy(accuracyClass = it.toDoubleOrNull()) } },
+            onLocationChanged = { viewModel.updateDevice { d -> d.copy(location = it) } },
+            onValveNumberChanged = { viewModel.updateDevice { d -> d.copy(valveNumber = it) } },
+            onStatusChanged = { viewModel.updateDevice { d -> d.copy(status = it) } },
+            onAdditionalInfoChanged = { viewModel.updateDevice { d -> d.copy(additionalInfo = it) } },
             onPhotoDeleted = { photoIndex ->
                 device?.let { currentDevice ->
-                    val currentPhotos = currentDevice.photos
-
-                    if (currentPhotos.isNotEmpty() && photoIndex < currentPhotos.size) {
+                    val photos = currentDevice.photos
+                    if (photoIndex in photos.indices) {
                         scope.launch {
-                            val fileName = currentPhotos[photoIndex]
-                            val success = photoManager.deleteDevicePhoto(currentDevice, fileName)
-
-                            if (success) {
-                                val updatedPhotos = currentPhotos.toMutableList().apply {
-                                    removeAt(photoIndex)
-                                }
-                                viewModel.updateDevice {
-                                    it.copy(photos = updatedPhotos)
-                                }
+                            val deleted = photoManager.deleteDevicePhoto(currentDevice, photos[photoIndex])
+                            if (deleted) {
+                                val updated = photos.toMutableList().apply { removeAt(photoIndex) }
+                                viewModel.updateDevice { it.copy(photos = updated) }
                             } else {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Не удалось удалить фото")
-                                }
+                                snackbarHostState.showSnackbar("Не удалось удалить фото")
                             }
                         }
                     }
                 }
             },
-            photoManager = photoManager, // ✅ ИСПРАВЛЕНО: передаем как параметр
+            onTakePhotoClick = {
+                val launched = cameraManager.launch(permissionLauncher, cameraLauncher)
+                if (!launched) {
+                    scope.launch { snackbarHostState.showSnackbar("Не удалось создать файл для камеры") }
+                }
+            },
+            onChooseFromGalleryClick = {
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         )
 
-        // Диалог удаления
         deleteDialogData?.let { dialogData ->
             DeviceDeleteDialog(
                 device = dialogData.device,
                 scheme = dialogData.scheme,
                 deviceCountInLocation = dialogData.deviceCountInLocation,
                 isLastInLocation = dialogData.isLastInLocation,
-                onDismiss = {
-                    deleteViewModel.dismissDialog()
-                },
+                onDismiss = { deleteViewModel.dismissDialog() },
                 onConfirm = { deleteScheme ->
                     scope.launch {
-                        try {
-                            viewModel.deleteDevice(deleteScheme)
-                            deleteViewModel.dismissDialog()
-                        } catch (e: Exception) {
-                            deleteViewModel.dismissDialog()
-                            snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
-                        }
+                        runCatching { viewModel.deleteDevice(deleteScheme) }
+                            .onFailure { snackbarHostState.showSnackbar("Ошибка удаления: ${it.message}") }
+                        deleteViewModel.dismissDialog()
                     }
                 }
             )
         }
 
-        // Snackbar для уведомлений
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -252,11 +246,37 @@ fun DeviceEditScreen(
     }
 }
 
+// =============================================================================
+// Общая suspend-функция сохранения фото (галерея + камера)
+// =============================================================================
+
+private suspend fun handlePhotoSelected(
+    uri: Uri,
+    device: Device?,
+    photoManager: PhotoManager,
+    onUpdate: (List<String>) -> Unit,
+    onError: suspend (String) -> Unit
+) {
+    val currentDevice = device ?: run {
+        onError("Устройство не загружено")
+        return
+    }
+
+    photoManager.savePhotoForDevice(currentDevice, uri)
+        .onSuccess { result -> onUpdate(result.device.photos) }
+        .onFailure { onError("Ошибка сохранения фото: ${it.message}") }
+}
+
+// =============================================================================
+// DeviceEditForm
+// =============================================================================
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceEditForm(
     device: Device?,
     uiState: com.kipia.management.mobile.viewmodel.DeviceEditUiState,
+    photoManager: PhotoManager,
     onTypeChanged: (String) -> Unit,
     onNameChanged: (String) -> Unit,
     onManufacturerChanged: (String) -> Unit,
@@ -268,35 +288,29 @@ fun DeviceEditForm(
     onValveNumberChanged: (String) -> Unit,
     onStatusChanged: (String) -> Unit,
     onAdditionalInfoChanged: (String) -> Unit,
-    onPhotoSelected: (Uri) -> Unit,
     onPhotoDeleted: (Int) -> Unit,
-    photoManager: PhotoManager, // ✅ ИСПРАВЛЕНО: получаем как параметр
+    onTakePhotoClick: () -> Unit,
+    onChooseFromGalleryClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DeviceEditViewModel = hiltViewModel()
 ) {
     val safeDevice = device ?: Device.createEmpty()
-
-    var isTypeExpanded by remember { mutableStateOf(false) }
-    var isStatusExpanded by remember { mutableStateOf(false) }
-
-    // Используем StateFlow из ViewModel
     val isLocationDropdownExpanded by viewModel.isLocationDropdownExpanded.collectAsStateWithLifecycle()
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
 
-    val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        uri?.let(onPhotoSelected)
-    }
+    var showPhotoOptions by remember { mutableStateOf(false) }
+    var isTypeExpanded by remember { mutableStateOf(false) }
+    var isStatusExpanded by remember { mutableStateOf(false) }
 
-    // ✅ ИСПРАВЛЕНО: получаем полные пути к фото
+    // Полные пути к фото
     val photoPaths = remember(safeDevice, photoManager) {
         safeDevice.photos.mapNotNull { fileName ->
             photoManager.getFullPhotoPath(safeDevice, fileName)
-        }.filter { path -> path != null && path.isNotBlank() }
+                .takeIf { !it.isNullOrBlank() }
+        }
     }
 
-    // Локальные состояния для полей ввода
+    // Локальные состояния полей ввода
     var typeText by remember { mutableStateOf(safeDevice.type) }
     var inventoryNumberText by remember { mutableStateOf(safeDevice.inventoryNumber) }
     var locationText by remember { mutableStateOf(safeDevice.location) }
@@ -309,7 +323,6 @@ fun DeviceEditForm(
     var statusText by remember { mutableStateOf(safeDevice.status) }
     var additionalInfoText by remember { mutableStateOf(safeDevice.additionalInfo ?: "") }
 
-    // Обновляем локальные состояния при изменении device
     LaunchedEffect(safeDevice) {
         typeText = safeDevice.type
         inventoryNumberText = safeDevice.inventoryNumber
@@ -324,210 +337,119 @@ fun DeviceEditForm(
         additionalInfoText = safeDevice.additionalInfo ?: ""
     }
 
+    // Диалог выбора источника фото
+    if (showPhotoOptions) {
+        PhotoSourceDialog(
+            onDismiss = { showPhotoOptions = false },
+            onTakePhoto = {
+                showPhotoOptions = false
+                onTakePhotoClick()
+            },
+            onChooseFromGallery = {
+                showPhotoOptions = false
+                onChooseFromGalleryClick()
+            }
+        )
+    }
+
     Column(
         modifier = modifier.padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Основное фото
+
+        // ---- Фото --------------------------------------------------------
+
         DeviceEditSectionTitle("Основное фото")
         DeviceEditMainPhotoSection(
-            photoPaths = photoPaths, // ✅ ИСПРАВЛЕНО
-            onSelectPhoto = {
-                photoPicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            }
+            photoPaths = photoPaths,
+            onPhotoClick = { showPhotoOptions = true }
         )
 
-        // Основная информация
+        // ---- Основная информация -----------------------------------------
+
         DeviceEditSectionTitle("Основная информация")
 
-        // Тип прибора (простое текстовое поле)
-        OutlinedTextField(
+        DeviceTextField(
             value = typeText,
-            onValueChange = { newValue ->
-                typeText = newValue
-                onTypeChanged(newValue)
-            },
-            label = {
-                Text(
-                    "Тип прибора *",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            singleLine = true,
+            onValueChange = { typeText = it; onTypeChanged(it) },
+            label = "Тип прибора *",
+            placeholder = "Например: Манометр, Термометр и т.д.",
             isError = uiState.typeError != null,
-            placeholder = {
-                Text("Например: Манометр, Термометр и т.д.")
-            }
+            errorText = uiState.typeError
         )
 
-        uiState.typeError?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-            )
-        }
-
-        OutlinedTextField(
+        DeviceTextField(
             value = nameText,
-            onValueChange = { newValue ->
-                nameText = newValue
-                onNameChanged(newValue)
-            },
-            label = { Text("Наименование", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            singleLine = true
+            onValueChange = { nameText = it; onNameChanged(it) },
+            label = "Наименование"
         )
 
-        OutlinedTextField(
+        DeviceTextField(
             value = manufacturerText,
-            onValueChange = { newValue ->
-                manufacturerText = newValue
-                onManufacturerChanged(newValue)
-            },
-            label = { Text("Производитель") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            singleLine = true
+            onValueChange = { manufacturerText = it; onManufacturerChanged(it) },
+            label = "Производитель"
         )
 
-        OutlinedTextField(
+        DeviceTextField(
             value = inventoryNumberText,
-            onValueChange = { newValue ->
-                inventoryNumberText = newValue
-                onInventoryNumberChanged(newValue)
-            },
-            label = { Text("Инвентарный номер *") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            singleLine = true,
-            isError = uiState.inventoryNumberError != null
+            onValueChange = { inventoryNumberText = it; onInventoryNumberChanged(it) },
+            label = "Инвентарный номер *",
+            isError = uiState.inventoryNumberError != null,
+            errorText = uiState.inventoryNumberError
         )
 
-        uiState.inventoryNumberError?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-            )
-        }
-
-        OutlinedTextField(
+        DeviceTextField(
             value = yearText,
-            onValueChange = { newValue ->
-                yearText = newValue
-                onYearChanged(newValue)
-            },
-            label = {
-                Text(
-                    "Год выпуска",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(
-                keyboardType = KeyboardType.Number
-            ),
-            singleLine = true
+            onValueChange = { yearText = it; onYearChanged(it) },
+            label = "Год выпуска",
+            keyboardType = KeyboardType.Number
         )
 
-        OutlinedTextField(
+        DeviceTextField(
             value = measurementLimitText,
-            onValueChange = { newValue ->
-                measurementLimitText = newValue
-                onMeasurementLimitChanged(newValue)
-            },
-            label = {
-                Text(
-                    "Предел измерений",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            onValueChange = { measurementLimitText = it; onMeasurementLimitChanged(it) },
+            label = "Предел измерений"
         )
 
-        OutlinedTextField(
+        DeviceTextField(
             value = accuracyClassText,
-            onValueChange = { newValue ->
-                accuracyClassText = newValue
-                onAccuracyClassChanged(newValue)
-            },
-            label = {
-                Text(
-                    "Класс точности",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(
-                keyboardType = KeyboardType.Number
-            ),
-            singleLine = true
+            onValueChange = { accuracyClassText = it; onAccuracyClassChanged(it) },
+            label = "Класс точности",
+            keyboardType = KeyboardType.Number
         )
 
-        OutlinedTextField(
+        DeviceTextField(
             value = valveNumberText,
-            onValueChange = { newValue ->
-                valveNumberText = newValue
-                onValveNumberChanged(newValue)
-            },
-            label = {
-                Text(
-                    "Номер крана",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            onValueChange = { valveNumberText = it; onValveNumberChanged(it) },
+            label = "Номер крана"
         )
 
-        // Место установки и статус
+        // ---- Место и статус ----------------------------------------------
+
         DeviceEditSectionTitle("Место и статус")
 
-        // Поле местоположения с выпадающим списком
+        // Место установки с автодополнением
         ExposedDropdownMenuBox(
             expanded = isLocationDropdownExpanded,
             onExpandedChange = { expanded ->
-                if (expanded) {
-                    viewModel.expandLocationDropdown()
-                } else {
-                    viewModel.collapseLocationDropdown()
-                }
+                if (expanded) viewModel.expandLocationDropdown()
+                else viewModel.collapseLocationDropdown()
             }
         ) {
             OutlinedTextField(
                 value = locationText,
-                onValueChange = { newValue ->
-                    locationText = newValue
-                    onLocationChanged(newValue)
-                },
+                onValueChange = { locationText = it; onLocationChanged(it) },
                 label = { Text("Место установки *") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor()
                     .padding(vertical = 4.dp),
                 trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(
-                        expanded = isLocationDropdownExpanded
-                    )
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLocationDropdownExpanded)
                 },
                 isError = uiState.locationError != null,
                 placeholder = {
-                    if (allLocations.isNotEmpty()) {
-                        Text("Введите или выберите из списка...")
-                    }
+                    if (allLocations.isNotEmpty()) Text("Введите или выберите из списка...")
                 }
             )
 
@@ -537,12 +459,7 @@ fun DeviceEditForm(
             ) {
                 allLocations.forEach { location ->
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = location, // ✅ ИСПРАВЛЕНО: добавляем параметр text
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
+                        text = { Text(location, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         onClick = {
                             locationText = location
                             onLocationChanged(location)
@@ -562,26 +479,21 @@ fun DeviceEditForm(
             )
         }
 
-        // Статус (выпадающий список)
+        // Статус
         ExposedDropdownMenuBox(
             expanded = isStatusExpanded,
             onExpandedChange = { isStatusExpanded = it }
         ) {
             OutlinedTextField(
                 value = statusText,
-                onValueChange = { newValue ->
-                    statusText = newValue
-                    onStatusChanged(newValue)
-                },
+                onValueChange = { statusText = it; onStatusChanged(it) },
                 label = { Text("Статус") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor()
                     .padding(vertical = 4.dp),
                 trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(
-                        expanded = isStatusExpanded
-                    )
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = isStatusExpanded)
                 }
             )
 
@@ -589,15 +501,9 @@ fun DeviceEditForm(
                 expanded = isStatusExpanded,
                 onDismissRequest = { isStatusExpanded = false }
             ) {
-                // ✅ ИСПРАВЛЕНО: используем STATUSES из компаньона
                 Device.Companion.STATUSES.forEach { status ->
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = status, // ✅ ИСПРАВЛЕНО: добавляем параметр text
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
+                        text = { Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         onClick = {
                             statusText = status
                             onStatusChanged(status)
@@ -608,26 +514,21 @@ fun DeviceEditForm(
             }
         }
 
-        // Дополнительные фото
+        // ---- Галерея фото ------------------------------------------------
+
         DeviceEditSectionTitle("Дополнительные фото")
         DeviceEditPhotoGallerySection(
-            photoPaths = photoPaths, // ✅ ИСПРАВЛЕНО
-            onAddPhoto = {
-                photoPicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            },
+            photoPaths = photoPaths,
+            onAddPhotoClick = { showPhotoOptions = true },
             onDeletePhoto = onPhotoDeleted
         )
 
-        // Дополнительная информация
+        // ---- Доп. информация ---------------------------------------------
+
         DeviceEditSectionTitle("Дополнительная информация")
         OutlinedTextField(
             value = additionalInfoText,
-            onValueChange = { newValue ->
-                additionalInfoText = newValue
-                onAdditionalInfoChanged(newValue)
-            },
+            onValueChange = { additionalInfoText = it; onAdditionalInfoChanged(it) },
             label = { Text("Примечания") },
             modifier = Modifier
                 .fillMaxWidth()
@@ -637,7 +538,8 @@ fun DeviceEditForm(
             maxLines = 5
         )
 
-        // Валидация формы
+        // ---- Ошибки валидации --------------------------------------------
+
         if (!uiState.isFormValid && uiState.validationErrors.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -645,10 +547,7 @@ fun DeviceEditForm(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-                )
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
@@ -661,13 +560,13 @@ fun DeviceEditForm(
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        text = "Заполните обязательные поля (отмечены *): " +
-                                uiState.validationErrors.joinToString(", ") {
-                                    when (it) {
+                        text = "Заполните обязательные поля (*): " +
+                                uiState.validationErrors.joinToString(", ") { field ->
+                                    when (field) {
                                         "type" -> "Тип прибора"
                                         "inventoryNumber" -> "Инвентарный номер"
                                         "location" -> "Место установки"
-                                        else -> it
+                                        else -> field
                                     }
                                 },
                         style = MaterialTheme.typography.labelMedium,
@@ -676,6 +575,47 @@ fun DeviceEditForm(
                 }
             }
         }
+    }
+}
+
+// =============================================================================
+// Мелкие переиспользуемые компоненты
+// =============================================================================
+
+/**
+ * Обёртка над OutlinedTextField с поддержкой ошибок — убирает дублирование
+ * одинаковых блоков по всей форме.
+ */
+@Composable
+private fun DeviceTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String? = null,
+    isError: Boolean = false,
+    errorText: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    singleLine: Boolean = true
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        placeholder = placeholder?.let { { Text(it) } },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        singleLine = singleLine,
+        isError = isError,
+        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = keyboardType)
+    )
+    errorText?.let { error ->
+        Text(
+            text = error,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+        )
     }
 }
 
@@ -689,10 +629,14 @@ fun DeviceEditSectionTitle(text: String) {
     )
 }
 
+// =============================================================================
+// Фото-секции
+// =============================================================================
+
 @Composable
 fun DeviceEditMainPhotoSection(
-    photoPaths: List<String>, // ✅ ИСПРАВЛЕНО
-    onSelectPhoto: () -> Unit
+    photoPaths: List<String>,
+    onPhotoClick: () -> Unit
 ) {
     val mainPhoto = photoPaths.firstOrNull()
 
@@ -719,9 +663,7 @@ fun DeviceEditMainPhotoSection(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Default.PhotoCamera,
                             contentDescription = "Добавить фото",
@@ -737,9 +679,8 @@ fun DeviceEditMainPhotoSection(
                 }
             }
 
-            // Кнопка добавления/изменения фото
             IconButton(
-                onClick = onSelectPhoto,
+                onClick = onPhotoClick,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp),
@@ -760,14 +701,14 @@ fun DeviceEditMainPhotoSection(
 
 @Composable
 fun DeviceEditPhotoGallerySection(
-    photoPaths: List<String>, // ✅ ИСПРАВЛЕНО
-    onAddPhoto: () -> Unit,
+    photoPaths: List<String>,
+    onAddPhotoClick: () -> Unit,
     onDeletePhoto: (Int) -> Unit
 ) {
     Column {
         if (photoPaths.isEmpty()) {
             Card(
-                onClick = onAddPhoto,
+                onClick = onAddPhotoClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp),
@@ -778,13 +719,8 @@ fun DeviceEditPhotoGallerySection(
                 ),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Default.AddPhotoAlternate,
                             contentDescription = "Добавить фото",
@@ -792,10 +728,7 @@ fun DeviceEditPhotoGallerySection(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Добавить фото",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("Добавить фото", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -821,7 +754,6 @@ fun DeviceEditPhotoGallerySection(
                             )
                         }
 
-                        // Кнопка удаления фото
                         IconButton(
                             onClick = { onDeletePhoto(index) },
                             modifier = Modifier
@@ -841,10 +773,9 @@ fun DeviceEditPhotoGallerySection(
                     }
                 }
 
-                // Кнопка добавления нового фото
                 if (photoPaths.size < 10) {
                     Card(
-                        onClick = onAddPhoto,
+                        onClick = onAddPhotoClick,
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f),
@@ -853,15 +784,9 @@ fun DeviceEditPhotoGallerySection(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         ),
-                        border = BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        )
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = "Добавить фото",
@@ -881,4 +806,46 @@ fun DeviceEditPhotoGallerySection(
             )
         }
     }
+}
+
+// =============================================================================
+// Диалоги
+// =============================================================================
+
+@Composable
+fun PhotoSourceDialog(
+    onDismiss: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onChooseFromGallery: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Добавить фото") },
+        text = { Text("Выберите источник фото:") },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onTakePhoto) {
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Камера")
+                }
+                TextButton(onClick = onChooseFromGallery) {
+                    Icon(
+                        Icons.Default.PhotoLibrary,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Галерея")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
 }

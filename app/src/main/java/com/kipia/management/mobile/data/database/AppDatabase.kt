@@ -8,7 +8,7 @@ import com.kipia.management.mobile.data.entities.*
 
 @Database(
     entities = [Device::class, Scheme::class, DeviceLocation::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

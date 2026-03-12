@@ -106,17 +106,8 @@ data class ComposeLine(
     }
 
     override fun contains(point: Offset): Boolean {
-        val localPoint = transformPointToShapeSpace(
-            point = point,
-            shapeX = x,
-            shapeY = y,
-            shapeWidth = width,
-            shapeHeight = height,
-            rotation = rotation  // Учитываем поворот
-        )
-
         return isPointInLine(
-            point = localPoint,
+            point = point,
             start = Offset(startX, startY),
             end = Offset(endX, endY),
             strokeWidth = strokeWidth
@@ -140,7 +131,17 @@ data class ComposeLine(
     )
 
     override fun copyWithId(): ComposeLine = this.copy(id = "line_${System.currentTimeMillis()}")
-    override fun copyWithPosition(x: Float, y: Float): ComposeLine = this.copy(x = x, y = y)
+    override fun copyWithPosition(x: Float, y: Float): ComposeLine {
+        val dx = x - this.x
+        val dy = y - this.y
+        return this.copy(
+            x = x, y = y,
+            startX = this.startX + dx,
+            startY = this.startY + dy,
+            endX = this.endX + dx,
+            endY = this.endY + dy
+        )
+    }
     override fun copyWithFillColor(color: Color): ComposeLine = this.copy(fillColor = color)
     override fun copyWithStrokeColor(color: Color): ComposeLine = this.copy(strokeColor = color)
     override fun copyWithStrokeWidth(width: Float): ComposeLine = this.copy(strokeWidth = width)

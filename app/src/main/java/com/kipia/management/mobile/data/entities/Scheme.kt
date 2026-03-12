@@ -12,6 +12,9 @@ import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeRhombus
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeShape
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeText
 import timber.log.Timber
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 
 /**
@@ -34,7 +37,10 @@ data class Scheme(
 
     // JSON с данными схемы
     @ColumnInfo(name = "data")
-    val data: String
+    val data: String,
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis()
 ) {
     companion object {
         fun createEmpty(name: String = ""): Scheme = Scheme(
@@ -46,8 +52,14 @@ data class Scheme(
 
     fun getSchemeData(): SchemeData {
         return try {
-            Gson().fromJson(data, SchemeData::class.java) ?: SchemeData()
-        } catch (_: Exception) {
+            val result = Gson().fromJson(data, SchemeData::class.java)
+            Timber.d("getSchemeData: shapes count = ${result?.shapes?.size}, data length = ${data.length}")
+            result?.shapes?.forEachIndexed { i, shape ->
+                Timber.d("  shape[$i]: type=${shape.type}, x=${shape.x}, y=${shape.y}")
+            }
+            result ?: SchemeData()
+        } catch (e: Exception) {
+            Timber.e(e, "getSchemeData FAILED, data=$data")
             SchemeData()
         }
     }
@@ -55,6 +67,11 @@ data class Scheme(
     fun setSchemeData(schemeData: SchemeData): Scheme {
         val json = Gson().toJson(schemeData)
         return this.copy(data = json)
+    }
+
+    // метод для обновления времени
+    fun withUpdatedNow(): Scheme {
+        return this.copy(updatedAt = System.currentTimeMillis())
     }
 }
 
@@ -69,112 +86,142 @@ data class SchemeData(
     val shapes: List<ShapeData> = emptyList()
 )
 
-// Класс для сериализации/десериализации фигур
+
+// Класс для сериализации/десериализации фигур.
+// Совместим с обоими форматами: JavaFX (плоский) и Android (с properties).
 data class ShapeData(
-    val type: String, // "rectangle", "line", "ellipse", "text"
-    val id: String,
-    val x: Float,
-    val y: Float,
-    val width: Float,
-    val height: Float,
+    val type: String,               // JavaFX: "LINE", Android: "line" — нормализуем через .lowercase()
+    val id: String? = null,         // отсутствует в JavaFX формате — генерируем при чтении
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val width: Float = 0f,
+    val height: Float = 0f,
     val rotation: Float = 0f,
-    val fillColor: String = "#00000000", // ARGB hex
-    val strokeColor: String = "#FF000000",
+    val fillColor: String? = null,
+    val strokeColor: String? = null,
     val strokeWidth: Float = 2f,
-    val properties: Map<String, Any> = emptyMap(), // Дополнительные свойства
-    val transform: TransformData? = null, // Локальная трансформация
-    val layer: LayerData? = null, // Информация о слое
-    val isLocked: Boolean = false, // Заблокирован ли объект
-    val isVisible: Boolean = true // Видимость
+    val properties: Map<String, Any>? = null,
+    val transform: TransformData? = null,
+    val layer: LayerData? = null,
+    val isLocked: Boolean = false,
+    val isVisible: Boolean = true,
+    // ── Поля JavaFX плоского формата ───────────────────────────────
+    val startX: Float = 0f,   // линия
+    val startY: Float = 0f,
+    val endX: Float = 0f,
+    val endY: Float = 0f,
+    val text: String? = null,       // текст
+    val fontSize: Float = 0f,
+    val fontFamily: String? = null,
+    val fontStyle: String? = null   // "Regular" | "Bold" | "Italic" | "Bold Italic"
 ) {
-    // Конвертация в ComposeShape
+    private val normalizedType get() = type.lowercase()
+
     fun toComposeShape(): ComposeShape {
-        Timber.d("💾 Загрузка фигуры из JSON:")
-        Timber.d("   id: $id")
-        Timber.d("   type: $type")
-        Timber.d("   position: ($x, $y)")
-        Timber.d("   rotation: $rotation")  // Это ключевое!
-        Timber.d("   size: ${width}x${height}")
-        return when (type) {
+        val shapeId = id?.takeIf { it.isNotBlank() }
+            ?: "${normalizedType}_${x.toInt()}_${y.toInt()}_${System.nanoTime()}"
+
+        Timber.d("💾 Загрузка фигуры: type=$type→$normalizedType id=$shapeId pos=($x,$y) rot=$rotation")
+
+        return when (normalizedType) {
             "rectangle" -> ComposeRectangle(
-                id = id,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = parseColor(fillColor), // Используем нашу функцию парсинга
-                strokeColor = parseColor(strokeColor),
-                strokeWidth = strokeWidth,
-                cornerRadius = properties["cornerRadius"] as? Float ?: 0f
-            )
-            "line" -> ComposeLine(
-                id = id,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
+                id = shapeId, x = x, y = y, width = width, height = height,
                 rotation = rotation,
                 fillColor = parseColor(fillColor),
                 strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth,
-                startX = properties["startX"] as? Float ?: 0f,
-                startY = properties["startY"] as? Float ?: 0f,
-                endX = properties["endX"] as? Float ?: width,
-                endY = properties["endY"] as? Float ?: 0f
+                cornerRadius = (properties?.get("cornerRadius") as? Double)?.toFloat()
+                    ?: properties?.get("cornerRadius") as? Float ?: 0f
             )
+
+            "line" -> {
+                val sX = startX.takeIf { it != 0f || startY != 0f }
+                    ?: (properties?.get("startX") as? Double)?.toFloat()
+                    ?: properties?.get("startX") as? Float ?: x
+                val sY = startY.takeIf { it != 0f || startX != 0f }
+                    ?: (properties?.get("startY") as? Double)?.toFloat()
+                    ?: properties?.get("startY") as? Float ?: y
+                val eX = endX.takeIf { it != 0f || endY != 0f }
+                    ?: (properties?.get("endX") as? Double)?.toFloat()
+                    ?: properties?.get("endX") as? Float ?: x + width
+                val eY = endY.takeIf { it != 0f || endX != 0f }
+                    ?: (properties?.get("endY") as? Double)?.toFloat()
+                    ?: properties?.get("endY") as? Float ?: y
+
+                // Вычисляем bounding box линии из абсолютных координат
+                val lineX = min(sX, eX)
+                val lineY = min(sY, eY)
+                val lineW = max(abs(eX - sX), strokeWidth) // минимум strokeWidth чтобы не было 0
+                val lineH = max(abs(eY - sY), strokeWidth)
+
+                ComposeLine(
+                    id = shapeId,
+                    x = lineX, y = lineY,
+                    width = lineW, height = lineH,
+                    rotation = rotation,
+                    fillColor = parseColor(fillColor),
+                    strokeColor = parseColor(strokeColor),
+                    strokeWidth = strokeWidth,
+                    startX = sX, startY = sY, endX = eX, endY = eY
+                )
+            }
+
             "ellipse" -> ComposeEllipse(
-                id = id,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
+                id = shapeId, x = x, y = y, width = width, height = height,
                 rotation = rotation,
                 fillColor = parseColor(fillColor),
                 strokeColor = parseColor(strokeColor),
                 strokeWidth = strokeWidth
             )
-            "text" -> {
-                val fontSize = when (val value = properties["fontSize"]) {
-                    is Double -> value.toFloat()
-                    is Float -> value
-                    is Int -> value.toFloat()
-                    else -> 16f
-                }
 
-                val isBold = properties["isBold"] as? Boolean ?: false
-                val isItalic = properties["isItalic"] as? Boolean ?: false
-                val textColorStr = properties["textColor"] as? String ?: "#FF000000"
+            "rhombus" -> ComposeRhombus(
+                id = shapeId, x = x, y = y, width = width, height = height,
+                rotation = rotation,
+                fillColor = parseColor(fillColor),
+                strokeColor = parseColor(strokeColor),
+                strokeWidth = strokeWidth
+            )
+
+            "text" -> {
+                // JavaFX: text/fontSize в корне; Android: в properties
+                val resolvedText = text
+                    ?: properties?.get("text") as? String ?: ""
+                val resolvedFontSize = when {
+                    fontSize > 0f -> fontSize
+                    else -> when (val v = properties?.get("fontSize")) {
+                        is Double -> v.toFloat()
+                        is Float -> v
+                        is Int -> v.toFloat()
+                        else -> 16f
+                    }
+                }
+                // JavaFX fontStyle: "Bold Italic" → isBold + isItalic
+                val style = fontStyle ?: ""
+                val isBold = style.contains("Bold", ignoreCase = true)
+                        || properties?.get("isBold") as? Boolean ?: false
+                val isItalic = style.contains("Italic", ignoreCase = true)
+                        || properties?.get("isItalic") as? Boolean ?: false
+                // JavaFX использует strokeColor как цвет текста
+                val textColorStr = properties?.get("textColor") as? String ?: strokeColor
 
                 ComposeText(
-                    id = id,
-                    x = x,
-                    y = y,
-                    width = width,
-                    height = height,
+                    id = shapeId, x = x, y = y, width = width, height = height,
                     rotation = rotation,
                     fillColor = parseColor(fillColor),
                     strokeColor = parseColor(strokeColor),
                     strokeWidth = strokeWidth,
-                    text = properties["text"] as? String ?: "",
-                    fontSize = fontSize,
+                    text = resolvedText,
+                    fontSize = resolvedFontSize,
                     textColor = parseColor(textColorStr),
                     isBold = isBold,
                     isItalic = isItalic
                 )
             }
-            "rhombus" -> ComposeRhombus(
-                id = id,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = parseColor(fillColor),
-                strokeColor = parseColor(strokeColor),
-                strokeWidth = strokeWidth
-            )
-            else -> throw IllegalArgumentException("Unknown shape type: $type")
+
+            else -> {
+                Timber.w("⚠️ Неизвестный тип фигуры: '$type' — пропускаем")
+                throw IllegalArgumentException("Unknown shape type: $type")
+            }
         }
     }
 }
@@ -194,15 +241,15 @@ data class LayerData(
 )
 
 // Добавьте функцию парсинга в SchemeData.kt или в отдельный утилитарный файл:
-fun parseColor(colorHex: String): Color {
+fun parseColor(colorHex: String?): Color {
+    if (colorHex == null) return Color.Transparent
     return try {
         val cleanHex = colorHex.removePrefix("#")
         val longColor = when (cleanHex.length) {
-            6 -> "FF$cleanHex" // RGB -> ARGB
-            8 -> cleanHex // ARGB
+            6 -> "FF$cleanHex"
+            8 -> cleanHex
             else -> "FFFFFFFF"
         }.toLong(16)
-
         Color(longColor)
     } catch (_: Exception) {
         Color.Transparent

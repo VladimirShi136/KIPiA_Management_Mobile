@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.data
 
+import com.kipia.management.mobile.data.dao.DeviceDao
 import com.kipia.management.mobile.data.database.AppDatabase
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
@@ -18,25 +19,36 @@ class DatabaseInitializer @Inject constructor(
     private val database: AppDatabase,
     private val schemeSyncUseCase: SchemeSyncUseCase
 ) {
+    // Добавьте флаг для отключения тестовых данных
+    private val shouldCreateTestDevices = false  // Установите false для отключения
 
-    fun initialize() {  // ← УБЕРИТЕ suspend
+    fun initialize() {
         CoroutineScope(Dispatchers.IO).launch {
             val deviceDao = database.deviceDao()
 
-            // Проверяем, пустая ли база устройств
             if (deviceDao.getAllDevicesSync().isEmpty()) {
-                Timber.d("DatabaseInitializer: База пустая, создаем тестовые устройства")
-                // Добавляем тестовые устройства
-                val testDevices = createTestDevices()
-                testDevices.forEach { device ->
-                    deviceDao.insertDevice(device)
-                    schemeSyncUseCase.syncSchemeOnDeviceSave(device)
+                Timber.d("DatabaseInitializer: База пустая")
+
+                // Проверяем флаг перед созданием тестовых устройств
+                if (shouldCreateTestDevices) {
+                    createAndSaveTestDevices(deviceDao)
+                } else {
+                    Timber.d("DatabaseInitializer: Создание тестовых устройств отключено")
                 }
-                Timber.d("DatabaseInitializer: создано ${testDevices.size} тестовых устройств")
             } else {
                 Timber.d("DatabaseInitializer: В базе уже есть устройства")
             }
         }
+    }
+
+    private suspend fun createAndSaveTestDevices(deviceDao: DeviceDao) {
+        Timber.d("DatabaseInitializer: создаем тестовые устройства")
+        val testDevices = createTestDevices()
+        testDevices.forEach { device ->
+            deviceDao.insertDevice(device)
+            schemeSyncUseCase.syncSchemeOnDeviceSave(device)
+        }
+        Timber.d("DatabaseInitializer: создано ${testDevices.size} тестовых устройств")
     }
 
     private fun createTestDevices(): List<Device> {

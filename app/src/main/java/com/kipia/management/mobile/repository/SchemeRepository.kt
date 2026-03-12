@@ -11,4 +11,9 @@ interface SchemeRepository {
     suspend fun deleteScheme(scheme: Scheme)
     suspend fun deleteSchemeById(id: Int)
     suspend fun getSchemeByName(name: String): Scheme?
+    suspend fun insertSchemeWithTimestamp(scheme: Scheme): Long
+    suspend fun updateSchemeWithTimestamp(scheme: Scheme)
+    suspend fun getAllSchemesForExport(): List<Scheme>
+    suspend fun importSchemes(schemes: List<Scheme>)
+    suspend fun getMaxUpdatedAt(): Long?
 }

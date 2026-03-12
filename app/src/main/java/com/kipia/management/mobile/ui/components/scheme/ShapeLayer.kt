@@ -18,6 +18,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import com.kipia.management.mobile.ui.components.scheme.shapes.*
 import com.kipia.management.mobile.viewmodel.CanvasState
 import com.kipia.management.mobile.viewmodel.EditorState
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun ShapeLayer(
@@ -51,16 +53,21 @@ fun ShapeLayer(
     val visibleShapes by remember(shapes, visibleArea) {
         derivedStateOf {
             shapes.filter { shape ->
-                val shapeBounds = Rect(
-                    shape.x, shape.y,
-                    shape.x + shape.width,
-                    shape.y + shape.height
-                )
+                val shapeBounds = if (shape is ComposeLine) {
+                    // Для линии используем реальные абсолютные координаты
+                    Rect(
+                        left = min(shape.startX, shape.endX) - shape.strokeWidth,
+                        top = min(shape.startY, shape.endY) - shape.strokeWidth,
+                        right = max(shape.startX, shape.endX) + shape.strokeWidth,
+                        bottom = max(shape.startY, shape.endY) + shape.strokeWidth
+                    )
+                } else {
+                    Rect(shape.x, shape.y, shape.x + shape.width, shape.y + shape.height)
+                }
                 shapeBounds.overlaps(visibleArea)
             }
         }
     }
-
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -73,35 +80,59 @@ fun ShapeLayer(
         visibleShapes.forEach { shape ->
             val isSelected = editorState.selection.selectedShapeId == shape.id
 
-            // Вычисляем экранные координаты
-            val screenX = shape.x * canvasState.scale + canvasState.offset.x
-            val screenY = shape.y * canvasState.scale + canvasState.offset.y
+            if (shape is ComposeLine) {
+                // Линия использует абсолютные координаты — не применяем translate по shape.x/y
+                val scaledStartX = shape.startX * canvasState.scale + canvasState.offset.x
+                val scaledStartY = shape.startY * canvasState.scale + canvasState.offset.y
+                val scaledEndX = shape.endX * canvasState.scale + canvasState.offset.x
+                val scaledEndY = shape.endY * canvasState.scale + canvasState.offset.y
+                val scaledStrokeWidth = shape.strokeWidth * canvasState.scale
 
-            // Масштабируем размер фигуры
-            val scaledWidth = shape.width * canvasState.scale
-            val scaledHeight = shape.height * canvasState.scale
-            val scaledStrokeWidth = shape.strokeWidth * canvasState.scale
-
-            // Применяем глобальную трансформацию
-            withTransform({
-                translate(screenX, screenY)
-                rotate(
-                    degrees = shape.rotation,
-                    pivot = Offset(scaledWidth / 2, scaledHeight / 2)
-                )
-            }) {
-                // Рисуем фигуру
-                drawShapeWithGlobalTransform(
-                    shape = shape,
-                    scaledWidth = scaledWidth,
-                    scaledHeight = scaledHeight,
-                    scaledStrokeWidth = scaledStrokeWidth,
-                    scaleFactor = canvasState.scale
+                drawLine(
+                    color = shape.strokeColor,
+                    start = Offset(scaledStartX, scaledStartY),
+                    end = Offset(scaledEndX, scaledEndY),
+                    strokeWidth = scaledStrokeWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
 
-                // Рисуем маркер выделения (только для выбранной фигуры)
                 if (isSelected) {
-                    drawSelectionMarker(shape, scaledWidth, scaledHeight, scaleFactor = canvasState.scale)
+                    drawLine(
+                        color = Color.Cyan.copy(alpha = 0.8f),
+                        start = Offset(scaledStartX, scaledStartY),
+                        end = Offset(scaledEndX, scaledEndY),
+                        strokeWidth = 3f * canvasState.scale,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+            } else {
+                // Остальные фигуры — как раньше
+                val screenX = shape.x * canvasState.scale + canvasState.offset.x
+                val screenY = shape.y * canvasState.scale + canvasState.offset.y
+                val scaledWidth = shape.width * canvasState.scale
+                val scaledHeight = shape.height * canvasState.scale
+                val scaledStrokeWidth = shape.strokeWidth * canvasState.scale
+
+                withTransform({
+                    translate(screenX, screenY)
+                    rotate(
+                        degrees = shape.rotation,
+                        pivot = Offset(scaledWidth / 2, scaledHeight / 2)
+                    )
+                }) {
+                    drawShapeWithGlobalTransform(
+                        shape,
+                        scaledWidth,
+                        scaledHeight,
+                        scaledStrokeWidth,
+                        canvasState.scale
+                    )
+                    if (isSelected) drawSelectionMarker(
+                        shape,
+                        scaledWidth,
+                        scaledHeight,
+                        canvasState.scale
+                    )
                 }
             }
         }
