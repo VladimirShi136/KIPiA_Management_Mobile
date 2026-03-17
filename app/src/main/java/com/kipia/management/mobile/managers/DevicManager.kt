@@ -62,6 +62,14 @@ class DeviceManager {
         }
     }
 
+    fun rotateDevice(deviceId: Int, angleDeg: Float) {
+        _devices.update { list ->
+            list.map { device ->
+                if (device.deviceId == deviceId) device.copy(rotation = angleDeg) else device
+            }
+        }
+    }
+
     fun getDevicePosition(deviceId: Int): Offset? {
         return _devices.value.find { it.deviceId == deviceId }?.let {
             Offset(it.x, it.y)

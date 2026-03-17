@@ -177,52 +177,35 @@ private fun createLineFromParams(
     length: Float,
     rotation: Float
 ): ComposeLine {
-    // Базовая линия всегда горизонтальная (угол 0°)
-    val dx = length
-    val dy = 0f
+    // Центр линии в мировых координатах — не меняется
+    val centerX = (originalLine.startX + originalLine.endX) / 2f
+    val centerY = (originalLine.startY + originalLine.endY) / 2f
 
-    // Центр линии (используем текущий центр bounding box)
-    val centerX = originalLine.x + originalLine.width / 2
-    val centerY = originalLine.y + originalLine.height / 2
+    // Вычисляем новые абсолютные координаты с учётом угла поворота
+    val radians = Math.toRadians(rotation.toDouble())
+    val dx = (length / 2f) * cos(radians).toFloat()
+    val dy = (length / 2f) * sin(radians).toFloat()
 
-    // Вычисляем новые start и end относительно центра (горизонтальная линия)
-    val startX = centerX - dx / 2
-    val startY = centerY - dy / 2
-    val endX = centerX + dx / 2
-    val endY = centerY + dy / 2
+    val newStartX = centerX - dx
+    val newStartY = centerY - dy
+    val newEndX   = centerX + dx
+    val newEndY   = centerY + dy
 
-    // Вычисляем новый bounding box
-    val minX = min(startX, endX)
-    val minY = min(startY, endY)
-    val maxX = max(startX, endX)
-    val maxY = max(startY, endY)
-
-    val newWidth = (maxX - minX).coerceAtLeast(20f) + 20f // Добавляем отступ
-    val newHeight = (maxY - minY).coerceAtLeast(20f) + 20f
-
-    // Новые start и end относительно нового bounding box
-    val newStartX = startX - minX
-    val newStartY = startY - minY
-    val newEndX = endX - minX
-    val newEndY = endY - minY
-
-    Timber.d("📐 createLineFromParams:")
-    Timber.d("   center=($centerX, $centerY)")
-    Timber.d("   dx=$dx, dy=$dy")
-    Timber.d("   new bounding box: min=($minX, $minY), max=($maxX, $maxY)")
-    Timber.d("   new width=$newWidth, height=$newHeight")
-    Timber.d("   new start=($newStartX, $newStartY), end=($newEndX, $newEndY)")
-    Timber.d("   rotation=$rotation")
+    // x/y/width/height — только для bounds-проверок
+    val minX = min(newStartX, newEndX) - originalLine.strokeWidth
+    val minY = min(newStartY, newEndY) - originalLine.strokeWidth
+    val maxX = max(newStartX, newEndX) + originalLine.strokeWidth
+    val maxY = max(newStartY, newEndY) + originalLine.strokeWidth
 
     return originalLine.copy(
-        x = minX,
-        y = minY,
-        startX = newStartX,
-        startY = newStartY,
-        endX = newEndX,
-        endY = newEndY,
-        width = newWidth,
-        height = newHeight,
-        rotation = rotation  // Сохраняем угол поворота
+        startX   = newStartX,
+        startY   = newStartY,
+        endX     = newEndX,
+        endY     = newEndY,
+        x        = minX,
+        y        = minY,
+        width    = (maxX - minX).coerceAtLeast(1f),
+        height   = (maxY - minY).coerceAtLeast(1f),
+        rotation = rotation
     )
 }

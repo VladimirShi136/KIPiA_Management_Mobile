@@ -281,6 +281,32 @@ class PhotoManager @Inject constructor(
         }
     }
 
+    /**
+     * Удаляет ВСЕ физические файлы фото устройства.
+     * Вызывается при удалении устройства чтобы не оставлять мусор на диске.
+     * Возвращает количество успешно удалённых файлов.
+     */
+    fun deleteAllDevicePhotos(device: Device): Int {
+        if (device.photos.isEmpty()) return 0
+
+        val locationDir = getLocationDir(device.location)
+        var deletedCount = 0
+
+        device.photos.forEach { fileName ->
+            val file = File(locationDir, fileName)
+            if (file.exists() && file.delete()) {
+                deletedCount++
+            }
+        }
+
+        // Удаляем папку локации если она стала пустой
+        if (locationDir.exists() && locationDir.listFiles().isNullOrEmpty()) {
+            locationDir.delete()
+        }
+
+        return deletedCount
+    }
+
     data class PhotoSaveResult(
         val fileName: String,
         val fullPath: String,

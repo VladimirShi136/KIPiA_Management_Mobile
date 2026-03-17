@@ -48,8 +48,9 @@ class SyncManager @Inject constructor(
      */
     suspend fun exportToZip(outputUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Закрываем все транзакции перед копированием БД
-            database.close()
+            // WAL checkpoint — сбрасываем все незафиксированные страницы в основной файл БД
+            // database.close() использовать нельзя: Room после этого не переоткрывается
+            database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
 
             val dbFile = context.getDatabasePath(DB_NAME)
             val photosDir = photoManager.getBasePhotosDir()
@@ -236,18 +237,7 @@ class SyncManager @Inject constructor(
             }
         }
 
-        // После чтения импортируемой БД
-        Timber.d("IMPORT: schemes count=${importedData.schemes.size}")
-        importedData.schemes.forEach { s ->
-            Timber.d("IMPORT scheme: id=${s.id} name='${s.name}' updatedAt=${s.updatedAt} dataLen=${s.data.length}")
-        }
-
-        // После чтения текущих схем из Room
-        val currentSchemes = schemeDao.getAllSchemesSync()
-        Timber.d("LOCAL: schemes count=${currentSchemes.size}")
-        currentSchemes.forEach { s ->
-            Timber.d("LOCAL scheme: id=${s.id} name='${s.name}' updatedAt=${s.updatedAt} dataLen=${s.data.length}")
-        }
+        Timber.d("SyncManager: merge завершён — +$devicesAdded dev, ~$devicesUpdated dev, +$schemesAdded sch, ~$schemesUpdated sch, +$locationsAdded loc")
 
         return SyncStats(
             devicesAdded = devicesAdded,

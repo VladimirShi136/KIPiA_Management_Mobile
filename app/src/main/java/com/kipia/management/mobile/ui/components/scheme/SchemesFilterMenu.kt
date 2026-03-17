@@ -3,16 +3,21 @@ package com.kipia.management.mobile.ui.components.scheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,10 +36,11 @@ fun SchemesFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+
+    // focusRequester и keyboardController живут здесь и передаются вниз — как в DeviceFilterMenu
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Управление фокусом для поиска
     LaunchedEffect(showSearch) {
         if (showSearch) {
             focusRequester.requestFocus()
@@ -42,7 +48,6 @@ fun SchemesFilterMenu(
         }
     }
 
-    // Подсчет активных фильтров (поиск + сортировка)
     val activeFilters = remember(searchQuery, currentSort) {
         var count = 0
         if (searchQuery.isNotEmpty()) count++
@@ -51,19 +56,16 @@ fun SchemesFilterMenu(
     }
 
     Box(modifier = modifier) {
-        // Кнопка меню фильтров
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier.size(48.dp)
         ) {
-            // Иконка фильтра
             Icon(
                 Icons.Default.FilterAlt,
                 contentDescription = "Фильтры схем",
                 tint = Color.White
             )
 
-            // Бейдж с количеством активных фильтров
             Badge(
                 containerColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
@@ -79,13 +81,11 @@ fun SchemesFilterMenu(
             }
         }
 
-        // Основное выпадающее меню
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.width(250.dp)
+            modifier = Modifier.width(280.dp)
         ) {
-            // Заголовок меню
             DropdownMenuItem(
                 text = {
                     Text(
@@ -102,14 +102,16 @@ fun SchemesFilterMenu(
 
             HorizontalDivider()
 
-            // Пункт поиска
+            // focusRequester и keyboardController передаются как параметры — как в DeviceFilterMenu
             SearchMenuItem(
                 searchQuery = searchQuery,
+                showSearch = showSearch,
                 onSearchQueryChange = onSearchQueryChange,
-                onSearchClicked = { showSearch = true }
+                onToggleSearch = { showSearch = !showSearch },
+                focusRequester = focusRequester,
+                keyboardController = keyboardController
             )
 
-            // Пункт сортировки с подменю
             SortMenuItem(
                 currentSort = currentSort,
                 onSortSelected = { sort ->
@@ -120,7 +122,6 @@ fun SchemesFilterMenu(
 
             HorizontalDivider()
 
-            // Кнопка сброса всех фильтров
             DropdownMenuItem(
                 text = {
                     Text(
@@ -130,6 +131,7 @@ fun SchemesFilterMenu(
                 },
                 onClick = {
                     onResetAllFilters()
+                    showSearch = false
                     expanded = false
                     Timber.d("Все фильтры схем сброшены")
                 },
@@ -145,50 +147,21 @@ fun SchemesFilterMenu(
     }
 }
 
+// Структура идентична DeviceFilterMenu.SearchMenuItem:
+// TextField рендерится внутри того же DropdownMenuItem (не в отдельном if/else composable),
+// focusRequester приходит снаружи и уже привязан через LaunchedEffect в родителе
 @Composable
 private fun SearchMenuItem(
     searchQuery: String,
+    showSearch: Boolean,
     onSearchQueryChange: (String) -> Unit,
-    onSearchClicked: () -> Unit
+    onToggleSearch: () -> Unit,
+    focusRequester: FocusRequester,
+    keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?
 ) {
-    var showSearchField by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-
-    if (showSearchField) {
-        // Поле поиска внутри меню
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                placeholder = { Text("Поиск схем...") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Поиск")
-                },
-                trailingIcon = {
-                    IconButton(
-                        onClick = { showSearchField = false }
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
-                    }
-                }
-            )
-        }
-    } else {
-        // Кнопка поиска
-        DropdownMenuItem(
-            text = {
+    DropdownMenuItem(
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -198,34 +171,45 @@ private fun SearchMenuItem(
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.weight(1f)
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // Галочка если поиск активен
-                        if (searchQuery.isNotEmpty()) {
-                            Text(
-                                text = "✓",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(end = 4.dp)
-                            )
-                        }
-                        // Стрелка
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Поиск",
-                            modifier = Modifier.size(16.dp)
+                    if (searchQuery.isNotEmpty()) {
+                        Text(
+                            text = "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-            },
-            onClick = { showSearchField = true },
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null)
+
+                if (showSearch) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        placeholder = { Text("Введите название схемы...") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { onSearchQueryChange("") }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Очистить")
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = { keyboardController?.hide() }
+                        )
+                    )
+                }
             }
-        )
-    }
+        },
+        onClick = onToggleSearch,
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null)
+        }
+    )
 }
 
 @Composable
@@ -250,7 +234,6 @@ private fun SortMenuItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Галочка если не стандартная сортировка
                     if (currentSort != SchemesSortBy.NAME_ASC) {
                         Text(
                             text = "✓",
@@ -259,7 +242,6 @@ private fun SortMenuItem(
                             modifier = Modifier.padding(end = 4.dp)
                         )
                     }
-                    // Стрелка вниз
                     Icon(
                         Icons.Default.ArrowDropDown,
                         contentDescription = "Выбрать сортировку",
@@ -270,11 +252,10 @@ private fun SortMenuItem(
         },
         onClick = { showSubMenu = true },
         leadingIcon = {
-            Icon(Icons.Default.Sort, contentDescription = null)
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
         }
     )
 
-    // Подменю сортировки
     SortSubMenu(
         showSubMenu = showSubMenu,
         onDismiss = { showSubMenu = false },
@@ -428,7 +409,7 @@ private fun buildActiveFiltersText(
 
     when (currentSort) {
         SchemesSortBy.NAME_DESC -> filters.add("Сортировка: Я → А")
-        else -> {} // NAME_ASC не показываем (это по умолчанию)
+        else -> {}
     }
 
     return if (filters.isEmpty()) {

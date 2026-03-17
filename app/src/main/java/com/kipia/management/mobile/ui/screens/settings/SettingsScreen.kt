@@ -41,24 +41,20 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     val supportsDynamicColors = themeViewModel.supportsDynamicColors
 
-    // Диалог подтверждения импорта
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Лончер для экспорта — создать файл
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         uri?.let { settingsViewModel.exportDatabase(it) }
     }
 
-    // Лончер для импорта — выбрать файл
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { pendingImportUri = it }
     }
 
-    // Диалог подтверждения импорта
     if (pendingImportUri != null) {
         AlertDialog(
             onDismissRequest = { pendingImportUri = null },
@@ -79,7 +75,6 @@ fun SettingsScreen(
         )
     }
 
-    // Диалог результата
     when (val state = syncState) {
         is SyncState.ExportSuccess -> {
             AlertDialog(
@@ -117,17 +112,20 @@ fun SettingsScreen(
         else -> {}
     }
 
+    // Единый отступ для всех карточек
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 6.dp)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .padding(vertical = 6.dp), // верхний и нижний отступ колонки
+        verticalArrangement = Arrangement.spacedBy(6.dp) // равные отступы между карточками
     ) {
         // ─── Синхронизация ───────────────────────────────────────
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(6.dp)
-        ) {
+        Card(modifier = cardModifier) {
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(
                     text = "Синхронизация",
@@ -145,9 +143,8 @@ fun SettingsScreen(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Кнопка экспорта
                     OutlinedButton(
                         onClick = {
                             val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
@@ -157,32 +154,22 @@ fun SettingsScreen(
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            Icons.Filled.Upload,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Экспорт", maxLines = 1)
                     }
 
-                    // Кнопка импорта
                     Button(
                         onClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) },
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            Icons.Filled.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Импорт", maxLines = 1)
                     }
                 }
 
-                // Индикатор загрузки
                 if (isLoading) {
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -201,11 +188,7 @@ fun SettingsScreen(
         }
 
         // ─── Внешний вид ─────────────────────────────────────────
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(6.dp)
-        ) {
+        Card(modifier = cardModifier) {
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(
                     text = "Внешний вид",
@@ -257,7 +240,7 @@ fun SettingsScreen(
                         Text("Динамические цвета", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             text = if (supportsDynamicColors) "Использовать цвета обоев системы"
-                                   else "Доступно на Android 12 и выше",
+                            else "Доступно на Android 12 и выше",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                                 alpha = if (supportsDynamicColors) 1f else 0.7f
@@ -274,28 +257,60 @@ fun SettingsScreen(
         }
 
         // ─── О приложении ─────────────────────────────────────────
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp)
-                .padding(bottom = 6.dp)
-        ) {
+        // ListItem имеет свой фон и острые углы — заменяем на Row внутри Card
+        Card(modifier = cardModifier) {
             Column(modifier = Modifier.padding(10.dp)) {
                 Text(
                     text = "О приложении",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.Info, contentDescription = null) },
-                    headlineContent = { Text("Версия") },
-                    supportingContent = { Text("1.0.0") }
-                )
-                ListItem(
-                    leadingContent = { Icon(Icons.Filled.Code, contentDescription = null) },
-                    headlineContent = { Text("Разработчик") },
-                    supportingContent = { Text("KIPiA Management") }
-                )
+
+                // Версия
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Column {
+                        Text("Версия", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "1.0.0",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Разработчик
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Code,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Column {
+                        Text("Разработчик", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "KIPiA Management",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }

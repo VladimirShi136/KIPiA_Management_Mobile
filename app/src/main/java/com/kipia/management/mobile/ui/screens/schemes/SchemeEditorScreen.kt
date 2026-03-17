@@ -7,7 +7,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,9 +20,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.Scheme
-import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.*
 import com.kipia.management.mobile.ui.components.scheme.dialogs.ColorPickerDialog
+import com.kipia.management.mobile.ui.components.scheme.dialogs.DevicePropertiesPanel
 import com.kipia.management.mobile.ui.components.scheme.dialogs.DraggableCard
 import com.kipia.management.mobile.ui.components.scheme.dialogs.ShapePropertiesDialog
 import com.kipia.management.mobile.ui.components.scheme.shapes.ComposeLine
@@ -498,107 +497,6 @@ private fun ShapePropertiesPanel(
             // Кнопка закрытия
             TextButton(
                 onClick = { viewModel.toggleShapeProperties() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Закрыть")
-            }
-        }
-    }
-}
-
-@Composable
-private fun DevicePropertiesPanel(
-    editorState: EditorState,
-    allDevices: List<Device>,
-    devices: List<SchemeDevice>,
-    viewModel: SchemeEditorViewModel,
-    modifier: Modifier = Modifier
-) {
-    val selectedDeviceInfo = editorState.selection.selectedDeviceId?.let { id ->
-        val device = allDevices.find { it.id == id }
-        val schemeDevice = devices.find { it.deviceId == id }
-        if (device != null && schemeDevice != null) device to schemeDevice else null
-    }
-
-    if (selectedDeviceInfo != null &&
-        editorState.uiState.showDeviceProperties &&
-        editorState.uiState.mode != EditorMode.PAN_ZOOM
-    ) {
-        DraggableCard(
-            modifier = modifier.width(280.dp),
-            showDragHandle = true
-        ) {
-            Text(
-                "Свойства прибора",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            val (device, schemeDevice) = selectedDeviceInfo
-
-            // Информация о приборе
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = device.name ?: device.type,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Тип: ${device.type}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                    )
-                    Text(
-                        text = "Инв. №${device.inventoryNumber}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Позиция
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Позиция:",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "(${schemeDevice.x.toInt()}, ${schemeDevice.y.toInt()})",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Кнопка закрытия
-            TextButton(
-                onClick = { viewModel.toggleDeviceProperties() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Закрыть")

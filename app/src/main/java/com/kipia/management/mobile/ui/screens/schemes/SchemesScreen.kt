@@ -78,22 +78,14 @@ fun SchemesScreen(
     }
 
     // ★ Настраиваем TopAppBar через контроллер
-    LaunchedEffect(topAppBarController, uiState) {
-        topAppBarController?.setForScreen("schemes", buildMap { //
+    LaunchedEffect(topAppBarController) {
+        topAppBarController?.setForScreen("schemes", buildMap {
             put("title", "Учет приборов КИПиА")
-            put("searchQuery", uiState.searchQuery)
-            put("currentSort", uiState.sortBy)
-            put("onSearchQueryChange", { query: String ->
-                viewModel.setSearchQuery(query)
-            })
-            put("onSortSelected", { sortBy: SchemesSortBy ->
-                viewModel.setSortBy(sortBy)
-            })
-            put("onResetAllFilters", {
-                viewModel.resetAllFilters()
-            })
             put("showThemeToggle", true)
             put("showSettingsIcon", true)
+            put("onSearchQueryChange", { query: String -> viewModel.setSearchQuery(query) })
+            put("onSortSelected", { sortBy: SchemesSortBy -> viewModel.setSortBy(sortBy) })
+            put("onResetAllFilters", { viewModel.resetAllFilters() })
         })
     }
 

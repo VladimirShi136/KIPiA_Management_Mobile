@@ -188,6 +188,10 @@ class DeviceEditViewModel @Inject constructor(
             try {
                 println("DEBUG: Удаление устройства ID: ${deviceToDelete.id}, deleteScheme=$deleteScheme")
 
+                // Удаляем физические файлы фото до удаления записи из БД
+                val deletedPhotos = photoManager.deleteAllDevicePhotos(deviceToDelete)
+                println("DEBUG: Удалено $deletedPhotos фото для ${deviceToDelete.getDisplayName()}")
+
                 // Удаляем устройство
                 val rowsDeleted = repository.deleteDevice(deviceToDelete)
 

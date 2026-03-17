@@ -23,6 +23,7 @@ import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
 import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
 import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
+import com.kipia.management.mobile.viewmodel.SchemesViewModel
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,7 +83,6 @@ fun KIPiATopAppBar(
         actions = {
             // Используем remember для избежания лишних рекомпозиций внутри actions
             KeyedTopAppBarActions(
-                key = topAppBarState.hashCode(), // Уникальный ключ для состояния
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent,
                 navController = navController
@@ -94,7 +94,6 @@ fun KIPiATopAppBar(
 
 @Composable
 private fun KeyedTopAppBarActions(
-    key: Int,
     topAppBarState: TopAppBarData,
     topAppBarContent: Color,
     navController: NavController
@@ -211,35 +210,24 @@ private fun SchemesScreenActions(
     topAppBarContent: Color,
     navController: NavController
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Фильтры для схем
+    val schemesViewModel: SchemesViewModel = hiltViewModel()
+    val uiState by schemesViewModel.uiState.collectAsStateWithLifecycle()
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
         if (topAppBarState.showSchemesFilterMenu) {
             SchemesFilterMenu(
-                searchQuery = topAppBarState.schemesSearchQuery ?: "",
-                onSearchQueryChange = { query ->
-                    topAppBarState.onSchemesSearchQueryChange?.invoke(query)
-                },
-                currentSort = topAppBarState.schemesCurrentSort ?: SchemesSortBy.NAME_ASC,
-                onSortSelected = { sortBy ->
-                    topAppBarState.onSchemesSortSelected?.invoke(sortBy)
-                },
-                onResetAllFilters = {
-                    topAppBarState.onSchemesResetAllFilters?.invoke()
-                },
+                searchQuery = uiState.searchQuery,        // ← из VM напрямую
+                onSearchQueryChange = { schemesViewModel.setSearchQuery(it) },
+                currentSort = uiState.sortBy,             // ← из VM напрямую
+                onSortSelected = { schemesViewModel.setSortBy(it) },
+                onResetAllFilters = { schemesViewModel.resetAllFilters() },
                 modifier = Modifier.padding(end = 4.dp)
             )
         }
-
         ThemeToggleButton(contentColor = topAppBarContent)
         Spacer(modifier = Modifier.width(8.dp))
         IconButton(onClick = { navController.navigate("settings") }) {
-            Icon(
-                Icons.Filled.Settings,
-                contentDescription = "Настройки",
-                tint = topAppBarContent
-            )
+            Icon(Icons.Filled.Settings, contentDescription = "Настройки", tint = topAppBarContent)
         }
     }
 }

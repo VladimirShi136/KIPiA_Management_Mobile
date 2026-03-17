@@ -88,7 +88,6 @@ data class SchemeData(
 
 
 // Класс для сериализации/десериализации фигур.
-// Совместим с обоими форматами: JavaFX (плоский) и Android (с properties).
 data class ShapeData(
     val type: String,               // JavaFX: "LINE", Android: "line" — нормализуем через .lowercase()
     val id: String? = null,         // отсутствует в JavaFX формате — генерируем при чтении

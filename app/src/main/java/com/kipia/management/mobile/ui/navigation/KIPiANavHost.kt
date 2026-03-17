@@ -124,12 +124,12 @@ fun KIPiANavHost(
         composable(BottomNavItem.Schemes.route) {
             SchemesScreen(
                 onNavigateToSchemeEditor = { schemeId ->
-                    val route = "scheme_editor/$schemeId"
-                    navController.navigate(route)
+                    navController.navigate("scheme_editor/$schemeId")
                 },
                 topAppBarController = topAppBarController,
                 updateBottomNavVisibility = updateBottomNavVisibility,
-                notificationManager = notificationManager
+                notificationManager = notificationManager,
+                viewModel = schemesViewModel  // ← добавить
             )
         }
 

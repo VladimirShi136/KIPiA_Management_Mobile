@@ -30,14 +30,12 @@ import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
+import com.kipia.management.mobile.viewmodel.DeviceStats
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-/**
- * Основной экран для отображения и управления приборами
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTextApi::class)
 @Composable
 fun DevicesScreen(
@@ -48,119 +46,70 @@ fun DevicesScreen(
     deleteViewModel: DeviceDeleteViewModel = hiltViewModel(),
     notificationManager: NotificationManager
 ) {
-    val devices by viewModel.devices.collectAsStateWithLifecycle()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val searchQuery = uiState.searchQuery
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    var sortColumn by remember { mutableStateOf(SortColumn.INVENTORY_NUMBER) }
-    var sortAscending by remember { mutableStateOf(true) }
-    val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
+    val devices    by viewModel.devices.collectAsStateWithLifecycle()
+    val uiState    by viewModel.uiState.collectAsStateWithLifecycle()
+    val stats      by viewModel.stats.collectAsStateWithLifecycle()
+    val snackbarHostState  = remember { SnackbarHostState() }
+    val scope              = rememberCoroutineScope()
+    val deleteDialogData   by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
     val verticalScrollState = rememberLazyListState()
 
-    // ★★★★ УПРОЩЕННАЯ ЛОГИКА СКРЫТИЯ BOTTOM NAV ★★★★
+    // ── Видимость BottomNav ───────────────────────────────────────────────────
+
     val shouldShowBottomNav by remember {
         derivedStateOf {
-            with(verticalScrollState) {
-                // Если мы в самом верху списка (первый элемент и не было скролла)
-                firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
-            }
+            verticalScrollState.firstVisibleItemIndex == 0 &&
+                    verticalScrollState.firstVisibleItemScrollOffset == 0
         }
     }
 
-    // Обновляем состояние BottomNav
     LaunchedEffect(shouldShowBottomNav) {
-        Timber.d("DevicesScreen: Обновление BottomNav видимости: $shouldShowBottomNav")
         updateBottomNavVisibility(shouldShowBottomNav)
     }
 
-    // ★★★★ КНОПКА "ВВЕРХ" ★★★★
     val showScrollToTopButton by remember {
-        derivedStateOf {
-            !shouldShowBottomNav
-        }
+        derivedStateOf { !shouldShowBottomNav }
     }
 
-    // Функция для удаления устройства
+    // ── Удаление ─────────────────────────────────────────────────────────────
+
     val deleteDeviceAction: (Device) -> Unit = { device ->
-        scope.launch {
-            deleteViewModel.checkAndShowDialog(device)
-        }
+        scope.launch { deleteViewModel.checkAndShowDialog(device) }
     }
 
-    // ★★★★ ОБРАБОТКА УВЕДОМЛЕНИЙ ★★★★
+    // ── Уведомления ──────────────────────────────────────────────────────────
+
     LaunchedEffect(Unit) {
         notificationManager.notification.collect { notification ->
-            // Пропускаем пустые уведомления
-            if (notification is NotificationManager.Notification.None) {
-                println("DEBUG DevicesScreen: Получено пустое уведомление - пропускаем")
-                return@collect
-            }
+            if (notification is NotificationManager.Notification.None) return@collect
 
-            println("DEBUG DevicesScreen: Получено уведомление: $notification")
+            Timber.d("DevicesScreen: notification=$notification")
 
             val message = when (notification) {
-                is NotificationManager.Notification.DeviceSaved -> {
-                    println("DEBUG DevicesScreen: Показываем уведомление о сохранении")
+                is NotificationManager.Notification.DeviceSaved ->
                     "Прибор '${notification.deviceName}' сохранен"
-                }
-
-                is NotificationManager.Notification.DeviceDeleted -> {
-                    println("DEBUG DevicesScreen: Показываем уведомление об удалении")
-                    if (notification.withScheme) {
+                is NotificationManager.Notification.DeviceDeleted ->
+                    if (notification.withScheme)
                         "Прибор '${notification.deviceName}' и схема удалены"
-                    } else {
+                    else
                         "Прибор '${notification.deviceName}' удален"
-                    }
-                }
-
-                is NotificationManager.Notification.Error -> {
-                    println("DEBUG DevicesScreen: Показываем уведомление об ошибке")
+                is NotificationManager.Notification.Error ->
                     "Ошибка: ${notification.message}"
-                }
-
+                is NotificationManager.Notification.SchemeSaved ->
+                    "Схема '${notification.schemeName}' сохранена"
                 NotificationManager.Notification.None -> return@collect
-                is NotificationManager.Notification.SchemeSaved -> TODO()
             }
 
             scope.launch {
-                println("DEBUG DevicesScreen: Показываем snackbar: $message")
-                snackbarHostState.showSnackbar(
-                    message = message,
-                    duration = SnackbarDuration.Short
-                )
-
-                // ★★★★ ВАЖНО: Очищаем replay cache после показа ★★★★
-                delay(100) // Небольшая задержка для гарантии показа
+                snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
+                delay(100)
                 notificationManager.clearLastNotification()
             }
         }
     }
 
-    // ★★★★ ТОЛЬКО СОРТИРОВКА (фильтрация в ViewModel) ★★★★
-    val sortedDevices = remember(
-        devices, // ViewModel УЖЕ отфильтровал устройства
-        sortColumn,
-        sortAscending
-    ) {
-        devices.sortedWith(
-            compareBy<Device> { device ->
-                when (sortColumn) {
-                    SortColumn.TYPE -> device.type
-                    SortColumn.NAME -> device.name ?: ""
-                    SortColumn.INVENTORY_NUMBER -> device.inventoryNumber
-                    SortColumn.MEASUREMENT_LIMIT -> device.measurementLimit ?: ""
-                    SortColumn.LOCATION -> device.location
-                    SortColumn.VALVE_NUMBER -> device.valveNumber ?: ""
-                    SortColumn.STATUS -> device.status
-                }
-            }.let { comparator ->
-                if (!sortAscending) comparator.reversed() else comparator
-            }
-        )
-    }
+    // ── UI ───────────────────────────────────────────────────────────────────
 
-    // ★★★★ ВСЁ В ОДНОМ Box ★★★★
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -172,21 +121,24 @@ fun DevicesScreen(
                         .add(WindowInsets(bottom = 0.dp))
                 )
         ) {
-            // ★★★★ СТАТИСТИКА ★★★★
+            // Статистика — данные из ViewModel, не считаем здесь
             DeviceStatistics(
-                devices = devices,
+                stats = stats,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(60.dp)
                     .padding(bottom = 6.dp)
             )
 
-            // ★★★★ АКТИВНЫЕ ФИЛЬТРЫ ★★★★
-            if (searchQuery.isNotEmpty() || uiState.locationFilter != null || uiState.statusFilter != null) {
+            // Активные фильтры
+            if (uiState.searchQuery.isNotEmpty() ||
+                uiState.locationFilter != null   ||
+                uiState.statusFilter   != null
+            ) {
                 ActiveFiltersBadge(
-                    searchQuery = searchQuery,
+                    searchQuery    = uiState.searchQuery,
                     locationFilter = uiState.locationFilter,
-                    statusFilter = uiState.statusFilter,
+                    statusFilter   = uiState.statusFilter,
                     onClearFilters = {
                         viewModel.setSearchQuery("")
                         viewModel.setLocationFilter(null)
@@ -197,125 +149,82 @@ fun DevicesScreen(
             }
 
             when {
-                uiState.isLoading -> {
-                    LoadingState()
-                }
+                uiState.isLoading -> LoadingState()
 
-                sortedDevices.isEmpty() -> {
-                    EmptyDevicesState(
-                        onAddDevice = { onNavigateToDeviceEdit(null) }
-                    )
-                }
+                devices.isEmpty() -> EmptyDevicesState(
+                    onAddDevice = { onNavigateToDeviceEdit(null) }
+                )
 
-                else -> {
-                    DeviceTableWithScroll(
-                        devices = sortedDevices,
-                        searchQuery = searchQuery,
-                        sortColumn = sortColumn,
-                        sortAscending = sortAscending,
-                        verticalScrollState = verticalScrollState,
-                        onSortColumn = { column ->
-                            if (sortColumn == column) {
-                                sortAscending = !sortAscending
-                            } else {
-                                sortColumn = column
-                                sortAscending = true
-                            }
-                        },
-                        onDeviceClick = { device ->
-                            onNavigateToDeviceDetail(device.id)
-                        },
-                        onEditDevice = { device ->
-                            onNavigateToDeviceEdit(device.id)
-                        },
-                        onDeleteDevice = deleteDeviceAction,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                    )
-                }
+                else -> DeviceTableWithScroll(
+                    devices             = devices, // уже отфильтрованы и отсортированы
+                    searchQuery         = uiState.searchQuery,
+                    sortColumn          = uiState.sortColumn,
+                    sortAscending       = uiState.sortAscending,
+                    verticalScrollState = verticalScrollState,
+                    onSortColumn        = { column -> viewModel.setSortColumn(column) },
+                    onDeviceClick       = { device -> onNavigateToDeviceDetail(device.id) },
+                    onEditDevice        = { device -> onNavigateToDeviceEdit(device.id) },
+                    onDeleteDevice      = deleteDeviceAction,
+                    modifier            = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                )
             }
         }
 
-        // ★★★★ COLUMN ДЛЯ ВЕРТИКАЛЬНОГО РАСПОЛОЖЕНИЯ КНОПОК ★★★★
+        // FAB-кнопки
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(
-                    end = 46.dp,
-                    bottom = 30.dp
-                )
+                .padding(end = 46.dp, bottom = 30.dp)
                 .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ★★★★ КНОПКА "ВВЕРХ" (появляется когда навигация скрыта) ★★★★
             AnimatedVisibility(
                 visible = showScrollToTopButton,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
+                enter   = fadeIn() + scaleIn(),
+                exit    = fadeOut() + scaleOut()
             ) {
                 FloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            verticalScrollState.animateScrollToItem(0)
-                        }
-                    },
+                    onClick        = { scope.launch { verticalScrollState.animateScrollToItem(0) } },
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier
-                        .size(48.dp)
+                    contentColor   = MaterialTheme.colorScheme.onPrimary,
+                    modifier       = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        Icons.Default.ArrowUpward,
-                        contentDescription = "Наверх",
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(Icons.Default.ArrowUpward, contentDescription = "Наверх", modifier = Modifier.size(24.dp))
                 }
             }
 
-            // ★★★★ КНОПКА ДОБАВЛЕНИЯ ПРИБОРА ★★★★
             FloatingActionButton(
-                onClick = { onNavigateToDeviceEdit(null) },
+                onClick        = { onNavigateToDeviceEdit(null) },
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(48.dp)
+                contentColor   = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier       = Modifier.size(48.dp)
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Добавить прибор",
-                    modifier = Modifier.size(24.dp)
-                )
+                Icon(Icons.Default.Add, contentDescription = "Добавить прибор", modifier = Modifier.size(24.dp))
             }
         }
 
-        // Snackbar
         SnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier
+            modifier  = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 16.dp)
         )
 
-        // ★★★★ ДИАЛОГ УДАЛЕНИЯ ★★★★
         deleteDialogData?.let { dialogData ->
             DeviceDeleteDialog(
-                device = dialogData.device,
-                scheme = dialogData.scheme,
+                device               = dialogData.device,
+                scheme               = dialogData.scheme,
                 deviceCountInLocation = dialogData.deviceCountInLocation,
-                isLastInLocation = dialogData.isLastInLocation,
-                onDismiss = {
-                    deleteViewModel.dismissDialog()
-                },
-                onConfirm = { deleteScheme ->
+                isLastInLocation     = dialogData.isLastInLocation,
+                onDismiss            = { deleteViewModel.dismissDialog() },
+                onConfirm            = { deleteScheme ->
                     scope.launch {
                         try {
-                            // ★★★★ Передаем флаг deleteScheme в ViewModel ★★★★
-                            // ViewModel сам решит, удалять ли схему
                             viewModel.deleteDevice(dialogData.device, deleteScheme)
-
                             deleteViewModel.dismissDialog()
-
                         } catch (e: Exception) {
                             deleteViewModel.dismissDialog()
                             snackbarHostState.showSnackbar("Ошибка удаления: ${e.message}")
@@ -327,6 +236,10 @@ fun DevicesScreen(
     }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Enum — должен быть здесь, т.к. ViewModel его импортирует
+// ═════════════════════════════════════════════════════════════════════════════
+
 enum class SortColumn(val displayName: String) {
     TYPE("Тип прибора"),
     NAME("Модель"),
@@ -337,259 +250,16 @@ enum class SortColumn(val displayName: String) {
     STATUS("Статус")
 }
 
-@Composable
-fun DeviceDeleteDialog(
-    device: Device,
-    scheme: Scheme?,
-    deviceCountInLocation: Int,
-    isLastInLocation: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (deleteScheme: Boolean) -> Unit
-) {
-    val messageContent = @Composable {
-        Column(
-            modifier = Modifier
-                .padding(16.dp) // ← ВСЕГДА фиксированный padding — НЕ fillMaxWidth!
-                .heightIn(max = 200.dp) // ← Ограничиваем высоту, чтобы не "вылазил"
-        ) {
-            if (isLastInLocation) {
-                Text(
-                    text = "Вы удаляете устройство:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${device.getDisplayName()} (${device.inventoryNumber})",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+// ═════════════════════════════════════════════════════════════════════════════
+// Таблица
+// Архитектура: один horizontalScroll снаружи, LazyColumn внутри.
+// Строки — обычные Row без подписки на ScrollState.
+// При горизонтальном скролле рекомпозируется только внешний Box,
+// а не каждая из видимых строк — это главное ускорение.
+// ═════════════════════════════════════════════════════════════════════════════
 
-                if (scheme != null) {
-                    Text(
-                        text = "Это последнее устройство в локации:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "'${scheme.name}'",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    Text(
-                        text = "Что делать со схемой этой локации?",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                } else {
-                    Text(
-                        text = "Это последнее устройство в локации '${device.location}'.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Схема не привязана.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                Text(
-                    text = "Вы уверены, что хотите удалить устройство?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${device.getDisplayName()} (${device.inventoryNumber})",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                Text(
-                    text = "В локации '${device.location}' останется ещё ${deviceCountInLocation - 1} приборов.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Схема останется без изменений.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                if (isLastInLocation) "Удаление устройства" else "Подтверждение удаления",
-                style = MaterialTheme.typography.titleMedium
-            )
-        },
-        text = { messageContent() }, // ← Передаём как lambda
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (isLastInLocation && scheme != null) {
-                        onConfirm(true) // "Удалить с схемой"
-                    } else {
-                        onConfirm(false) // "Удалить устройство"
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                ),
-                modifier = Modifier.padding(end = 8.dp)
-            ) {
-                Text(
-                    text = if (isLastInLocation && scheme != null) {
-                        "Удалить с схемой"
-                    } else {
-                        "Удалить устройство"
-                    },
-                    color = MaterialTheme.colorScheme.onError
-                )
-            }
-        },
-        dismissButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                when {
-                    // Случай 1: Последний прибор с привязанной схемой (3 кнопки)
-                    isLastInLocation && scheme != null -> {
-                        // Кнопка "Только устройство"
-                        Button(
-                            onClick = { onConfirm(false) }, // Удалить только устройство
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Text("Только устройство")
-                        }
-
-                        // Кнопка "Отмена"
-                        Button(onClick = onDismiss) {
-                            Text("Отмена")
-                        }
-                    }
-
-                    // Случай 2: НЕ последний прибор или нет схемы (2 кнопки)
-                    else -> {
-                        // Кнопка "Отмена" - просто закрывает диалог
-                        Button(
-                            onClick = onDismiss,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Text("Отмена")
-                        }
-                    }
-                }
-            }
-        }
-    )
-}
-
-@Composable
-fun DeviceStatistics(
-    devices: List<Device>,
-    modifier: Modifier = Modifier
-) {
-    val total = devices.size
-    val inWork = devices.count { it.status == "В работе" }
-    val inStorage = devices.count { it.status == "Хранение" }
-    val lost = devices.count { it.status == "Утерян" }
-    val broken = devices.count { it.status == "Испорчен" }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Всего приборов
-            StatItem(
-                count = total,
-                label = "Всего",
-                color = DeviceStatusColors.Total,
-                modifier = Modifier.weight(1f)
-            )
-
-            // В работе
-            StatItem(
-                count = inWork,
-                label = "В работе",
-                color = DeviceStatusColors.Working,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Хранение
-            StatItem(
-                count = inStorage,
-                label = "Хранение",
-                color = DeviceStatusColors.Storage,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Утерян
-            StatItem(
-                count = lost,
-                label = "Утерян",
-                color = DeviceStatusColors.Lost,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Испорчен
-            StatItem(
-                count = broken,
-                label = "Испорчен",
-                color = DeviceStatusColors.Broken,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-fun StatItem(
-    count: Int,
-    label: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+// Суммарная ширина всех колонок (120+150+100+120+120+100+100+80)
+private val TABLE_TOTAL_WIDTH = 890.dp
 
 @Composable
 fun DeviceTableWithScroll(
@@ -604,62 +274,56 @@ fun DeviceTableWithScroll(
     onDeleteDevice: (Device) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Один ScrollState на всю таблицу — шапка и строки скроллятся синхронно
     val horizontalScrollState = rememberScrollState()
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Заголовок таблицы с верхними скругленными углами
+
+        // ── Шапка ──────────────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 12.dp,
-                        topEnd = 12.dp,
-                        bottomStart = 0.dp,
-                        bottomEnd = 0.dp
-                    )
-                )
+                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .horizontalScroll(horizontalScrollState)
         ) {
             TableHeader(
-                sortColumn = sortColumn,
+                sortColumn    = sortColumn,
                 sortAscending = sortAscending,
-                onSortColumn = onSortColumn,
-                horizontalScrollState = horizontalScrollState,
-                modifier = Modifier.fillMaxWidth()
+                onSortColumn  = onSortColumn
             )
         }
 
-        // Тело таблицы с LazyColumn и нижними скругленными углами
+        // ── Тело таблицы ───────────────────────────────────────────────────
+        // horizontalScroll СНАРУЖИ LazyColumn — строки не знают о скролле
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 0.dp,
-                        topEnd = 0.dp,
-                        bottomStart = 12.dp,
-                        bottomEnd = 12.dp
-                    )
-                )
+                .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
+                .horizontalScroll(horizontalScrollState)
         ) {
             LazyColumn(
-                state = verticalScrollState,
-                modifier = Modifier.fillMaxSize(),
+                state          = verticalScrollState,
+                modifier       = Modifier.width(TABLE_TOTAL_WIDTH),
                 contentPadding = PaddingValues(bottom = 1.dp)
             ) {
                 itemsIndexed(devices, key = { _, device -> device.id }) { index, device ->
+                    // remember стабилизирует лямбды — строка не перерисовывается
+                    // если device.id не изменился
+                    val onClick  = remember(device.id) { { onDeviceClick(device) } }
+                    val onEdit   = remember(device.id) { { onEditDevice(device) } }
+                    val onDelete = remember(device.id) { { onDeleteDevice(device) } }
+
                     TableRowWithDivider(
-                        device = device,
-                        index = index, // ← ВАЖНО: передаем индекс из itemsIndexed
+                        device      = device,
+                        index       = index,
                         searchQuery = searchQuery,
-                        onClick = { onDeviceClick(device) },
-                        onEdit = { onEditDevice(device) },
-                        onDelete = { onDeleteDevice(device) },
-                        horizontalScrollState = horizontalScrollState,
-                        showDivider = index < devices.size - 1 // ← Упрощенная логика
+                        onClick     = onClick,
+                        onEdit      = onEdit,
+                        onDelete    = onDelete,
+                        showDivider = index < devices.size - 1
                     )
                 }
             }
@@ -675,30 +339,31 @@ fun TableRowWithDivider(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    horizontalScrollState: ScrollState,
     showDivider: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // dividerColor через remember — не читаем colorScheme при каждом скролле
+    val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+
     Column(modifier = modifier) {
         TableRow(
-            device = device,
-            index = index,
+            device      = device,
+            index       = index,
             searchQuery = searchQuery,
-            onClick = onClick,
-            onEdit = onEdit,
-            onDelete = onDelete,
-            horizontalScrollState = horizontalScrollState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp) // Уменьшенная высота строки
+            onClick     = onClick,
+            onEdit      = onEdit,
+            onDelete    = onDelete,
+            modifier    = Modifier
+                .width(TABLE_TOTAL_WIDTH)
+                .height(40.dp)
         )
         if (showDivider) {
             HorizontalDivider(
-                modifier = Modifier
-                    .fillMaxWidth()
+                modifier  = Modifier
+                    .width(TABLE_TOTAL_WIDTH)
                     .padding(horizontal = 8.dp),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                color     = dividerColor
             )
         }
     }
@@ -709,90 +374,28 @@ fun TableHeader(
     sortColumn: SortColumn,
     sortAscending: Boolean,
     onSortColumn: (SortColumn) -> Unit,
-    horizontalScrollState: ScrollState,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier          = modifier
+            .width(TABLE_TOTAL_WIDTH)
             .height(40.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .horizontalScroll(horizontalScrollState),
+            .background(MaterialTheme.colorScheme.surfaceVariant),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Тип прибора
-        TableHeaderCell(
-            title = "Тип прибора",
-            width = 120.dp,
-            isSorted = sortColumn == SortColumn.TYPE,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.TYPE) }
-        )
+        TableHeaderCell(title = "Тип прибора",    width = 120.dp, isSorted = sortColumn == SortColumn.TYPE,              sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.TYPE) })
+        TableHeaderCell(title = "Модель",         width = 150.dp, isSorted = sortColumn == SortColumn.NAME,              sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.NAME) })
+        TableHeaderCell(title = "Инв. №",         width = 100.dp, isSorted = sortColumn == SortColumn.INVENTORY_NUMBER,  sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.INVENTORY_NUMBER) })
+        TableHeaderCell(title = "Предел измер.",  width = 120.dp, isSorted = sortColumn == SortColumn.MEASUREMENT_LIMIT, sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.MEASUREMENT_LIMIT) })
+        TableHeaderCell(title = "Место",          width = 120.dp, isSorted = sortColumn == SortColumn.LOCATION,          sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.LOCATION) })
+        TableHeaderCell(title = "Номер крана",    width = 100.dp, isSorted = sortColumn == SortColumn.VALVE_NUMBER,      sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.VALVE_NUMBER) })
+        TableHeaderCell(title = "Статус",         width = 100.dp, isSorted = sortColumn == SortColumn.STATUS,            sortAscending = sortAscending, onClick = { onSortColumn(SortColumn.STATUS) })
 
-        // 2. Модель
-        TableHeaderCell(
-            title = "Модель",
-            width = 150.dp,
-            isSorted = sortColumn == SortColumn.NAME,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.NAME) }
-        )
-
-        // 3. Инв. №
-        TableHeaderCell(
-            title = "Инв. №",
-            width = 100.dp,
-            isSorted = sortColumn == SortColumn.INVENTORY_NUMBER,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.INVENTORY_NUMBER) }
-        )
-
-        // 4. Предел измерений
-        TableHeaderCell(
-            title = "Предел измер.",
-            width = 120.dp,
-            isSorted = sortColumn == SortColumn.MEASUREMENT_LIMIT,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.MEASUREMENT_LIMIT) }
-        )
-
-        // 5. Место установки
-        TableHeaderCell(
-            title = "Место",
-            width = 120.dp,
-            isSorted = sortColumn == SortColumn.LOCATION,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.LOCATION) }
-        )
-
-        // 6. Номер крана
-        TableHeaderCell(
-            title = "Номер крана",
-            width = 100.dp,
-            isSorted = sortColumn == SortColumn.VALVE_NUMBER,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.VALVE_NUMBER) }
-        )
-
-        // 7. Статус
-        TableHeaderCell(
-            title = "Статус",
-            width = 100.dp,
-            isSorted = sortColumn == SortColumn.STATUS,
-            sortAscending = sortAscending,
-            onClick = { onSortColumn(SortColumn.STATUS) }
-        )
-
-        // 8. Действия
-        Box(
-            modifier = Modifier
-                .width(80.dp)
-                .padding(vertical = 12.dp)
-        ) {
+        Box(modifier = Modifier.width(80.dp).padding(vertical = 12.dp)) {
             Text(
-                text = "Действия",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text     = "Действия",
+                style    = MaterialTheme.typography.labelMedium,
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
@@ -809,9 +412,7 @@ fun TableHeaderCell(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier
-            .width(width)
-            .height(40.dp),
+        modifier = modifier.width(width).height(40.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -823,21 +424,19 @@ fun TableHeaderCell(
                 .padding(horizontal = 8.dp)
         ) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text     = title,
+                style    = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color    = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-
             Spacer(modifier = Modifier.width(4.dp))
-
             if (isSorted) {
                 Icon(
-                    if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                    imageVector        = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
                     contentDescription = if (sortAscending) "По возрастанию" else "По убыванию",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier           = Modifier.size(16.dp),
+                    tint               = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -853,137 +452,62 @@ fun TableRow(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    horizontalScrollState: ScrollState,
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
+    // Читаем цвета один раз — Compose кэширует если colorScheme не менялась
+    val bgColor   = if (index % 2 == 0) MaterialTheme.colorScheme.surface
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
+    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+
     Row(
         modifier = modifier
-            .fillMaxWidth()
+            .width(TABLE_TOTAL_WIDTH)
             .height(40.dp)
             .clickable(onClick = onClick)
-            .background(
-                color = if (index % 2 == 0) {
-                    MaterialTheme.colorScheme.surface
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
-                }
-            )
-            .horizontalScroll(horizontalScrollState),
+            .background(bgColor),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Тип прибора
-        TableCell(
-            text = device.type,
-            width = 120.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
 
-        // 2. Модель
-        TableCell(
-            text = device.name ?: "-",
-            width = 150.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
+        TableCell(device.type,                   120.dp, searchQuery, highlight)
+        TableCell(device.name ?: "-",            150.dp, searchQuery, highlight)
+        TableCell(device.inventoryNumber,         100.dp, searchQuery, highlight)
+        TableCell(device.measurementLimit ?: "-", 120.dp, searchQuery, highlight)
+        TableCell(device.location,               120.dp, searchQuery, highlight)
+        TableCell(device.valveNumber ?: "-",     100.dp, searchQuery, highlight)
 
-        // 3. Инв. №
-        TableCell(
-            text = device.inventoryNumber,
-            width = 100.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
-
-        // 4. Предел измерений
-        TableCell(
-            text = device.measurementLimit ?: "-",
-            width = 120.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
-
-        // 5. Место установки
-        TableCell(
-            text = device.location,
-            width = 120.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
-
-        // 6. Номер крана
-        TableCell(
-            text = device.valveNumber ?: "-",
-            width = 100.dp,
-            searchQuery = searchQuery,
-            highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        )
-
-        // 7. Статус
-        Box(
-            modifier = Modifier
-                .width(100.dp)
-                .padding(horizontal = 8.dp)
-        ) {
+        Box(modifier = Modifier.width(100.dp).padding(horizontal = 8.dp)) {
             StatusBadgeCompact(status = device.status)
         }
 
-        // 8. Действия
-        Box(
-            modifier = Modifier
-                .width(80.dp)
-                .padding(horizontal = 4.dp)
-        ) {
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.MoreVert,
-                        contentDescription = "Меню",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+        Box(modifier = Modifier.width(80.dp).padding(horizontal = 4.dp)) {
+            IconButton(
+                onClick  = { showMenu = true },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Меню", modifier = Modifier.size(18.dp))
+            }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Открыть") },
-                        onClick = {
-                            showMenu = false
-                            onClick()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Visibility, contentDescription = null)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Изменить") },
-                        onClick = {
-                            showMenu = false
-                            onEdit()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Edit, contentDescription = null)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Удалить") },
-                        onClick = {
-                            showMenu = false
-                            onDelete() // ← ВАЖНО: вызывается ли этот колбэк?
-                            println("DEBUG: Кнопка 'Удалить' нажата для устройства ${device.id}")
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Delete, contentDescription = null)
-                        }
-                    )
-                }
+            DropdownMenu(
+                expanded          = showMenu,
+                onDismissRequest  = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text         = { Text("Открыть") },
+                    onClick      = { showMenu = false; onClick() },
+                    leadingIcon  = { Icon(Icons.Default.Visibility, null) }
+                )
+                DropdownMenuItem(
+                    text         = { Text("Изменить") },
+                    onClick      = { showMenu = false; onEdit() },
+                    leadingIcon  = { Icon(Icons.Default.Edit, null) }
+                )
+                DropdownMenuItem(
+                    text         = { Text("Удалить") },
+                    onClick      = { showMenu = false; onDelete() },
+                    leadingIcon  = { Icon(Icons.Default.Delete, null) }
+                )
             }
         }
     }
@@ -1007,70 +531,115 @@ fun TableCell(
         contentAlignment = Alignment.CenterStart
     ) {
         if (searchQuery.isNotEmpty() && text.contains(searchQuery, ignoreCase = true)) {
-            val annotatedString = buildAnnotatedString {
-                val lowerText = text.lowercase()
-                val lowerQuery = searchQuery.lowercase()
-                var startIndex = 0
+            // remember кэширует результат — не пересчитывается пока text/searchQuery не изменились
+            val annotatedString = remember(text, searchQuery, highlightColor) {
+                buildAnnotatedString {
+                    val lowerText  = text.lowercase()
+                    val lowerQuery = searchQuery.lowercase()
+                    var startIndex = 0
 
-                while (true) {
-                    val index = lowerText.indexOf(lowerQuery, startIndex)
-                    if (index == -1) break
-
-                    append(text.substring(startIndex, index))
-                    withStyle(
-                        SpanStyle(
-                            background = highlightColor,
-                            fontWeight = FontWeight.Bold
-                        )
-                    ) {
-                        append(text.substring(index, index + searchQuery.length))
+                    while (true) {
+                        val index = lowerText.indexOf(lowerQuery, startIndex)
+                        if (index == -1) break
+                        append(text.substring(startIndex, index))
+                        withStyle(SpanStyle(background = highlightColor, fontWeight = FontWeight.Bold)) {
+                            append(text.substring(index, index + searchQuery.length))
+                        }
+                        startIndex = index + searchQuery.length
                     }
-                    startIndex = index + searchQuery.length
-                }
-
-                if (startIndex < text.length) {
-                    append(text.substring(startIndex))
+                    if (startIndex < text.length) append(text.substring(startIndex))
                 }
             }
-
             Text(
-                text = annotatedString,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
+                text     = annotatedString,
+                style    = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface, // ИЗМЕНЕНИЕ
+                color    = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
             Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
+                text     = text,
+                style    = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize),
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface, // ИЗМЕНЕНИЕ
+                color    = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Статистика — принимает готовый DeviceStats из ViewModel
+// ═════════════════════════════════════════════════════════════════════════════
+
+@Composable
+fun DeviceStatistics(
+    stats: DeviceStats,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(12.dp),
+        colors   = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier              = Modifier.fillMaxWidth().padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatItem(stats.total,     "Всего",    DeviceStatusColors.Total,   Modifier.weight(1f))
+            StatItem(stats.inWork,    "В работе", DeviceStatusColors.Working, Modifier.weight(1f))
+            StatItem(stats.inStorage, "Хранение", DeviceStatusColors.Storage, Modifier.weight(1f))
+            StatItem(stats.lost,      "Утерян",   DeviceStatusColors.Lost,    Modifier.weight(1f))
+            StatItem(stats.broken,    "Испорчен", DeviceStatusColors.Broken,  Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+fun StatItem(
+    count: Int,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text  = count.toString(),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = color
+        )
+        Text(
+            text      = label,
+            style     = MaterialTheme.typography.labelSmall,
+            color     = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Прочие компоненты
+// ═════════════════════════════════════════════════════════════════════════════
+
 @Composable
 fun StatusBadgeCompact(status: String) {
     val deviceStatus = DeviceStatus.fromString(status)
-
     Surface(
-        color = deviceStatus.containerColor,
-        shape = RoundedCornerShape(4.dp),
-        modifier = Modifier
-            .height(24.dp) // Уменьшенная высота бейджа
-            .padding(vertical = 2.dp)
+        color    = deviceStatus.containerColor,
+        shape    = RoundedCornerShape(4.dp),
+        modifier = Modifier.height(24.dp).padding(vertical = 2.dp)
     ) {
         Text(
-            text = getCompactStatus(status),
-            color = deviceStatus.textColor,
-            style = MaterialTheme.typography.labelSmall.copy(
+            text     = getCompactStatus(status),
+            color    = deviceStatus.textColor,
+            style    = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Medium,
-                fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+                fontSize   = MaterialTheme.typography.labelSmall.fontSize * 0.9f
             ),
             modifier = Modifier
                 .padding(horizontal = 6.dp)
@@ -1081,14 +650,12 @@ fun StatusBadgeCompact(status: String) {
     }
 }
 
-private fun getCompactStatus(fullStatus: String): String {
-    return when (fullStatus) {
-        "В работе" -> "В работе"
-        "Хранение" -> "Хранение"
-        "Утерян" -> "Утерян"
-        "Испорчен" -> "Испорчен"
-        else -> fullStatus
-    }
+private fun getCompactStatus(fullStatus: String): String = when (fullStatus) {
+    "В работе" -> "В работе"
+    "Хранение" -> "Хранение"
+    "Утерян"   -> "Утерян"
+    "Испорчен" -> "Испорчен"
+    else        -> fullStatus
 }
 
 @Composable
@@ -1101,51 +668,33 @@ fun ActiveFiltersBadge(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
+        shape    = RoundedCornerShape(8.dp),
+        colors   = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier              = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment     = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier.weight(1f),
+                modifier          = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.FilterAlt,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-
+                Icon(Icons.Default.FilterAlt, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
-
                 Text(
-                    text = buildActiveFiltersText(searchQuery, locationFilter, statusFilter),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text     = buildActiveFiltersText(searchQuery, locationFilter, statusFilter),
+                    style    = MaterialTheme.typography.labelSmall,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
-            IconButton(
-                onClick = onClearFilters,
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Очистить фильтры",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
+            IconButton(onClick = onClearFilters, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Close, "Очистить фильтры", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -1156,46 +705,22 @@ private fun buildActiveFiltersText(
     locationFilter: String?,
     statusFilter: String?
 ): String {
-    val filters = mutableListOf<String>()
-
-    if (searchQuery.isNotEmpty()) {
-        filters.add("Поиск: \"$searchQuery\"")
+    val filters = buildList {
+        if (searchQuery.isNotEmpty()) add("Поиск: \"$searchQuery\"")
+        if (locationFilter != null)   add("Место: $locationFilter")
+        if (statusFilter   != null)   add("Статус: $statusFilter")
     }
-
-    if (locationFilter != null) {
-        filters.add("Место: $locationFilter")
-    }
-
-    if (statusFilter != null) {
-        filters.add("Статус: $statusFilter")
-    }
-
-    return if (filters.isEmpty()) {
-        "Нет активных фильтров"
-    } else {
-        "Фильтры: ${filters.joinToString(", ")}"
-    }
+    return if (filters.isEmpty()) "Нет активных фильтров"
+    else "Фильтры: ${filters.joinToString(", ")}"
 }
 
 @Composable
 fun LoadingState() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-                strokeWidth = 3.dp
-            )
+            CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 3.dp)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Загрузка приборов...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Загрузка приборов...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1205,56 +730,97 @@ fun EmptyDevicesState(
     onAddDevice: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                Icons.Default.Devices,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-
+    Box(modifier = modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(Icons.Default.Devices, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Нет приборов",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
+            Text("Нет приборов", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Добавьте первый прибор, нажав на кнопку ниже",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
+            Text("Добавьте первый прибор, нажав на кнопку ниже", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onAddDevice,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
+            Button(onClick = onAddDevice, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Добавить прибор")
             }
         }
     }
+}
+
+@Composable
+fun DeviceDeleteDialog(
+    device: Device,
+    scheme: Scheme?,
+    deviceCountInLocation: Int,
+    isLastInLocation: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (deleteScheme: Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (isLastInLocation) "Удаление устройства" else "Подтверждение удаления",
+                style = MaterialTheme.typography.titleMedium
+            )
+        },
+        text = {
+            Column(modifier = Modifier.padding(16.dp).heightIn(max = 200.dp)) {
+                if (isLastInLocation) {
+                    Text("Вы удаляете устройство:", style = MaterialTheme.typography.bodyMedium)
+                    Text("${device.getDisplayName()} (${device.inventoryNumber})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+                    if (scheme != null) {
+                        Text("Это последнее устройство в локации:", style = MaterialTheme.typography.bodyMedium)
+                        Text("'${scheme.name}'", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Что делать со схемой этой локации?", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        Text("Это последнее устройство в локации '${device.location}'.", style = MaterialTheme.typography.bodyMedium)
+                        Text("Схема не привязана.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Text("Вы уверены, что хотите удалить устройство?", style = MaterialTheme.typography.bodyMedium)
+                    Text("${device.getDisplayName()} (${device.inventoryNumber})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+                    Text("В локации '${device.location}' останется ещё ${deviceCountInLocation - 1} приборов.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Схема останется без изменений.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(isLastInLocation && scheme != null) },
+                colors  = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
+                Text(
+                    text  = if (isLastInLocation && scheme != null) "Удалить с схемой" else "Удалить устройство",
+                    color = MaterialTheme.colorScheme.onError
+                )
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    isLastInLocation && scheme != null -> {
+                        Button(
+                            onClick = { onConfirm(false) },
+                            colors  = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor   = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) { Text("Только устройство") }
+                        Button(onClick = onDismiss) { Text("Отмена") }
+                    }
+                    else -> {
+                        Button(
+                            onClick = onDismiss,
+                            colors  = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor   = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) { Text("Отмена") }
+                    }
+                }
+            }
+        }
+    )
 }

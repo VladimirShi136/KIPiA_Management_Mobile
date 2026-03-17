@@ -341,12 +341,30 @@ class SchemeEditorViewModel @Inject constructor(
 
     fun addShape(shapeType: EditorMode, position: Offset) {
         val newShape = ComposeShapeFactory.create(shapeType).apply {
-            if (this is ComposeText) {
-                x = position.x
-                y = position.y
-            } else {
-                x = position.x - width / 2
-                y = position.y - height / 2
+            when (this) {
+                is ComposeLine -> {
+                    // Линия: ставим абсолютные координаты start/end
+                    val cx = position.x
+                    val cy = position.y
+                    startX = cx - 50f
+                    startY = cy
+                    endX = cx + 50f
+                    endY = cy
+                    x = startX
+                    y = startY
+                    width = 100f
+                    height = 20f
+                }
+
+                is ComposeText -> {
+                    x = position.x
+                    y = position.y
+                }
+
+                else -> {
+                    x = position.x - width / 2
+                    y = position.y - height / 2
+                }
             }
         }
 
@@ -599,6 +617,26 @@ class SchemeEditorViewModel @Inject constructor(
         )
     }
 
+    fun rotateDevice(deviceId: Int, angleDeg: Float) {
+        val currentDevice = devices.value.find { it.deviceId == deviceId } ?: return
+        val previousAngle = currentDevice.rotation
+
+        // Нет смысла крутить если угол не изменился
+        if (previousAngle == angleDeg) return
+
+        commandManager.execute(object : Command {
+            override fun execute() {
+                deviceManager.rotateDevice(deviceId, angleDeg)
+                markAsDirty()
+            }
+
+            override fun undo() {
+                deviceManager.rotateDevice(deviceId, previousAngle)
+                markAsDirty()
+            }
+        })
+    }
+
     fun removeDevice(deviceId: Int) {
         commandManager.execute(
             RemoveDeviceCommand(
@@ -706,8 +744,22 @@ class SchemeEditorViewModel @Inject constructor(
                 }
             } else {
                 val newShape = ComposeShapeFactory.create(pendingShapeMode).apply {
-                    x = position.x - width / 2
-                    y = position.y - height / 2
+                    when (this) {
+                        is ComposeLine -> {
+                            startX = position.x - 50f
+                            startY = position.y
+                            endX   = position.x + 50f
+                            endY   = position.y
+                            x      = startX
+                            y      = startY
+                            width  = 100f
+                            height = 20f
+                        }
+                        else -> {
+                            x = position.x - width / 2
+                            y = position.y - height / 2
+                        }
+                    }
                 }
 
                 val canvasWidth = _editorState.value.canvasState.width.toFloat()
