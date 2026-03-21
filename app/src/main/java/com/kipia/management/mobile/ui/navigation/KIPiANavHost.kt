@@ -1,6 +1,11 @@
 package com.kipia.management.mobile.ui.navigation
 
 import android.net.Uri
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -27,6 +32,10 @@ import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
 
+// Константы анимации — один раз, используются везде
+private val tabEnter = scaleIn(tween(200), initialScale = 0.95f) + fadeIn(tween(200))
+private val tabExit = scaleOut(tween(200), targetScale = 0.95f) + fadeOut(tween(200))
+
 /**
  * Чистый навигационный хост - только маршрутизация
  */
@@ -47,10 +56,17 @@ fun KIPiANavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxSize(),
+        enterTransition = { fadeIn(tween(150)) },
+        exitTransition = { fadeOut(tween(150)) },
+        popEnterTransition = { fadeIn(tween(150)) },
+        popExitTransition = { fadeOut(tween(150)) }
     ) {
         // Экран устройств
-        composable(BottomNavItem.Devices.route) {
+        composable(
+            BottomNavItem.Devices.route,
+            enterTransition = { tabEnter },
+            exitTransition = { tabExit }) {
             DevicesScreen(
                 updateBottomNavVisibility = updateBottomNavVisibility,
                 onNavigateToDeviceDetail = { deviceId ->
@@ -121,7 +137,10 @@ fun KIPiANavHost(
         }
 
         // Схемы
-        composable(BottomNavItem.Schemes.route) {
+        composable(
+            BottomNavItem.Schemes.route,
+            enterTransition = { tabEnter },
+            exitTransition = { tabExit }) {
             SchemesScreen(
                 onNavigateToSchemeEditor = { schemeId ->
                     navController.navigate("scheme_editor/$schemeId")
@@ -146,12 +165,20 @@ fun KIPiANavHost(
         }
 
         // Отчеты
-        composable(BottomNavItem.Reports.route) {
-            ReportsScreen()
+        composable(
+            BottomNavItem.Reports.route,
+            enterTransition = { tabEnter },
+            exitTransition = { tabExit }) {
+            ReportsScreen(
+                topAppBarController = topAppBarController
+            )
         }
 
         // Фото (общая галерея)
-        composable(BottomNavItem.Photos.route) {
+        composable(
+            BottomNavItem.Photos.route,
+            enterTransition = { tabEnter },
+            exitTransition = { tabExit }) {
             PhotosScreen(
                 onNavigateToFullScreenPhoto = { photoPath, device ->
                     val fileName = Uri.decode(photoPath.substringAfterLast("/"))
@@ -188,7 +215,8 @@ fun KIPiANavHost(
             FullScreenPhotoContainer(
                 deviceId = deviceId,
                 photoIndex = photoIndex,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                topAppBarController = topAppBarController // ★ передаём контроллер
             )
         }
 

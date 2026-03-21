@@ -40,9 +40,10 @@ fun SettingsScreen(
     val syncState by settingsViewModel.syncState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
     val supportsDynamicColors = themeViewModel.supportsDynamicColors
-
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
-
+    val lastExport by settingsViewModel.lastExportTimestamp.collectAsStateWithLifecycle()
+    val lastImport by settingsViewModel.lastImportTimestamp.collectAsStateWithLifecycle()
+    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
@@ -134,6 +135,22 @@ fun SettingsScreen(
                 )
                 Text(
                     text = "Обменивайтесь данными между Android и ПК через ZIP-файл.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Text(
+                    text = "Последний экспорт: ${
+                        lastExport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"
+                    }",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "Последний импорт: ${
+                        lastImport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"
+                    }",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 16.dp)

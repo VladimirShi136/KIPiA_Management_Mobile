@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,6 +25,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
+import com.kipia.management.mobile.ui.components.dialogs.ErrorDialog
 import com.kipia.management.mobile.ui.components.scheme.SchemesActiveFiltersBadge
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.viewmodel.DeleteResult
@@ -71,11 +72,7 @@ fun SchemesScreen(
     }
 
     // ★ ЛОГИКА ДЛЯ КНОПКИ "НАВЕРХ"
-    val showScrollToTopButton by remember(shouldShowBottomNav) {
-        derivedStateOf {
-            !shouldShowBottomNav
-        }
-    }
+    val showScrollToTopButton = !shouldShowBottomNav
 
     // ★ Настраиваем TopAppBar через контроллер
     LaunchedEffect(topAppBarController) {
@@ -221,72 +218,30 @@ fun SchemesScreen(
 
         // Диалог подтверждения удаления
         showDeleteDialog?.let { scheme ->
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = null },
-                title = { Text("Удаление схемы") },
-                text = {
-                    Column {
-                        Text("Вы уверены, что хотите удалить схему:")
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "'${scheme.name}'",
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                        if (scheme.description?.isNotBlank() == true) {
-                            Text(
-                                text = "Описание: ${scheme.description}",
-                                fontStyle = FontStyle.Italic
-                            )
+            DeleteConfirmDialog(
+                title = "Удаление схемы",
+                itemName = "'${scheme.name}'",
+                message = if (scheme.description?.isNotBlank() == true)
+                    "Описание: ${scheme.description}" else null,
+                onConfirm = {
+                    scope.launch {
+                        when (val result = viewModel.deleteScheme(scheme)) {
+                            is DeleteResult.Error -> showError = result.message
+                            else -> {}
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Это действие нельзя отменить.",
-                            color = MaterialTheme.colorScheme.error
-                        )
                     }
+                    showDeleteDialog = null
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                when (val result = viewModel.deleteScheme(scheme)) {
-                                    is DeleteResult.Success -> {
-                                        // Можно показать Snackbar
-                                    }
-                                    is DeleteResult.Error -> {
-                                        showError = result.message
-                                    }
-                                }
-                            }
-                            showDeleteDialog = null
-                        },
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Удалить")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = null }) {
-                        Text("Отмена")
-                    }
-                }
+                onDismiss = { showDeleteDialog = null }
             )
         }
 
         // Ошибка
         showError?.let { error ->
-            AlertDialog(
-                onDismissRequest = { showError = null },
-                title = { Text("Нельзя удалить схему") },
-                text = { Text(error) },
-                confirmButton = {
-                    TextButton(onClick = { showError = null }) {
-                        Text("OK")
-                    }
-                }
+            ErrorDialog(
+                title = "Нельзя удалить схему",
+                message = error,
+                onDismiss = { showError = null }
             )
         }
     }
@@ -333,23 +288,39 @@ fun SchemeCard(
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val schemeData = scheme.getSchemeData()
+    val schemeData = remember(scheme.id) { scheme.getSchemeData() }
+
+    // Кэшируем стили — пересчитываются только при смене темы
+    val typography = MaterialTheme.typography
+    val colorScheme = MaterialTheme.colorScheme
+
+    val titleStyle = remember(typography) {
+        typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+    }
+    val subtitleColor = remember(colorScheme) {
+        colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    }
+    val cardColor = remember(colorScheme) {
+        colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    }
+
+    // Кэшируем форматирование даты — пересчитывается только при смене updatedAt
+    val formattedDate = remember(scheme.updatedAt) {
+        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(scheme.updatedAt))
+    }
 
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Заголовок с меню
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -358,17 +329,15 @@ fun SchemeCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = scheme.name,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        style = titleStyle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-
-                    // Показываем количество приборов
                     if (deviceCount > 0) {
                         Text(
                             text = "$deviceCount приборов привязано к локации",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                            style = typography.bodySmall,
+                            color = colorScheme.primary
                         )
                     }
                 }
@@ -380,100 +349,55 @@ fun SchemeCard(
                     ) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Меню")
                     }
-
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
                             text = { Text("Редактировать") },
-                            onClick = {
-                                showMenu = false
-                                onEdit()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Edit, contentDescription = null)
-                            }
+                            onClick = { showMenu = false; onEdit() },
+                            leadingIcon = { Icon(Icons.Default.Edit, null) }
                         )
                         DropdownMenuItem(
                             text = { Text("Удалить") },
-                            onClick = {
-                                showMenu = false
-                                onDelete()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Delete, contentDescription = null)
-                            },
+                            onClick = { showMenu = false; onDelete() },
+                            leadingIcon = { Icon(Icons.Default.Delete, null) },
                             enabled = canDelete
                         )
                     }
                 }
             }
 
-            // Индикатор если нельзя удалить
             if (!canDelete && deviceCount > 0) {
                 Text(
                     text = "⚠️ Нельзя удалить: используется $deviceCount прибором(ами)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    style = typography.labelSmall,
+                    color = colorScheme.error,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
-            // Информация о схеме
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Layers,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "${schemeData.devices.size} приборов на схеме",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Icon(
-                    Icons.Default.GridOn,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (schemeData.gridEnabled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Сетка ${schemeData.gridSize}px",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (schemeData.gridEnabled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Описание
             if (!scheme.description.isNullOrBlank()) {
                 Text(
                     text = scheme.description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
 
-            // Предпросмотр фона (если есть изображение)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Обновлено: $formattedDate",
+                style = typography.bodySmall,
+                color = subtitleColor
+            )
+
             schemeData.backgroundImage?.let { backgroundImage ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     AsyncImage(

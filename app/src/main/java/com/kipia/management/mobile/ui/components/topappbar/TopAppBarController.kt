@@ -143,6 +143,49 @@ class TopAppBarController {
                 )
             }
 
+            "fullscreen_photo" -> {
+                val inventoryNumber = additionalParams["inventoryNumber"] as? String ?: ""
+                val valveNumber = additionalParams["valveNumber"] as? String
+
+                _state.value = TopAppBarData(
+                    title = inventoryNumber,
+                    showBackButton = true,
+                    showSettingsIcon = false,
+                    showThemeToggle = false,
+                    showFilterMenu = false,
+                    showPhotoActions = true,
+                    photoInventoryNumber = inventoryNumber,
+                    photoValveNumber = valveNumber,
+                    photoFileName = additionalParams["photoFileName"] as? String,
+                    photoFilePath = additionalParams["photoFilePath"] as? String,
+                    onBackClick = additionalParams["onBackClick"] as? (() -> Unit),
+                    onRotateLeftClick = additionalParams["onRotateLeftClick"] as? (() -> Unit),
+                    onRotateRightClick = additionalParams["onRotateRightClick"] as? (() -> Unit),
+                    onDeletePhotoClick = additionalParams["onDeletePhotoClick"] as? (() -> Unit)
+                )
+            }
+
+            "reports" -> {
+                _state.value = TopAppBarData(
+                    title = "Учет приборов КИПиА",
+                    showBackButton = false,
+                    showSettingsIcon = true,
+                    showThemeToggle = true,
+                    showFilterMenu = false   // фильтров на отчётах нет
+                )
+            }
+
+            "report_detail" -> {
+                _state.value = TopAppBarData(
+                    title = additionalParams["title"] as? String ?: "Отчёт",
+                    showBackButton = true,
+                    showSettingsIcon = false,
+                    showThemeToggle = false,
+                    showFilterMenu = false,
+                    onBackClick = additionalParams["onBackClick"] as? (() -> Unit)  // ← добавь
+                )
+            }
+
             else -> {
                 // Главный экран или неизвестный экран - используем состояние по умолчанию
                 _state.value = TopAppBarData.getDefault()
@@ -154,6 +197,7 @@ class TopAppBarController {
 /**
  * Данные для TopAppBar
  */
+@Stable
 data class TopAppBarData(
     // ★ ОСНОВНЫЕ ПОЛЯ
     val title: String = "Учет приборов КИПиА",
@@ -205,7 +249,16 @@ data class TopAppBarData(
     val onPropertiesClick: (() -> Unit)? = null,
     val onEditorSettingsClick: (() -> Unit)? = null,
     // ★ КОЛБЭК ДЛЯ ОЧИСТКИ СХЕМЫ
-    val onClearClick: (() -> Unit)? = null
+    val onClearClick: (() -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ ПОЛНОЭКРАННОГО ПРОСМОТРА ФОТО
+    val showPhotoActions: Boolean = false,
+    val photoInventoryNumber: String? = null,
+    val photoValveNumber: String? = null,
+    val photoFileName: String? = null,
+    val photoFilePath: String? = null,
+    val onRotateLeftClick: (() -> Unit)? = null,
+    val onRotateRightClick: (() -> Unit)? = null,
+    val onDeletePhotoClick: (() -> Unit)? = null
 ) {
     companion object {
         fun getDefault(): TopAppBarData {

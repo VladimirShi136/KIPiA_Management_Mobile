@@ -86,7 +86,6 @@ data class SchemeData(
     val shapes: List<ShapeData> = emptyList()
 )
 
-
 // Класс для сериализации/десериализации фигур.
 data class ShapeData(
     val type: String,               // JavaFX: "LINE", Android: "line" — нормализуем через .lowercase()
@@ -142,7 +141,7 @@ data class ShapeData(
                     ?: properties?.get("startY") as? Float ?: y
                 val eX = endX.takeIf { it != 0f || endY != 0f }
                     ?: (properties?.get("endX") as? Double)?.toFloat()
-                    ?: properties?.get("endX") as? Float ?: x + width
+                    ?: properties?.get("endX") as? Float ?: (x + width)
                 val eY = endY.takeIf { it != 0f || endX != 0f }
                     ?: (properties?.get("endY") as? Double)?.toFloat()
                     ?: properties?.get("endY") as? Float ?: y

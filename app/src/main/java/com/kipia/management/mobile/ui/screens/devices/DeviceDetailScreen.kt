@@ -20,6 +20,9 @@ import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,6 +113,7 @@ fun DeviceDetailContent(
             ) {
                 // Заголовок с инвентарным номером
                 Text(
+
                     text = device.getDisplayName(),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -123,6 +127,19 @@ fun DeviceDetailContent(
                     text = "Инвентарный номер: ${device.inventoryNumber}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Обновлено: ${
+                        SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                            .format(Date(device.updatedAt))
+                    }",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )

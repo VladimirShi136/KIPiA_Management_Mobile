@@ -1,5 +1,7 @@
 package com.kipia.management.mobile.viewmodel
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
@@ -149,7 +151,7 @@ class DevicesViewModel @Inject constructor(
         base.copy(sortColumn = sortColumn, sortAscending = sortAscending)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5000),
         initialValue = DevicesUiState()
     )
 
@@ -158,7 +160,7 @@ class DevicesViewModel @Inject constructor(
     val allLocations: StateFlow<List<String>> = repository.getAllLocations()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
@@ -218,6 +220,7 @@ class DevicesViewModel @Inject constructor(
 
 // ── Data-классы состояния ─────────────────────────────────────────────────────
 
+@Stable
 data class DevicesUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -228,6 +231,7 @@ data class DevicesUiState(
     val sortAscending: Boolean = true
 )
 
+@Immutable
 data class DeviceStats(
     val total: Int = 0,
     val inWork: Int = 0,

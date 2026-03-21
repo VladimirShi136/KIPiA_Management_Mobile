@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 
 @Composable
@@ -20,14 +21,14 @@ fun FullScreenPhotoContent(
     isLoading: Boolean,
     error: String?,
     photoDetailViewModel: PhotoDetailViewModel,
+    topAppBarController: TopAppBarController, // ★ добавлен параметр
     onNavigateBack: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     when {
-        isLoading -> {
-            LoadingPhotoState()
-        }
+        isLoading -> LoadingPhotoState()
+
         error != null -> {
             ErrorPhotoState(
                 error = error,
@@ -35,6 +36,7 @@ fun FullScreenPhotoContent(
                 onNavigateBack = onNavigateBack
             )
         }
+
         device != null && photos.isNotEmpty() && photoIndex < photos.size -> {
             val photoPath = photos[photoIndex]
 
@@ -46,9 +48,11 @@ fun FullScreenPhotoContent(
                 photoPath = photoPath,
                 device = device,
                 onNavigateBack = onNavigateBack,
-                viewModel = photoDetailViewModel
+                viewModel = photoDetailViewModel,
+                topAppBarController = topAppBarController // ★ передаём
             )
         }
+
         else -> {
             ErrorPhotoState(
                 error = "Фото не найдено",
@@ -61,13 +65,8 @@ fun FullScreenPhotoContent(
 
 @Composable
 fun LoadingPhotoState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
             Text("Загрузка фото...")
@@ -82,9 +81,7 @@ fun ErrorPhotoState(
     onNavigateBack: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -94,36 +91,19 @@ fun ErrorPhotoState(
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
-
         Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Ошибка",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.error
-        )
-
+        Text("Ошибка", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
         Spacer(modifier = Modifier.height(8.dp))
-
         Text(
             text = error,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-
         Spacer(modifier = Modifier.height(24.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Button(onClick = onNavigateBack) {
-                Text("Назад")
-            }
-
-            Button(onClick = onRetry) {
-                Text("Повторить")
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(onClick = onNavigateBack) { Text("Назад") }
+            Button(onClick = onRetry) { Text("Повторить") }
         }
     }
 }

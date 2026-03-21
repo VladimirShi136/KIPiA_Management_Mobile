@@ -185,7 +185,7 @@ private fun SearchMenuItem(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = onSearchQueryChange,
-                        placeholder = { Text("Введите название схемы...") },
+                        placeholder = { Text("Введите текст...") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),

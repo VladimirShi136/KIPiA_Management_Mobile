@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -63,7 +62,6 @@ fun PhotosScreen(
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
     val groupedByLocation by viewModel.groupedByLocation.collectAsStateWithLifecycle()
-    val expandedGroups by viewModel.expandedGroups.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Состояния скролла для каждого режима
@@ -74,11 +72,6 @@ fun PhotosScreen(
     // Определяем, какой режим сейчас активен
     val isGroupedMode = uiState.displayMode == DisplayMode.GROUPED
     val isListViewMode = uiState.viewMode == ViewMode.LIST
-
-    // ★ ДОБАВЛЕНО: Функция сброса всех фильтров
-    val onResetAllFilters: () -> Unit = {
-        viewModel.resetAllFilters()
-    }
 
     // ★ ИСПРАВЛЕНИЕ: Определяем shouldShowBottomNav для каждого режима отдельно
     val shouldShowBottomNav by remember(groupedScrollState, gridScrollState, listScrollState, isGroupedMode, isListViewMode) {
@@ -221,19 +214,14 @@ fun PhotosScreen(
                     .padding(paddingValues)
             ) {
                 // ★★ ДОБАВЛЕНО: АКТИВНЫЕ ФИЛЬТРЫ ★★
-                if (uiState.selectedLocation != null || uiState.selectedDeviceId != null) {
-                    PhotosActiveFiltersBadge(
-                        selectedLocation = uiState.selectedLocation,
-                        selectedDeviceId = uiState.selectedDeviceId,
-                        devices = devices,
-                        onClearFilters = {
-                            viewModel.resetAllFilters()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 6.dp)
-                    )
-                }
+                PhotosActiveFiltersBadge(
+                    searchQuery = uiState.searchQuery,
+                    currentSort = uiState.sortBy,
+                    onClearFilters = { viewModel.resetAllFilters() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                )
 
                 // ★ ГАЛЕРЕЯ (основной контент)
                 when {

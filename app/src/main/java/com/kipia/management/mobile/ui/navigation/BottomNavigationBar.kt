@@ -49,6 +49,14 @@ val bottomNavItems = listOf(
     BottomNavItem.Reports
 )
 
+private val BUTTON_COLORS = bottomNavItems.mapIndexed { index, _ ->
+    getBottomNavButtonColor(index)
+}
+private val TEXT_COLORS = BUTTON_COLORS.map { getBottomNavTextColor(it) }
+private val BUTTON_COLORS_INACTIVE = BUTTON_COLORS.map { it.copy(alpha = 0.7f) }
+private val TEXT_COLORS_INACTIVE = TEXT_COLORS.map { it.copy(alpha = 0.9f) }
+
+
 @Composable
 fun BottomNavigationBar(
     navController: NavController,
@@ -56,26 +64,15 @@ fun BottomNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
-    val currentRoute = currentDestination?.route
+    val currentRoute = navBackStackEntry?.destination?.route
     val bottomNavColors = getBottomNavColors(isDarkTheme)
 
-    // Определяем, активен ли таб devices
-    val isDevicesTabActive = when {
-        currentRoute == "devices" -> true
-        currentRoute?.startsWith("device_") == true -> true
-        else -> false
-    }
-
-    val isSchemesTabActive = when {
-        currentRoute == "schemes" -> true
-        currentRoute?.startsWith("scheme_") == true -> true
-        else -> false
-    }
-
-    val isPhotosTabActive =
-        currentRoute == "photos" || currentRoute?.startsWith("fullscreen_photo") == true
-
+    val isDevicesTabActive = currentRoute == "devices" ||
+            currentRoute?.startsWith("device_") == true
+    val isSchemesTabActive = currentRoute == "schemes" ||
+            currentRoute?.startsWith("scheme_") == true
+    val isPhotosTabActive = currentRoute == "photos" ||
+            currentRoute?.startsWith("fullscreen_photo") == true
     val isReportsTabActive = currentRoute == "reports"
 
     Surface(
@@ -86,7 +83,6 @@ fun BottomNavigationBar(
         shape = RectangleShape,
         tonalElevation = 4.dp
     ) {
-        // КНОПКИ ВНУТРИ ФОНА
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,16 +98,9 @@ fun BottomNavigationBar(
                     is BottomNavItem.Reports -> isReportsTabActive
                 }
 
-                // ★★★★ ПОЛУЧАЕМ ЦВЕТ КНОПКИ И ТЕКСТА ИЗ COLOR.KT ★★★★
-                val buttonColor = getBottomNavButtonColor(index)
-                val textColor = getBottomNavTextColor(buttonColor)
-
-                // Текстовая кнопка в рамке
                 TextButton(
                     onClick = {
-                        if (!isSelected) {
-                            resetToTabRoot(navController, item.route)
-                        }
+                        if (!isSelected) resetToTabRoot(navController, item.route)
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -119,27 +108,29 @@ fun BottomNavigationBar(
                         .height(44.dp)
                         .border(
                             width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) textColor
+                            color = if (isSelected) TEXT_COLORS[index]
                             else bottomNavColors.border,
                             shape = RoundedCornerShape(12.dp)
                         )
                         .background(
-                            color = buttonColor.copy(alpha = if (isSelected) 1f else 0.7f),
+                            color = if (isSelected) BUTTON_COLORS[index]
+                            else BUTTON_COLORS_INACTIVE[index],
                             shape = RoundedCornerShape(12.dp)
                         ),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Transparent,
-                        contentColor = textColor
+                        contentColor = TEXT_COLORS[index]
                     ),
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
                         text = stringResource(id = item.titleResId),
-                        color = if (isSelected) textColor
-                        else textColor.copy(alpha = 0.9f),
+                        color = if (isSelected) TEXT_COLORS[index]
+                        else TEXT_COLORS_INACTIVE[index],
                         fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        fontWeight = if (isSelected) FontWeight.Bold
+                        else FontWeight.Normal,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -154,9 +145,6 @@ fun BottomNavigationBar(
  * Сброс к корневому экрану таба
  */
 private fun resetToTabRoot(navController: NavController, targetRoute: String) {
-    Timber.d("═══════════════════════════════════════════")
-    Timber.d("RESET TO TAB ROOT: $targetRoute")
-
     navController.navigate(targetRoute) {
         // Полная очистка стека
         popUpTo(0) {
@@ -165,24 +153,5 @@ private fun resetToTabRoot(navController: NavController, targetRoute: String) {
 
         launchSingleTop = true
         restoreState = false
-
-        // Отключаем анимации
-        anim {
-            enter = 0
-            exit = 0
-            popEnter = 0
-            popExit = 0
-        }
     }
-
-    Timber.d("Reset navigation completed")
-    Timber.d("═══════════════════════════════════════════")
-}
-
-// ★★★★ ОБНОВЛЯЕМ BottomNavItem ДЛЯ ИСПОЛЬЗОВАНИЯ ФУНКЦИЙ ИЗ COLOR.KT ★★★★
-@Composable
-private fun BottomNavItem.getColors(index: Int): Pair<Color, Color> {
-    val buttonColor = getBottomNavButtonColor(index)
-    val textColor = getBottomNavTextColor(buttonColor)
-    return Pair(buttonColor, textColor)
 }

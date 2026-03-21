@@ -4,19 +4,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
 import kotlinx.coroutines.delay
 
 /**
  * Контейнер для полноэкранного просмотра фото
- * Загружает устройство и передает данные в FullScreenPhotoScreen
  */
 @Composable
 fun FullScreenPhotoContainer(
     deviceId: Int,
     photoIndex: Int,
     onNavigateBack: () -> Unit,
+    topAppBarController: TopAppBarController, // ★ добавлен параметр
     modifier: Modifier = Modifier
 ) {
     val deviceDetailViewModel: DeviceDetailViewModel = hiltViewModel()
@@ -46,6 +47,7 @@ fun FullScreenPhotoContainer(
         isLoading = isLoading,
         error = error,
         photoDetailViewModel = photoDetailViewModel,
+        topAppBarController = topAppBarController, // ★ передаём
         onNavigateBack = onNavigateBack,
         onRetry = { deviceDetailViewModel.loadDevice(deviceId) },
         modifier = modifier

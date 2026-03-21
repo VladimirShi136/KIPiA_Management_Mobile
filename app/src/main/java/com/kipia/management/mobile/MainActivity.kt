@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -314,9 +315,9 @@ fun KIPiAApp(
                             val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
                             topAppBarController.setForScreen(
                                 "device_detail", mapOf(
-                                "deviceName" to "Прибор #${deviceId ?: "?"}",
-                                "onEdit" to { navController.navigate("device_edit/$deviceId") }
-                            ))
+                                    "deviceName" to "Прибор #${deviceId ?: "?"}",
+                                    "onEdit" to { navController.navigate("device_edit/$deviceId") }
+                                ))
                         }
 
                         route == "devices" -> {
@@ -330,37 +331,37 @@ fun KIPiAApp(
                         route == "photos" -> {
                             topAppBarController.setForScreen(
                                 "photos", mapOf(
-                                "selectedLocation" to (photosState.selectedLocation ?: ""),
-                                "selectedDeviceId" to (photosState.selectedDeviceId ?: 0),
-                                "locations" to photosLocations,
-                                "devices" to photosDevices,
-                                "onLocationFilterChange" to { location: String? ->
-                                    photosViewModel.selectLocation(location)
-                                },
-                                "onDeviceFilterChange" to { deviceId: Int? ->
-                                    photosViewModel.selectDevice(deviceId)
-                                }
-                            ))
+                                    "selectedLocation" to (photosState.selectedLocation ?: ""),
+                                    "selectedDeviceId" to (photosState.selectedDeviceId ?: 0),
+                                    "locations" to photosLocations,
+                                    "devices" to photosDevices,
+                                    "onLocationFilterChange" to { location: String? ->
+                                        photosViewModel.selectLocation(location)
+                                    },
+                                    "onDeviceFilterChange" to { deviceId: Int? ->
+                                        photosViewModel.selectDevice(deviceId)
+                                    }
+                                ))
                         }
 
                         route == "schemes" -> {
                             topAppBarController.setForScreen(
                                 "schemes", mapOf(
-                                "title" to "Учет приборов КИПиА",
-                                "searchQuery" to schemesState.searchQuery,
-                                "currentSort" to (schemesState.sortBy ?: SchemesSortBy.NAME_ASC),
-                                "showThemeToggle" to true,
-                                "showSettingsIcon" to true,
-                                "onSearchQueryChange" to { query: String ->
-                                    schemesViewModel.setSearchQuery(query)
-                                },
-                                "onSortSelected" to { sortBy: SchemesSortBy ->
-                                    schemesViewModel.setSortBy(sortBy)
-                                },
-                                "onResetAllFilters" to {
-                                    schemesViewModel.resetAllFilters()
-                                }
-                            ))
+                                    "title" to "Учет приборов КИПиА",
+                                    "searchQuery" to schemesState.searchQuery,
+                                    "currentSort" to (schemesState.sortBy ?: SchemesSortBy.NAME_ASC),
+                                    "showThemeToggle" to true,
+                                    "showSettingsIcon" to true,
+                                    "onSearchQueryChange" to { query: String ->
+                                        schemesViewModel.setSearchQuery(query)
+                                    },
+                                    "onSortSelected" to { sortBy: SchemesSortBy ->
+                                        schemesViewModel.setSortBy(sortBy)
+                                    },
+                                    "onResetAllFilters" to {
+                                        schemesViewModel.resetAllFilters()
+                                    }
+                                ))
                         }
 
                         route == "scheme_editor" -> {
@@ -368,14 +369,28 @@ fun KIPiAApp(
                             val schemeId = arguments?.getString("schemeId")?.toIntOrNull()
                             topAppBarController.setForScreen(
                                 "scheme_editor", mapOf(
-                                "canSave" to true,
-                                "canUndo" to false,
-                                "canRedo" to false,
-                                "isDirty" to false,
-                                "onBackClick" to { navController.navigateUp() },
-                                "onSaveClick" to { /* будет установлено из SchemeEditorScreen */ },
-                                "onPropertiesClick" to { /* будет установлено из SchemeEditorScreen */ }
-                            ))
+                                    "canSave" to true,
+                                    "canUndo" to false,
+                                    "canRedo" to false,
+                                    "isDirty" to false,
+                                    "onBackClick" to { navController.navigateUp() },
+                                    "onSaveClick" to { /* будет установлено из SchemeEditorScreen */ },
+                                    "onPropertiesClick" to { /* будет установлено из SchemeEditorScreen */ }
+                                ))
+                        }
+
+                        route == "reports" -> {
+                            topAppBarController.setForScreen("reports")
+                        }
+
+                        // ★ fullscreen_photo — начальное состояние, детали установит сам экран
+                        route?.startsWith("fullscreen_photo") == true -> {
+                            topAppBarController.setForScreen(
+                                "fullscreen_photo", mapOf(
+                                    "inventoryNumber" to "",
+                                    "valveNumber" to "",
+                                    "onBackClick" to { navController.navigateUp() }
+                                ))
                         }
 
                         else -> {
@@ -384,66 +399,69 @@ fun KIPiAApp(
                     }
                 }
             }
-
-            Scaffold(
-                topBar = {
-                    KIPiATopAppBar(
-                        topAppBarState = topAppBarState,
-                        topAppBarBg = topAppBarBg,
-                        topAppBarContent = topAppBarContent,
-                        onBackClick = onBackClick,
-                        navController = navController,
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.statusBars)
-                            .windowInsetsPadding(
-                                WindowInsets.navigationBars
-                                    .only(WindowInsetsSides.Horizontal)
-                            )
-                    )
-                },
-                bottomBar = {
-                    AnimatedVisibility(
-                        visible = showBottomNav,
-                        enter = slideInVertically(
-                            initialOffsetY = { fullHeight -> fullHeight },
-                            animationSpec = tween(durationMillis = 300)
-                        ) + fadeIn(animationSpec = tween(durationMillis = 200)),
-                        exit = slideOutVertically(
-                            targetOffsetY = { fullHeight -> fullHeight },
-                            animationSpec = tween(durationMillis = 300)
-                        ) + fadeOut(animationSpec = tween(durationMillis = 200)),
-                    ) {
-                        Surface(
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(topAppBarBg) // цвет уже есть в scope — AppColors.DarkBlue или DarkBackground
+            ) {
+                Scaffold(
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    topBar = {
+                        KIPiATopAppBar(
+                            topAppBarState = topAppBarState,
+                            topAppBarBg = topAppBarBg,
+                            topAppBarContent = topAppBarContent,
+                            onBackClick = onBackClick,
+                            navController = navController,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.navigationBars),
-                            color = bottomNavColors.background,
-                            shape = RectangleShape,
-                            tonalElevation = 4.dp
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                        )
+                    },
+                    bottomBar = {
+                        AnimatedVisibility(
+                            visible = showBottomNav,
+                            enter = slideInVertically(
+                                initialOffsetY = { fullHeight -> fullHeight },
+                                animationSpec = tween(durationMillis = 300)
+                            ) + fadeIn(animationSpec = tween(durationMillis = 200)),
+                            exit = slideOutVertically(
+                                targetOffsetY = { fullHeight -> fullHeight },
+                                animationSpec = tween(durationMillis = 300)
+                            ) + fadeOut(animationSpec = tween(durationMillis = 200)),
                         ) {
-                            BottomNavigationBar(
-                                navController = navController,
-                                isDarkTheme = isDarkTheme
-                            )
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .windowInsetsPadding(WindowInsets.navigationBars),
+                                color = bottomNavColors.background,
+                                shape = RectangleShape,
+                                tonalElevation = 4.dp
+                            ) {
+                                BottomNavigationBar(
+                                    navController = navController,
+                                    isDarkTheme = isDarkTheme
+                                )
+                            }
                         }
-                    }
-                },
-                contentWindowInsets = WindowInsets.safeDrawing
-            ) { innerPadding ->
-                KIPiANavHost(
-                    navController = navController,
-                    devicesViewModel = hiltViewModel(),
-                    photosViewModel = photosViewModel,
-                    schemesViewModel = schemesViewModel,
-                    topAppBarController = topAppBarController,
-                    notificationManager = notificationManager,
-                    photoManager = photoManager,
-                    updateBottomNavVisibility = updateBottomNavVisibility,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .consumeWindowInsets(innerPadding)
-                )
+                    },
+                    contentWindowInsets = WindowInsets.safeDrawing
+                ) { innerPadding ->
+                    KIPiANavHost(
+                        navController = navController,
+                        devicesViewModel = hiltViewModel(),
+                        photosViewModel = photosViewModel,
+                        schemesViewModel = schemesViewModel,
+                        topAppBarController = topAppBarController,
+                        notificationManager = notificationManager,
+                        photoManager = photoManager,
+                        updateBottomNavVisibility = updateBottomNavVisibility,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .background(MaterialTheme.colorScheme.background)
+                            .consumeWindowInsets(innerPadding)
+                    )
+                }
             }
         }
     }

@@ -17,12 +17,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.components.scheme.SchemesFilterMenu
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
 import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
-import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
+import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
 import timber.log.Timber
 
@@ -38,14 +39,20 @@ fun KIPiATopAppBar(
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
-    // Логируем только при изменении заголовка или важных параметров
+    val borderColor = remember(colorScheme) {
+        colorScheme.onPrimary.copy(alpha = 0.8f)
+    }
+
+    // Вызываем @Composable снаружи remember — результат стабилен пока цвета не меняются
+    val appBarColors = TopAppBarDefaults.topAppBarColors(
+        containerColor = topAppBarBg,
+        titleContentColor = topAppBarContent,
+        navigationIconContentColor = topAppBarContent,
+        actionIconContentColor = topAppBarContent
+    )
+
     LaunchedEffect(topAppBarState.title, topAppBarState.showBackButton) {
-        Timber.d("═══════════════════════════════════════════")
         Timber.d("TopAppBar обновлен: '${topAppBarState.title}'")
-        Timber.d("  showBackButton: ${topAppBarState.showBackButton}")
-        Timber.d("  showSchemesFilterMenu: ${topAppBarState.showSchemesFilterMenu}")
-        Timber.d("  showSchemeEditorActions: ${topAppBarState.showSchemeEditorActions}")
-        Timber.d("═══════════════════════════════════════════")
     }
 
     TopAppBar(
@@ -55,20 +62,11 @@ fun KIPiATopAppBar(
                 color = topAppBarContent,
                 fontSize = 14.sp,
                 modifier = Modifier
-                    .border(
-                        width = 1.dp,
-                        color = colorScheme.onPrimary.copy(alpha = 0.8f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    .border(1.dp, borderColor, RoundedCornerShape(12.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             )
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = topAppBarBg,
-            titleContentColor = topAppBarContent,
-            navigationIconContentColor = topAppBarContent,
-            actionIconContentColor = topAppBarContent
-        ),
+        colors = appBarColors,
         navigationIcon = {
             if (topAppBarState.showBackButton) {
                 IconButton(onClick = onBackClick) {
@@ -81,7 +79,6 @@ fun KIPiATopAppBar(
             }
         },
         actions = {
-            // Используем remember для избежания лишних рекомпозиций внутри actions
             KeyedTopAppBarActions(
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent,
@@ -104,6 +101,14 @@ private fun KeyedTopAppBarActions(
     when {
         topAppBarState.showSchemeEditorActions -> {
             SchemeEditorActions(
+                topAppBarState = topAppBarState,
+                topAppBarContent = topAppBarContent
+            )
+        }
+
+        // ★ ПОЛНОЭКРАННОЕ ФОТО
+        topAppBarState.showPhotoActions -> {
+            FullScreenPhotoActions(
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent
             )
@@ -132,6 +137,17 @@ private fun KeyedTopAppBarActions(
             )
         }
 
+        currentRoute == "reports" -> {
+            // Те же кнопки что на devices/schemes — тема + настройки
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ThemeToggleButton(contentColor = topAppBarContent)
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { navController.navigate("settings") }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Настройки", tint = topAppBarContent)
+                }
+            }
+        }
+
         topAppBarState.showBackButton -> {
             BackButtonScreenActions(
                 topAppBarState = topAppBarState,
@@ -146,6 +162,11 @@ private fun SchemeEditorActions(
     topAppBarState: TopAppBarData,
     topAppBarContent: Color
 ) {
+
+    val disabledTint = remember(topAppBarContent) {
+        topAppBarContent.copy(alpha = 0.35f)
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(end = 4.dp)
@@ -160,10 +181,9 @@ private fun SchemeEditorActions(
                 enabled = topAppBarState.canClear
             ) {
                 Icon(
-                    Icons.Default.Delete,  // Или другой подходящий икон
+                    Icons.Default.CleaningServices,
                     contentDescription = "Очистить схему",
-                    tint = if (topAppBarState.canClear) topAppBarContent
-                    else topAppBarContent.copy(alpha = 0.35f)
+                    tint = if (topAppBarState.canClear) topAppBarContent else disabledTint
                 )
             }
         }
@@ -178,7 +198,7 @@ private fun SchemeEditorActions(
                 enabled = topAppBarState.onPropertiesClick != null
             ) {
                 Icon(
-                    Icons.Default.Tune,
+                    Icons.Default.Info,
                     contentDescription = "Свойства схемы",
                     tint = topAppBarContent
                 )
@@ -238,34 +258,22 @@ private fun PhotosScreenActions(
     topAppBarContent: Color,
     navController: NavController
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    val photosViewModel: PhotosViewModel = hiltViewModel()
+    val uiState by photosViewModel.uiState.collectAsStateWithLifecycle()
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
         PhotosFilterMenu(
-            selectedLocation = topAppBarState.selectedLocation,
-            selectedDeviceId = topAppBarState.selectedDeviceId,
-            locations = topAppBarState.locations,
-            devices = topAppBarState.devices,
-            onLocationFilterChange = { location ->
-                topAppBarState.onLocationFilterChange?.invoke(location)
-            },
-            onDeviceFilterChange = { deviceId ->
-                topAppBarState.onDeviceFilterChange?.invoke(deviceId)
-            },
-            onResetAllFilters = {
-                // Добавьте логику сброса если нужно
-            },
+            searchQuery = uiState.searchQuery,
+            onSearchQueryChange = { photosViewModel.setSearchQuery(it) },
+            currentSort = uiState.sortBy,
+            onSortSelected = { photosViewModel.setSortBy(it) },
+            onResetAllFilters = { photosViewModel.resetAllFilters() },
             modifier = Modifier.padding(end = 4.dp)
         )
-
         ThemeToggleButton(contentColor = topAppBarContent)
         Spacer(modifier = Modifier.width(8.dp))
         IconButton(onClick = { navController.navigate("settings") }) {
-            Icon(
-                Icons.Filled.Settings,
-                contentDescription = "Настройки",
-                tint = topAppBarContent
-            )
+            Icon(Icons.Filled.Settings, contentDescription = "Настройки", tint = topAppBarContent)
         }
     }
 }
@@ -302,6 +310,56 @@ private fun DevicesScreenActions(
                 tint = topAppBarContent
             )
         }
+    }
+}
+
+@Composable
+private fun FullScreenPhotoActions(
+    topAppBarState: TopAppBarData,
+    topAppBarContent: Color
+) {
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            icon = { Icon(Icons.Filled.Info, null) },
+            title = { Text("Информация о фото") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PhotoInfoRow("Файл", topAppBarState.photoFileName ?: "—")
+                    PhotoInfoRow("Путь", topAppBarState.photoFilePath ?: "—")
+                    PhotoInfoRow("Инв. №", topAppBarState.photoInventoryNumber ?: "—")
+                    if (!topAppBarState.photoValveNumber.isNullOrBlank()) {
+                        PhotoInfoRow("Кран №", topAppBarState.photoValveNumber)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) { Text("Закрыть") }
+            }
+        )
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(end = 4.dp)
+    ) {
+        IconButton(onClick = { showInfoDialog = true }) {
+            Icon(Icons.Filled.Info, "Информация о фото", tint = topAppBarContent)
+        }
+        // Кнопка Delete вызывает onDeletePhotoClick → открывает диалог в FullScreenPhotoScreen
+        IconButton(onClick = { topAppBarState.onDeletePhotoClick?.invoke() }) {
+            Icon(Icons.Filled.Delete, "Удалить фото", tint = topAppBarContent)
+        }
+    }
+}
+
+@Composable
+private fun PhotoInfoRow(label: String, value: String) {
+    Column {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = value, style = MaterialTheme.typography.bodySmall)
     }
 }
 

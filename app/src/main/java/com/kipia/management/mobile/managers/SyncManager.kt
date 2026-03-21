@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -50,7 +49,9 @@ class SyncManager @Inject constructor(
         try {
             // WAL checkpoint — сбрасываем все незафиксированные страницы в основной файл БД
             // database.close() использовать нельзя: Room после этого не переоткрывается
-            database.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
+            database.openHelper.writableDatabase
+                .query("PRAGMA wal_checkpoint(FULL)", emptyArray())
+                .use { it.moveToFirst() }
 
             val dbFile = context.getDatabasePath(DB_NAME)
             val photosDir = photoManager.getBasePhotosDir()

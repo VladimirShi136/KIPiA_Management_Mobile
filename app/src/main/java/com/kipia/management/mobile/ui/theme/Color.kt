@@ -235,7 +235,6 @@ object UtilityColors {
 /**
  * Получить цвет для кнопки BottomNav по индексу
  */
-@Composable
 fun getBottomNavButtonColor(index: Int): Color {
     return when (index) {
         0 -> SystemColors.BottomNavButtons.Devices    // Devices
@@ -249,14 +248,13 @@ fun getBottomNavButtonColor(index: Int): Color {
 /**
  * Получить цвет текста для кнопки BottomNav
  */
-@Composable
 fun getBottomNavTextColor(backgroundColor: Color): Color {
     return when (backgroundColor) {
         SystemColors.BottomNavButtons.Devices -> SystemColors.BottomNavButtons.TextOnCoral
         SystemColors.BottomNavButtons.Photos -> SystemColors.BottomNavButtons.TextOnPeach
         SystemColors.BottomNavButtons.Schemes -> SystemColors.BottomNavButtons.TextOnIceBlue
         SystemColors.BottomNavButtons.Reports -> SystemColors.BottomNavButtons.TextOnGrayBlue
-        else -> MaterialTheme.colorScheme.onPrimary
+        else -> Color.White
     }
 }
 

@@ -3,430 +3,327 @@ package com.kipia.management.mobile.ui.screens.reports
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.kipia.management.mobile.data.entities.Device
-import com.kipia.management.mobile.ui.screens.reports.components.*
 import com.kipia.management.mobile.ui.screens.reports.models.*
-import java.text.DecimalFormat
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ReportDetailScreen(
-    report: Report,
-    onBack: () -> Unit
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(report.title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            ReportDetailContent(
-                report = report,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-    }
-}
 
 @Composable
-fun ReportDetailContent(
-    report: Report,
-    modifier: Modifier = Modifier
-) {
+fun ReportDetailScreen(report: Report) {
     when (report) {
-        is SummaryReport -> SummaryReportContent(report)
-        is DeviceListReport -> DeviceListReportContent(report)
-        is StatusDistributionReport -> DistributionReportContent(report)
-        is LocationDistributionReport -> DistributionReportContent(report)
-        is TypeDistributionReport -> DistributionReportContent(report)
+        is SummaryReport -> SummaryReportDetail(report)
+        is StatusDistributionReport -> DistributionDetail(
+            items = report.statuses.map { (label, count) ->
+                DistributionItem(label, count, report.total, statusColor(label))
+            }.sortedByDescending { it.count }
+        )
+
+        is LocationDistributionReport -> DistributionDetail(
+            items = report.locations.map { (label, count) ->
+                DistributionItem(label, count, report.total, Color(0xFFFF9800))
+            }.sortedByDescending { it.count }
+        )
+
+        is TypeDistributionReport -> DistributionDetail(
+            items = report.types.map { (label, count) ->
+                DistributionItem(label, count, report.total, Color(0xFF9C27B0))
+            }.sortedByDescending { it.count }
+        )
+
+        is NeedsAttentionReport -> NeedsAttentionDetail(report)
     }
 }
 
-@Composable
-fun SummaryReportContent(report: SummaryReport) {
-    val scrollState = rememberScrollState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // Статистика приборов
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Статистика приборов",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Показатели в виде карточек
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatisticCard(
-                        title = "Всего приборов",
-                        value = report.totalDevices.toString(),
-                        icon = Icons.Default.Devices,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    StatisticCard(
-                        title = "В работе",
-                        value = report.activeDevices.toString(),
-                        icon = Icons.Default.CheckCircle,
-                        color = Color(0xFF4CAF50), // Green
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatisticCard(
-                        title = "Неактивные",
-                        value = report.offlineDevices.toString(),
-                        icon = Icons.Default.Warning,
-                        color = Color(0xFFF44336), // Red
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    StatisticCard(
-                        title = "Средняя точность",
-                        value = report.avgAccuracy?.let {
-                            DecimalFormat("#.##").format(it)
-                        } ?: "Н/Д",
-                        icon = Icons.Default.PrecisionManufacturing,
-                        color = Color(0xFF2196F3), // Blue
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // Статистика схем
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Статистика схем",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                StatisticCard(
-                    title = "Всего схем",
-                    value = report.totalSchemes.toString(),
-                    icon = Icons.Default.Map,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        // Самые частые значения
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Самые частые значения",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MostCommonItem(
-                        label = "Самое частое место",
-                        value = report.mostCommonLocation ?: "Нет данных",
-                        icon = Icons.Default.LocationOn
-                    )
-
-                    MostCommonItem(
-                        label = "Самый частый тип",
-                        value = report.mostCommonType ?: "Нет данных",
-                        icon = Icons.Default.Category
-                    )
-                }
-            }
-        }
-
-        // Процентные соотношения
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Процентное соотношение",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val activePercentage = if (report.totalDevices > 0) {
-                    report.activeDevices.toFloat() / report.totalDevices
-                } else 0f
-
-                val offlinePercentage = if (report.totalDevices > 0) {
-                    report.offlineDevices.toFloat() / report.totalDevices
-                } else 0f
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    PercentageBar(
-                        label = "В работе",
-                        percentage = activePercentage,
-                        color = Color(0xFF4CAF50),
-                        value = "${report.activeDevices} из ${report.totalDevices}"
-                    )
-
-                    PercentageBar(
-                        label = "Неактивные",
-                        percentage = offlinePercentage,
-                        color = Color(0xFFF44336),
-                        value = "${report.offlineDevices} из ${report.totalDevices}"
-                    )
-                }
-            }
-        }
-    }
-}
+// ── Сводка ───────────────────────────────────────────────────────────────────
 
 @Composable
-fun DeviceListReportContent(report: DeviceListReport) {
+private fun SummaryReportDetail(report: SummaryReport) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(16.dp)
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Заголовок
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
+            // Статусы — 4 карточки 2x2
+            SectionCard(title = "Приборы по статусам") {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Список приборов",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                    StatusMiniCard(
+                        "В работе",
+                        report.inWork,
+                        Color(0xFF4CAF50),
+                        Modifier.weight(1f)
                     )
-
-                    Text(
-                        text = report.subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    StatusMiniCard(
+                        "Хранение",
+                        report.inStorage,
+                        Color(0xFFF58352),
+                        Modifier.weight(1f)
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Всего приборов: ${report.devices.size}",
-                        style = MaterialTheme.typography.bodyMedium
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatusMiniCard("Утерян", report.lost, Color(0xFF9E9E9E), Modifier.weight(1f))
+                    StatusMiniCard(
+                        "Испорчен",
+                        report.broken,
+                        Color(0xFFF44336),
+                        Modifier.weight(1f)
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Список приборов
-        items(report.devices, key = { it.id }) { device ->
-            DeviceReportItem(device = device)
-        }
-    }
-}
-
-@Composable
-fun DistributionReportContent(report: Report) {
-    when (report) {
-        is StatusDistributionReport -> GenericDistributionReport(
-            report = report,
-            title = "Распределение по статусам",
-            data = report.statuses,
-            total = report.total
-        )
-        is LocationDistributionReport -> GenericDistributionReport(
-            report = report,
-            title = "Распределение по местам",
-            data = report.locations,
-            total = report.total
-        )
-        is TypeDistributionReport -> GenericDistributionReport(
-            report = report,
-            title = "Распределение по типам",
-            data = report.types,
-            total = report.total
-        )
-        else -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Неизвестный тип отчета")
+        item {
+            SectionCard(title = "Общая информация") {
+                InfoRow(Icons.Default.Devices, "Всего приборов", "${report.totalDevices}")
+                InfoRow(Icons.Default.Map, "Схем локаций", "${report.totalSchemes}")
+                if (report.mostCommonLocation != null)
+                    InfoRow(Icons.Default.LocationOn, "Топ локация", report.mostCommonLocation)
+                if (report.mostCommonType != null)
+                    InfoRow(Icons.Default.Category, "Топ тип", report.mostCommonType)
             }
         }
     }
 }
 
-@Composable
-fun <T> GenericDistributionReport(
-    report: Report,
-    title: String,
-    data: Map<T, Int>,
-    total: Int
-) {
-    val scrollState = rememberScrollState()
+// ── Распределение (локации / типы / статусы) ─────────────────────────────────
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+@Composable
+private fun DistributionDetail(items: List<DistributionItem>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Заголовок
-        Card(
-            modifier = Modifier.fillMaxWidth()
+        items(items) { item ->
+            DistributionItemRow(item)
+        }
+    }
+}
+
+@Composable
+private fun DistributionItemRow(item: DistributionItem) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Text(
-                    text = report.subtitle,
+                    text = item.label,
                     style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${item.count} (${item.percentageInt}%)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = item.color
+                )
+            }
+            // Прогресс-бар
+            LinearProgressIndicator(
+                progress = { item.percentage },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                color = item.color,
+                trackColor = item.color.copy(alpha = 0.15f)
+            )
+        }
+    }
+}
+
+// ── Требуют внимания ─────────────────────────────────────────────────────────
+
+@Composable
+private fun NeedsAttentionDetail(report: NeedsAttentionReport) {
+    val allDevices = remember(report) {
+        report.lostDevices + report.brokenDevices
+    }
+
+    if (allDevices.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.CheckCircle, null,
+                    modifier = Modifier.size(64.dp), tint = Color(0xFF4CAF50)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Всё в порядке", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Нет утерянных или испорченных приборов",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+        return
+    }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (report.lostDevices.isNotEmpty()) {
+            item {
                 Text(
-                    text = "Всего записей: $total",
-                    style = MaterialTheme.typography.bodyMedium
+                    "Утерянные — ${report.lostDevices.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF9E9E9E),
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
+            }
+            items(report.lostDevices, key = { "lost_${it.id}" }) { device ->
+                AttentionDeviceCard(device, Color(0xFF9E9E9E))
             }
         }
 
-        // Круговая диаграмма (упрощенная)
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
+        if (report.brokenDevices.isNotEmpty()) {
+            item {
                 Text(
-                    text = "Диаграмма распределения",
+                    "Испорченные — ${report.brokenDevices.size}",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Простая круговая диаграмма
-                SimplePieChart(
-                    data = data.map { (label, value) ->
-                        ChartData(
-                            label = label.toString(),
-                            value = value,
-                            color = getColorForIndex(data.keys.indexOf(label)),
-                            percentage = value.toFloat() / total
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
+                    color = Color(0xFFF44336),
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
-        }
-
-        // Таблица распределения
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Детальное распределение",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                data.entries.sortedByDescending { it.value }.forEach { (label, count) ->
-                    val percentage = if (total > 0) {
-                        (count.toFloat() / total * 100).toInt()
-                    } else 0
-
-                    DistributionRow(
-                        label = label.toString(),
-                        count = count,
-                        percentage = percentage,
-                        color = getColorForIndex(data.keys.indexOf(label)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+            items(report.brokenDevices, key = { "broken_${it.id}" }) { device ->
+                AttentionDeviceCard(device, Color(0xFFF44336))
             }
         }
     }
+}
+
+// ── Вспомогательные composable ───────────────────────────────────────────────
+
+@Composable
+private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)) {
+            Text(
+                title, style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun StatusMiniCard(label: String, count: Int, color: Color, modifier: Modifier) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "$count", style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold, color = color
+            )
+            Text(
+                label, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String, value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            icon, null, modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            label, style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun AttentionDeviceCard(device: DeviceInfo, color: Color) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                color = color.copy(alpha = 0.15f),
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Default.Warning, null,
+                        tint = color, modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    device.displayName, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "${device.inventoryNumber} · ${device.location}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+private fun statusColor(status: String) = when (status) {
+    "В работе" -> Color(0xFF4CAF50)
+    "Хранение" -> Color(0xFFF58352)
+    "Утерян" -> Color(0xFF9E9E9E)
+    "Испорчен" -> Color(0xFFF44336)
+    else -> Color(0xFF607D8B)
 }

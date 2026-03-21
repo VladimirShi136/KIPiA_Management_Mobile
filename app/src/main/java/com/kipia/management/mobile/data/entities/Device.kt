@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.data.entities
 
+import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -9,6 +10,7 @@ import com.kipia.management.mobile.ui.theme.DeviceStatus
 /**
  * Модель устройства
  */
+@Immutable
 @Entity(tableName = "devices")
 data class Device(
     // идентификатор

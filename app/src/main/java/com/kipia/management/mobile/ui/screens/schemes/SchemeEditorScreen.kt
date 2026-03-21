@@ -885,14 +885,25 @@ private fun SimpleSchemePropertiesDialog(
     canvasState: CanvasState,
     onDismiss: () -> Unit
 ) {
+    // Форматируем дату один раз
+    val formattedDate = remember(scheme.updatedAt) {
+        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(scheme.updatedAt))
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Свойства схемы") },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Название: ${scheme.name}")
                 Text("Описание: ${scheme.description ?: "Нет описания"}")
                 Text("Размер: ${canvasState.width} x ${canvasState.height}")
+                Text(
+                    text = "Обновлено: $formattedDate",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }

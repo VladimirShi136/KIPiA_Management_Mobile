@@ -8,6 +8,7 @@ import com.kipia.management.mobile.ui.components.photos.DisplayMode
 import com.kipia.management.mobile.ui.components.photos.PhotoItem
 import com.kipia.management.mobile.ui.screens.photos.ViewMode
 import com.kipia.management.mobile.managers.PhotoManager
+import com.kipia.management.mobile.ui.components.photos.PhotosSortBy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -25,6 +26,8 @@ class PhotosViewModel @Inject constructor(
     private val _selectedLocation = MutableStateFlow<String?>(null)
     private val _viewMode = MutableStateFlow(ViewMode.GRID)
     private val _uiState = MutableStateFlow(PhotosUiState())
+    private val _searchQuery = MutableStateFlow("")
+    private val _sortBy = MutableStateFlow(PhotosSortBy.NAME_ASC)
     val uiState: StateFlow<PhotosUiState> = _uiState
 
     // Все устройства
@@ -87,20 +90,16 @@ class PhotosViewModel @Inject constructor(
 
     //  Функция для сброса всех фильтров
     fun resetAllFilters() {
-        Timber.d("═══════════════════════════════════════")
-        Timber.d("СБРОС ВСЕХ ФИЛЬТРОВ")
-        Timber.d("  Было - Локация: ${_selectedLocation.value}, Устройство: ${_selectedDeviceId.value}")
-
+        _searchQuery.value = ""
+        _sortBy.value = PhotosSortBy.NAME_ASC
         _selectedLocation.value = null
         _selectedDeviceId.value = null
-
         _uiState.value = _uiState.value.copy(
             selectedLocation = null,
-            selectedDeviceId = null
+            selectedDeviceId = null,
+            searchQuery = "",
+            sortBy = PhotosSortBy.NAME_ASC
         )
-
-        Timber.d("  Стало - Локация: null, Устройство: null")
-        Timber.d("═══════════════════════════════════════")
     }
 
     fun forceLoadData() {
@@ -143,16 +142,12 @@ class PhotosViewModel @Inject constructor(
             combine(
                 devices,
                 _selectedLocation,
-                _selectedDeviceId
-            ) { deviceList, locationFilter, deviceFilter ->
+                _selectedDeviceId,
+                _searchQuery,
+                _sortBy
+            ) { deviceList, locationFilter, deviceFilter, _, _ ->
                 Triple(deviceList, locationFilter, deviceFilter)
             }.collect { (deviceList, locationFilter, deviceFilter) ->
-                Timber.d("═══════════════════════════════════════")
-                Timber.d("ТРИГГЕР ОБНОВЛЕНИЯ ГРУППИРОВКИ:")
-                Timber.d("  Изменились фильтры: $locationFilter / $deviceFilter")
-                Timber.d("  Устройств: ${deviceList.size}")
-                Timber.d("═══════════════════════════════════════")
-
                 updateGroupedPhotos(deviceList)
             }
         }
@@ -186,61 +181,47 @@ class PhotosViewModel @Inject constructor(
     // ★ ИСПРАВЛЕННЫЙ: Метод для обновления сгруппированных данных с фильтрацией
     private fun updateGroupedPhotos(deviceList: List<Device>) {
         viewModelScope.launch {
-            // ★ ВАЖНО: берем текущие значения фильтров
             val locationFilter = _selectedLocation.value
             val deviceFilter = _selectedDeviceId.value
 
-            Timber.d("═══════════════════════════════════════")
-            Timber.d("ОБНОВЛЕНИЕ ГРУППИРОВКИ:")
-            Timber.d("  Всего устройств: ${deviceList.size}")
-            Timber.d("  Фильтр локации: $locationFilter")
-            Timber.d("  Фильтр устройства: $deviceFilter")
-
-            // ★ ФИЛЬТРУЕМ устройства перед группировкой
             val filteredDevices = deviceList.filter { device ->
                 val matchesLocation = locationFilter == null || device.location == locationFilter
                 val matchesDevice = deviceFilter == null || device.id == deviceFilter
-
                 matchesLocation && matchesDevice
             }
-
-            Timber.d("  После фильтрации: ${filteredDevices.size} устройств")
 
             val groups = mutableMapOf<String, MutableList<PhotoItem>>()
 
             filteredDevices.forEach { device ->
                 val location = device.location.ifEmpty { "Без локации" }
-
                 device.photos.forEach { fileName ->
                     val fullPath = photoManager.getFullPhotoPath(device, fileName)
                     if (fullPath != null && File(fullPath).exists()) {
-                        val photoItem = PhotoItem(
-                            fileName = fileName,
-                            fullPath = fullPath,
-                            device = device
+                        groups.getOrPut(location) { mutableListOf() }.add(
+                            PhotoItem(fileName = fileName, fullPath = fullPath, device = device)
                         )
-
-                        groups.getOrPut(location) { mutableListOf() }.add(photoItem)
                     }
                 }
             }
 
-            // Преобразуем в отсортированный список групп
+            val searchQuery = _searchQuery.value
+
             val sortedGroups = groups.map { (location, photos) ->
                 LocationPhotoGroup(
                     location = location,
-                    photos = photos.sortedByDescending {
-                        File(it.fullPath).lastModified()
-                    },
+                    photos = photos.sortedByDescending { File(it.fullPath).lastModified() },
                     isExpanded = _expandedGroups.value.contains(location)
                 )
-            }.sortedBy { it.location }
-
-            Timber.d("  Создано групп: ${sortedGroups.size}")
-            sortedGroups.forEach { group ->
-                Timber.d("    - ${group.location}: ${group.photos.size} фото")
             }
-            Timber.d("═══════════════════════════════════════")
+                .filter { group ->
+                    searchQuery.isBlank() || group.location.contains(searchQuery, ignoreCase = true)
+                }
+                .let { list ->
+                    when (_sortBy.value) {
+                        PhotosSortBy.NAME_ASC -> list.sortedBy { it.location }
+                        PhotosSortBy.NAME_DESC -> list.sortedByDescending { it.location }
+                    }
+                }
 
             _groupedByLocation.value = sortedGroups
         }
@@ -335,6 +316,15 @@ class PhotosViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(displayMode = mode)
     }
 
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+
+    fun setSortBy(sortBy: PhotosSortBy) {
+        _sortBy.value = sortBy
+        _uiState.value = _uiState.value.copy(sortBy = sortBy)
+    }
 }
 
 // ★ ДОБАВЛЯЕМ: Data классы для группировки
@@ -352,5 +342,7 @@ data class PhotosUiState(
     val selectedLocation: String? = null,
     val viewMode: ViewMode = ViewMode.GRID,
     val isGridView: Boolean = true,
-    val displayMode: DisplayMode = DisplayMode.GROUPED // ★ режим отображения
+    val displayMode: DisplayMode = DisplayMode.GROUPED,
+    val searchQuery: String = "",
+    val sortBy: PhotosSortBy = PhotosSortBy.NAME_ASC
 )
