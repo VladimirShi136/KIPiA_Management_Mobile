@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel

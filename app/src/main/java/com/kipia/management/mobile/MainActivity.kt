@@ -41,6 +41,7 @@ import com.kipia.management.mobile.ui.components.topappbar.KIPiATopAppBar
 import com.kipia.management.mobile.ui.components.topappbar.rememberTopAppBarController
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
 import com.kipia.management.mobile.ui.navigation.KIPiANavHost
+import com.kipia.management.mobile.ui.screens.reports.models.ReportFilter
 import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.BottomNavColors
@@ -379,8 +380,27 @@ fun KIPiAApp(
                                 ))
                         }
 
-                        route == "reports" -> {
-                            topAppBarController.setForScreen("reports")
+                        route == "reports" || route == "reports_with_filter" -> {
+                            // Не переустанавливаем фильтр, так как он будет передан из ReportsScreen
+                            // Просто устанавливаем базовое состояние
+                            topAppBarController.setForScreen(
+                                "reports_with_filter",
+                                mapOf(
+                                    "title" to "Учет приборов КИПиА",
+                                    "showBackButton" to false,
+                                    "showSettingsIcon" to true,
+                                    "showThemeToggle" to true,
+                                    "reportFilter" to ReportFilter.Empty,
+                                    "availableStatuses" to emptyList<String>(),
+                                    "availableTypes" to emptyList<String>(),
+                                    "availableManufacturers" to emptyList<String>(),
+                                    "availableLocations" to emptyList<String>(),
+                                    "availableYears" to emptyList<Int>(),
+                                    "onFilterChange" to { filter: ReportFilter ->
+                                        // Этот колбэк будет заменен из ReportsScreen
+                                    }
+                                )
+                            )
                         }
 
                         // ★ fullscreen_photo — начальное состояние, детали установит сам экран

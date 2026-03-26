@@ -135,6 +135,8 @@ class SyncManager @Inject constructor(
             val importedDb = File(tempDir, DB_NAME)
             val importedPhotos = File(tempDir, PHOTOS_DIR)
 
+            // Сначала merge БД — она определяет актуальный список фото для каждого устройства.
+            // mergePhotos вызывается после, чтобы знать какие файлы реально нужны.
             val stats = mergeDatabase(importedDb)
             mergePhotos(importedPhotos)
 
@@ -191,6 +193,11 @@ class SyncManager @Inject constructor(
             } else {
                 deviceIdMap[importedDevice.id] = existing.id
                 if (importedDevice.updatedAt > existing.updatedAt) {
+                    // Физически удаляем файлы фото, которые были убраны на другой стороне.
+                    // Без этого шага удалённые на JavaFX (или другом Android) фото
+                    // навсегда оставались бы на диске в виде мусора.
+                    syncRemovedPhotos(existing, importedDevice)
+
                     deviceDao.updateDevice(importedDevice.copy(id = existing.id))
                     devicesUpdated++
                 }
@@ -247,6 +254,41 @@ class SyncManager @Inject constructor(
             schemesUpdated = schemesUpdated,
             locationsAdded = locationsAdded
         )
+    }
+
+    /**
+     * Удаляет физические файлы фото, которые присутствуют в [localDevice],
+     * но отсутствуют в [importedDevice].
+     *
+     * Вызывается перед обновлением записи в БД, когда импортируемая версия новее.
+     * Это единственное место, где файлы фото могут быть удалены при импорте —
+     * все остальные операции только добавляют файлы.
+     *
+     * Пример: на JavaFX удалили photo_2.jpg → в импортируемой БД его нет →
+     * здесь удаляем физический файл на Android, иначе он остался бы мусором на диске.
+     */
+    private fun syncRemovedPhotos(localDevice: Device, importedDevice: Device) {
+        val removedPhotos = localDevice.photos.toSet() - importedDevice.photos.toSet()
+        if (removedPhotos.isEmpty()) return
+
+        // Используем location локального устройства: файлы лежат именно там.
+        // Если location тоже изменился — старые файлы всё равно удалятся корректно,
+        // т.к. мы ищем их по старому пути.
+        val locationDir = photoManager.getLocationDir(localDevice.location)
+
+        removedPhotos.forEach { fileName ->
+            val file = File(locationDir, fileName)
+            if (file.exists()) {
+                val deleted = file.delete()
+                Timber.d("SyncManager: удалён устаревший файл фото $fileName (deleted=$deleted)")
+            }
+        }
+
+        // Если после удаления папка локации опустела — убираем и её
+        if (locationDir.exists() && locationDir.listFiles().isNullOrEmpty()) {
+            locationDir.delete()
+            Timber.d("SyncManager: удалена пустая папка локации ${locationDir.name}")
+        }
     }
 
     /**
@@ -347,6 +389,16 @@ class SyncManager @Inject constructor(
     // MERGE ФОТО
     // ─────────────────────────────────────────────
 
+    /**
+     * Копирует фото из импортируемого архива в локальное хранилище.
+     *
+     * Логика намеренно только аддитивная (не удаляет существующие файлы):
+     * удаление устаревших файлов выполняется ранее в [syncRemovedPhotos],
+     * до того как запись устройства обновляется в БД.
+     *
+     * Файл пропускается если уже существует локально — это предотвращает
+     * перезапись более свежей локальной версии устаревшей из архива.
+     */
     private fun mergePhotos(importedPhotosDir: File) {
         if (!importedPhotosDir.exists()) return
 

@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kipia.management.mobile.data.entities.Device
@@ -86,6 +87,78 @@ class PhotosViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // ── Статистика ────────────────────────────────────────────────────────────
+
+    // Общая статистика — по всем устройствам, без фильтров
+    val totalStats: StateFlow<PhotoStats> = devices
+        .map { deviceList ->
+            val totalLocations = deviceList.map { it.location }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .size
+            val totalDevices = deviceList.size
+            val totalPhotos = deviceList.sumOf { device ->
+                device.photos.count { fileName ->
+                    val fullPath = photoManager.getFullPhotoPath(device, fileName)
+                    fullPath != null && File(fullPath).exists()
+                }
+            }
+            PhotoStats(
+                locations = totalLocations,
+                devices   = totalDevices,
+                photos    = totalPhotos
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = PhotoStats()
+        )
+
+    // Статистика по отфильтрованным данным
+    val filteredStats: StateFlow<PhotoStats> = combine(
+        devices,
+        _selectedLocation,
+        _selectedDeviceId,
+        _searchQuery
+    ) { deviceList, locationFilter, deviceFilter, searchQuery ->
+        val filteredDevices = deviceList.filter { device ->
+            val matchesLocation = locationFilter == null || device.location == locationFilter
+            val matchesDevice   = deviceFilter == null   || device.id == deviceFilter
+            val matchesSearch   = searchQuery.isBlank()  ||
+                    device.location.contains(searchQuery, ignoreCase = true) ||
+                    device.name?.contains(searchQuery, ignoreCase = true) == true ||
+                    device.inventoryNumber.contains(searchQuery, ignoreCase = true)
+            matchesLocation && matchesDevice && matchesSearch
+        }
+        val filteredLocations = filteredDevices.map { it.location }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .size
+        val filteredPhotos = filteredDevices.sumOf { device ->
+            device.photos.count { fileName ->
+                val fullPath = photoManager.getFullPhotoPath(device, fileName)
+                fullPath != null && File(fullPath).exists()
+            }
+        }
+        val devicesWithPhotos = filteredDevices.count { device ->
+            device.photos.any { fileName ->
+                val fullPath = photoManager.getFullPhotoPath(device, fileName)
+                fullPath != null && File(fullPath).exists()
+            }
+        }
+        PhotoStats(
+            locations        = filteredLocations,
+            devices          = filteredDevices.size,
+            photos           = filteredPhotos,
+            devicesWithPhotos = devicesWithPhotos
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PhotoStats()
     )
 
     //  Функция для сброса всех фильтров
@@ -327,14 +400,14 @@ class PhotosViewModel @Inject constructor(
     }
 }
 
-// ★ ДОБАВЛЯЕМ: Data классы для группировки
+// ── Data-классы ───────────────────────────────────────────────────────────────
+
 data class LocationPhotoGroup(
     val location: String,
     val photos: List<PhotoItem>,
     val isExpanded: Boolean = false
 )
 
-// ★ ОБНОВЛЯЕМ: PhotosUiState - добавляем режим отображения
 data class PhotosUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -345,4 +418,12 @@ data class PhotosUiState(
     val displayMode: DisplayMode = DisplayMode.GROUPED,
     val searchQuery: String = "",
     val sortBy: PhotosSortBy = PhotosSortBy.NAME_ASC
+)
+
+@Immutable
+data class PhotoStats(
+    val locations: Int = 0,
+    val devices: Int = 0,
+    val photos: Int = 0,
+    val devicesWithPhotos: Int = 0
 )

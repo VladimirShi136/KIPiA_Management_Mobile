@@ -32,9 +32,13 @@ import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.DeviceDeleteWithSchemeDialog
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.DeviceStatus
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.viewmodel.DeviceDeleteViewModel
 import com.kipia.management.mobile.viewmodel.DeviceStats
+import com.kipia.management.mobile.ui.components.stats.StatCard
+import com.kipia.management.mobile.ui.components.stats.StatGroup
+import com.kipia.management.mobile.ui.components.stats.StatItemData
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -121,7 +125,7 @@ fun DevicesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp)
+                .padding(Dimens.screenPadding)
                 .windowInsetsPadding(
                     WindowInsets.navigationBars
                         .only(WindowInsetsSides.Bottom)
@@ -133,8 +137,7 @@ fun DevicesScreen(
                 stats = stats,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(bottom = 6.dp)
+                    .padding(bottom = Dimens.spacingMedium)
             )
 
             // Активные фильтры
@@ -151,7 +154,7 @@ fun DevicesScreen(
                         viewModel.setLocationFilter(null)
                         viewModel.setStatusFilter(null)
                     },
-                    modifier = Modifier.padding(bottom = 4.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingSmall)
                 )
             }
 
@@ -424,7 +427,7 @@ fun TableHeader(
     Row(
         modifier = modifier
             .width(tableWidth)
-            .height(40.dp)
+            .height(Dimens.tableHeaderHeight)
             .background(MaterialTheme.colorScheme.surfaceVariant),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -568,7 +571,7 @@ fun TableRow(
         TableCell(device.location, Modifier.weight(W_LOCATION), searchQuery, highlightColor)
         TableCell(device.valveNumber ?: "-", Modifier.weight(W_VALVE), searchQuery, highlightColor)
 
-        Box(modifier = Modifier.width(COL_STATUS_WIDTH).padding(horizontal = 8.dp)) {
+        Box(modifier = Modifier.width(COL_STATUS_WIDTH).padding(horizontal = Dimens.tableCellPaddingHorizontal)) {
             StatusBadgeCompact(status = device.status)
         }
 
@@ -659,45 +662,20 @@ fun TableCell(
 
 @Composable
 fun DeviceStatistics(stats: DeviceStats, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
-                alpha = 0.5f
+    StatCard(
+        groups = listOf(
+            StatGroup(
+                items = listOf(
+                    StatItemData(stats.total,     "Всего",    DeviceStatusColors.Total),
+                    StatItemData(stats.inWork,    "В работе", DeviceStatusColors.Working),
+                    StatItemData(stats.inStorage, "Хранение", DeviceStatusColors.Storage),
+                    StatItemData(stats.lost,      "Утерян",   DeviceStatusColors.Lost),
+                    StatItemData(stats.broken,    "Испорчен", DeviceStatusColors.Broken)
+                )
             )
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatItem(stats.total, "Всего", DeviceStatusColors.Total, Modifier.weight(1f))
-            StatItem(stats.inWork, "В работе", DeviceStatusColors.Working, Modifier.weight(1f))
-            StatItem(stats.inStorage, "Хранение", DeviceStatusColors.Storage, Modifier.weight(1f))
-            StatItem(stats.lost, "Утерян", DeviceStatusColors.Lost, Modifier.weight(1f))
-            StatItem(stats.broken, "Испорчен", DeviceStatusColors.Broken, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-fun StatItem(count: Int, label: String, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
+        ),
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -746,7 +724,7 @@ fun ActiveFiltersBadge(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Dimens.chipRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
                 alpha = 0.5f
@@ -757,7 +735,7 @@ fun ActiveFiltersBadge(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(Dimens.spacingMedium),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

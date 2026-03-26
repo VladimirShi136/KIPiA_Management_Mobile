@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
@@ -68,7 +69,7 @@ fun LoadingPhotoState() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Dimens.spacingLarge))
             Text("Загрузка фото...")
         }
     }
@@ -81,27 +82,27 @@ fun ErrorPhotoState(
     onNavigateBack: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(Dimens.spacingLarge),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             Icons.Default.Error,
             contentDescription = "Ошибка",
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(Dimens.iconSizeXXLarge),
             tint = MaterialTheme.colorScheme.error
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingLarge))
         Text("Ошибка", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
         Text(
             text = error,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Spacer(modifier = Modifier.height(Dimens.spacingXLarge))
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)) {
             Button(onClick = onNavigateBack) { Text("Назад") }
             Button(onClick = onRetry) { Text("Повторить") }
         }

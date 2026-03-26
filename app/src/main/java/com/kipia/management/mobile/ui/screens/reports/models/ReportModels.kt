@@ -1,6 +1,7 @@
 package com.kipia.management.mobile.ui.screens.reports.models
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Color
 
 sealed class ReportType {
@@ -85,7 +86,10 @@ data class DeviceInfo(
     val displayName: String,
     val inventoryNumber: String,
     val location: String,
-    val status: String
+    val status: String,
+    val type: String,
+    val manufacturer: String,
+    val releaseYear: Int?
 )
 
 @Immutable
@@ -97,4 +101,26 @@ data class DistributionItem(
 ) {
     val percentage: Float get() = if (total > 0) count.toFloat() / total else 0f
     val percentageInt: Int get() = (percentage * 100).toInt()
+}
+
+/**
+ * Фильтр для отчётов.
+ * Применяется на стороне ViewModel — передаётся через TopAppBarController.
+ */
+@Stable
+data class ReportFilter(
+    val status: String? = null,          // «В работе», «Хранение», «Утерян», «Испорчен»
+    val deviceType: String? = null,      // тип прибора
+    val manufacturer: String? = null,    // производитель
+    val location: String? = null,        // местоположение
+    val releaseYear: Int? = null         // год выпуска
+) {
+    val activeCount: Int
+        get() = listOfNotNull(status, deviceType, manufacturer, location, releaseYear).size
+
+    val isEmpty: Boolean get() = activeCount == 0
+
+    companion object {
+        val Empty = ReportFilter()
+    }
 }

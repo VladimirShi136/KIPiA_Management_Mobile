@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.kipia.management.mobile.ui.theme.Dimens
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -116,28 +117,28 @@ fun SettingsScreen(
     // Единый отступ для всех карточек
     val cardModifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 6.dp)
+        .padding(horizontal = Dimens.screenPadding)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(vertical = 6.dp), // верхний и нижний отступ колонки
-        verticalArrangement = Arrangement.spacedBy(6.dp) // равные отступы между карточками
+            .padding(vertical = Dimens.spacingMedium), // верхний и нижний отступ колонки
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium) // равные отступы между карточками
     ) {
         // ─── Синхронизация ───────────────────────────────────────
         Card(modifier = cardModifier) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(Dimens.cardPadding)) {
                 Text(
                     text = "Синхронизация",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingMedium)
                 )
                 Text(
                     text = "Обменивайтесь данными между Android и ПК через ZIP-файл.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingLarge)
                 )
                 Text(
                     text = "Последний экспорт: ${
@@ -145,7 +146,7 @@ fun SettingsScreen(
                     }",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingSmall)
                 )
                 Text(
                     text = "Последний импорт: ${
@@ -153,14 +154,14 @@ fun SettingsScreen(
                     }",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingLarge)
                 )
 
                 val isLoading = syncState is SyncState.Loading
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                 ) {
                     OutlinedButton(
                         onClick = {
@@ -171,8 +172,8 @@ fun SettingsScreen(
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(Dimens.iconSizeSmall))
+                        Spacer(Modifier.width(Dimens.spacingMedium))
                         Text("Экспорт", maxLines = 1)
                     }
 
@@ -181,19 +182,19 @@ fun SettingsScreen(
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(Dimens.iconSizeSmall))
+                        Spacer(Modifier.width(Dimens.spacingMedium))
                         Text("Импорт", maxLines = 1)
                     }
                 }
 
                 if (isLoading) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(Dimens.spacingFab))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(Dimens.iconSizeXSmall), strokeWidth = 2.dp)
                         Text(
                             text = (syncState as SyncState.Loading).message,
                             style = MaterialTheme.typography.bodySmall,
@@ -206,25 +207,25 @@ fun SettingsScreen(
 
         // ─── Внешний вид ─────────────────────────────────────────
         Card(modifier = cardModifier) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(Dimens.cardPadding)) {
                 Text(
                     text = "Внешний вид",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingLarge)
                 )
 
                 Text(
                     text = "Тема приложения",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingMedium)
                 )
 
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     SegmentedButton(
                         selected = themeMode == PreferencesRepository.THEME_FOLLOW_SYSTEM,
                         onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_FOLLOW_SYSTEM) },
-                        icon = { Icon(Icons.Filled.SettingsBrightness, null, modifier = Modifier.size(16.dp)) },
+                        icon = { Icon(Icons.Filled.SettingsBrightness, null, modifier = Modifier.size(Dimens.iconSizeSmall)) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                         modifier = Modifier.weight(1f)
                     ) { Text("Системная", fontSize = 10.sp, maxLines = 1) }
@@ -232,7 +233,7 @@ fun SettingsScreen(
                     SegmentedButton(
                         selected = themeMode == PreferencesRepository.THEME_LIGHT,
                         onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_LIGHT) },
-                        icon = { Icon(Icons.Filled.LightMode, null, modifier = Modifier.size(16.dp)) },
+                        icon = { Icon(Icons.Filled.LightMode, null, modifier = Modifier.size(Dimens.iconSizeSmall)) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                         modifier = Modifier.weight(1f)
                     ) { Text("Светлая", fontSize = 10.sp, maxLines = 1) }
@@ -240,13 +241,13 @@ fun SettingsScreen(
                     SegmentedButton(
                         selected = themeMode == PreferencesRepository.THEME_DARK,
                         onClick = { themeViewModel.setTheme(PreferencesRepository.THEME_DARK) },
-                        icon = { Icon(Icons.Filled.DarkMode, null, modifier = Modifier.size(16.dp)) },
+                        icon = { Icon(Icons.Filled.DarkMode, null, modifier = Modifier.size(Dimens.iconSizeSmall)) },
                         shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
                         modifier = Modifier.weight(1f)
                     ) { Text("Темная", fontSize = 10.sp, maxLines = 1) }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Dimens.spacingLarge))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -276,20 +277,20 @@ fun SettingsScreen(
         // ─── О приложении ─────────────────────────────────────────
         // ListItem имеет свой фон и острые углы — заменяем на Row внутри Card
         Card(modifier = cardModifier) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(Dimens.cardPadding)) {
                 Text(
                     text = "О приложении",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = Dimens.spacingFab)
                 )
 
                 // Версия
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = Dimens.spacingMedium),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
                 ) {
                     Icon(
                         Icons.Filled.Info,
@@ -310,9 +311,9 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = Dimens.spacingMedium),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
                 ) {
                     Icon(
                         Icons.Filled.Code,

@@ -13,7 +13,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DeviceDeleteViewModel @Inject constructor(
     private val schemeSyncUseCase: SchemeSyncUseCase,
-    private val deviceRepository: DeviceRepository // ← ДОБАВЬ ЭТОТ КОНСТРУКТОР!
+    private val deviceRepository: DeviceRepository
 ) : ViewModel() {
 
     private val _showDeleteDialog = MutableStateFlow<DeleteDialogData?>(null)

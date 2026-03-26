@@ -1,22 +1,29 @@
 package com.kipia.management.mobile.ui.screens.reports
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.screens.reports.models.*
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.viewmodel.ReportsViewModel
 
 @Composable
@@ -25,62 +32,89 @@ fun ReportsScreen(
     topAppBarController: TopAppBarController? = null
 ) {
     val reports by viewModel.reports.collectAsStateWithLifecycle()
-    val currentReport by viewModel.currentReport.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val filterOptions by viewModel.filterOptions.collectAsStateWithLifecycle()
 
-    LaunchedEffect(currentReport) {
-        if (currentReport != null) {
-            topAppBarController?.setForScreen(
-                "report_detail",
-                mapOf(
-                    "title" to currentReport!!.title,
-                    "onBackClick" to { viewModel.closeReport() }  // ← ключевое
-                )
-            )
-        } else {
-            topAppBarController?.setForScreen("reports")
-        }
+    // Стабильные значения для LaunchedEffect
+    val filterKey = remember(filter) {
+        "${filter.status}_${filter.deviceType}_${filter.manufacturer}_${filter.location}_${filter.releaseYear}"
     }
 
-    if (currentReport != null) {
-        ReportDetailScreen(report = currentReport!!)   // без onBack — кнопка назад в TopAppBar
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-                reports.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            Icons.Default.Assessment,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text("Нет данных для отчётов",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(16.dp))
-                        Button(onClick = { viewModel.loadReports() }) {
-                            Text("Обновить")
-                        }
-                    }
-                }
-                else -> {
+    val filterOptionsKey = remember(filterOptions) {
+        "${filterOptions.statuses.size}_${filterOptions.types.size}_${filterOptions.manufacturers.size}_${filterOptions.locations.size}_${filterOptions.years.size}"
+    }
+
+    // Настройка TopAppBar - используем стабильные ключи
+    LaunchedEffect(filterKey, filterOptionsKey) {
+        topAppBarController?.setForScreen(
+            "reports_with_filter",
+            mapOf(
+                "title" to "Учет приборов КИПиА",
+                "showBackButton" to false,
+                "reportFilter" to filter,
+                "availableStatuses" to filterOptions.statuses,
+                "availableTypes" to filterOptions.types,
+                "availableManufacturers" to filterOptions.manufacturers,
+                "availableLocations" to filterOptions.locations,
+                "availableYears" to filterOptions.years,
+                "onFilterChange" to { newFilter: ReportFilter -> viewModel.setFilter(newFilter) }
+            )
+        )
+    }
+
+    // Показываем только сводный отчет (SummaryReport)
+    val summaryReport = remember(reports) {
+        reports.find { it is SummaryReport } as? SummaryReport
+    }
+
+    ReportsListContent(
+        summaryReport = summaryReport,
+        isLoading = isLoading,
+        filter = filter,
+        onRefresh = { viewModel.loadReports() },
+        onClearFilter = { viewModel.clearFilter() }
+    )
+}
+
+@Composable
+private fun ReportsListContent(
+    summaryReport: SummaryReport?,
+    isLoading: Boolean,
+    filter: ReportFilter,
+    onRefresh: () -> Unit,
+    onClearFilter: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
+            isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+
+            summaryReport == null -> EmptyReportsPlaceholder(
+                onRefresh = onRefresh,
+                hasFilter = !filter.isEmpty,
+                onClearFilter = onClearFilter
+            )
+
+            else -> {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Активные фильтры (как в SchemesScreen)
+                    ActiveFiltersBadge(
+                        filter = filter,
+                        onClearFilters = onClearFilter,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Dimens.screenPadding, vertical = Dimens.screenPadding)
+                    )
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(Dimens.screenPadding),
+                        contentPadding = PaddingValues(Dimens.screenPadding)
                     ) {
-                        items(reports, key = { it.id }) { report ->
-                            ReportCard(
-                                report = report,
-                                onClick = { viewModel.openReport(report) }
-                            )
+                        item {
+                            SummaryReportCard(report = summaryReport)
                         }
                     }
                 }
@@ -90,87 +124,281 @@ fun ReportsScreen(
 }
 
 @Composable
-private fun ReportCard(report: Report, onClick: () -> Unit) {
-    val (icon, color) = reportIconAndColor(report)
+private fun ActiveFiltersBadge(
+    filter: ReportFilter,
+    onClearFilters: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val hasActiveFilters = !filter.isEmpty
+
+    if (hasActiveFilters) {
+        Card(
+            modifier = modifier,
+            shape = RoundedCornerShape(Dimens.chipRadius),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(Dimens.spacingMedium),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.FilterAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(Dimens.iconSizeXSmall),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.width(Dimens.spacingMedium))
+
+                    Text(
+                        text = buildActiveFiltersText(filter),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = onClearFilters,
+                    modifier = Modifier.size(Dimens.iconSizeSmall + 6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Очистить фильтры",
+                        modifier = Modifier.size(Dimens.iconSizeXSmall),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun buildActiveFiltersText(filter: ReportFilter): String {
+    val filters = mutableListOf<String>()
+
+    filter.status?.let { filters.add("Статус: $it") }
+    filter.deviceType?.let { filters.add("Тип: $it") }
+    filter.manufacturer?.let { filters.add("Производитель: $it") }
+    filter.location?.let { filters.add("Локация: $it") }
+    filter.releaseYear?.let { filters.add("Год: $it") }
+
+    return if (filters.isEmpty()) {
+        "Нет активных фильтров"
+    } else {
+        "Фильтры: ${filters.joinToString(", ")}"
+    }
+}
+
+@Composable
+private fun SummaryReportCard(report: SummaryReport) {
+    val slices = listOf(
+        DonutSliceData("В работе", report.inWork.toFloat(), Color(0xFF4CAF50)),
+        DonutSliceData("Хранение", report.inStorage.toFloat(), Color(0xFFF58352)),
+        DonutSliceData("Утерян", report.lost.toFloat(), Color(0xFF9E9E9E)),
+        DonutSliceData("Испорчен", report.broken.toFloat(), Color(0xFFF44336))
+    ).filter { it.value > 0f }
 
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(Dimens.spacingLarge),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Иконка с цветным фоном
-            Surface(
-                color = color.copy(alpha = 0.15f),
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.size(48.dp)
+            // Заголовок
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                Icon(
+                    Icons.Default.Assessment,
+                    null,
+                    tint = Color(0xFF2196F3),
+                    modifier = Modifier.size(Dimens.iconSizeMedium)
+                )
+                Spacer(modifier = Modifier.width(Dimens.spacingMedium))
+                Text(
+                    "Сводка по приборам",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(Modifier.height(Dimens.spacingLarge))
+
+            // Большая диаграмма
+            Box(
+                modifier = Modifier.size(200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                DonutChart(
+                    slices = slices,
+                    total = report.totalDevices.toFloat(),
+                    strokeWidth = 24f
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "${report.totalDevices}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "всего приборов",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(report.title, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold)
-                Text(report.subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(Dimens.spacingXLarge))
 
-                // Превью данных
-                Spacer(Modifier.height(4.dp))
-                ReportCardPreview(report = report, color = color)
+            // Легенда в виде сетки
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
+                ) {
+                    LegendChip("В работе", report.inWork, Color(0xFF4CAF50), Modifier.weight(1f))
+                    LegendChip("Хранение", report.inStorage, Color(0xFFF58352), Modifier.weight(1f))
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
+                ) {
+                    LegendChip("Утерян", report.lost, Color(0xFF9E9E9E), Modifier.weight(1f))
+                    LegendChip("Испорчен", report.broken, Color(0xFFF44336), Modifier.weight(1f))
+                }
             }
-
-            Icon(Icons.Default.ChevronRight, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun ReportCardPreview(report: Report, color: Color) {
-    when (report) {
-        is SummaryReport -> Text(
-            "${report.totalDevices} приборов · ${report.totalSchemes} схем",
-            style = MaterialTheme.typography.labelSmall,
-            color = color
-        )
-        is StatusDistributionReport -> Text(
-            "В работе: ${report.statuses["В работе"] ?: 0} · Проблемных: ${(report.statuses["Утерян"] ?: 0) + (report.statuses["Испорчен"] ?: 0)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = color
-        )
-        is LocationDistributionReport -> Text(
-            "${report.locations.size} локаций · ${report.total} приборов",
-            style = MaterialTheme.typography.labelSmall,
-            color = color
-        )
-        is TypeDistributionReport -> Text(
-            "${report.types.size} типов · ${report.total} приборов",
-            style = MaterialTheme.typography.labelSmall,
-            color = color
-        )
-        is NeedsAttentionReport -> {
-            val count = report.lostDevices.size + report.brokenDevices.size
+private fun DonutChart(
+    slices: List<DonutSliceData>,
+    total: Float,
+    modifier: Modifier = Modifier,
+    strokeWidth: Float = 22f,
+    gapDeg: Float = 3f
+) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        if (total <= 0f || slices.isEmpty()) {
+            drawArc(
+                color = Color.Gray.copy(alpha = 0.15f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
+                size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+            return@Canvas
+        }
+
+        val totalGap = gapDeg * slices.size
+        val availableDeg = 360f - totalGap
+        var startAngle = -90f
+
+        slices.forEach { slice ->
+            val sweep = (slice.value / total) * availableDeg
+            if (sweep > 0f) {
+                drawArc(
+                    color = slice.color,
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
+                    size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+                startAngle += sweep + gapDeg
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendChip(
+    label: String,
+    count: Int,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Dimens.spacingMedium + 2.dp, vertical = Dimens.spacingSmall + 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall)
+        ) {
+            Canvas(Modifier.size(Dimens.spacingMedium)) { drawCircle(color) }
+            Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
             Text(
-                if (count == 0) "Всё в порядке ✓"
-                else "$count приборов требуют внимания",
+                "$count",
                 style = MaterialTheme.typography.labelSmall,
-                color = if (count == 0) Color(0xFF4CAF50) else color
+                fontWeight = FontWeight.Bold,
+                color = color
             )
         }
     }
 }
 
-private fun reportIconAndColor(report: Report): Pair<ImageVector, Color> = when (report) {
-    is SummaryReport -> Icons.Default.Assessment to Color(0xFF2196F3)
-    is StatusDistributionReport -> Icons.Default.PieChart to Color(0xFF4CAF50)
-    is LocationDistributionReport -> Icons.Default.LocationOn to Color(0xFFFF9800)
-    is TypeDistributionReport -> Icons.Default.Category to Color(0xFF9C27B0)
-    is NeedsAttentionReport -> Icons.Default.Warning to Color(0xFFF44336)
+@Composable
+private fun EmptyReportsPlaceholder(
+    onRefresh: () -> Unit,
+    hasFilter: Boolean,
+    onClearFilter: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            if (hasFilter) Icons.Default.FilterAltOff else Icons.Default.Assessment,
+            contentDescription = null,
+            modifier = Modifier.size(Dimens.iconSizeXXLarge),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(Dimens.spacingLarge))
+        Text(
+            if (hasFilter) "Нет данных по выбранному фильтру" else "Нет данных для отчётов",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(Dimens.spacingLarge))
+        Button(onClick = onRefresh) { Text("Обновить") }
+        if (hasFilter) {
+            Spacer(Modifier.height(Dimens.spacingMedium))
+            TextButton(onClick = onClearFilter) {
+                Text("Сбросить фильтр")
+            }
+        }
+    }
 }
+
+private data class DonutSliceData(val label: String, val value: Float, val color: Color)

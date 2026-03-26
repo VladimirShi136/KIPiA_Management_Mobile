@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
+import com.kipia.management.mobile.ui.components.reports.ReportsFilterMenu
 import com.kipia.management.mobile.ui.components.scheme.SchemesFilterMenu
 import com.kipia.management.mobile.ui.components.table.DeviceFilterMenu
 import com.kipia.management.mobile.ui.components.theme.ThemeToggleButton
@@ -43,7 +44,6 @@ fun KIPiATopAppBar(
         colorScheme.onPrimary.copy(alpha = 0.8f)
     }
 
-    // Вызываем @Composable снаружи remember — результат стабилен пока цвета не меняются
     val appBarColors = TopAppBarDefaults.topAppBarColors(
         containerColor = topAppBarBg,
         titleContentColor = topAppBarContent,
@@ -97,7 +97,6 @@ private fun KeyedTopAppBarActions(
 ) {
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
-    // Используем key чтобы гарантировать пересоздание при изменении типа экрана
     when {
         topAppBarState.showSchemeEditorActions -> {
             SchemeEditorActions(
@@ -106,7 +105,6 @@ private fun KeyedTopAppBarActions(
             )
         }
 
-        // ★ ПОЛНОЭКРАННОЕ ФОТО
         topAppBarState.showPhotoActions -> {
             FullScreenPhotoActions(
                 topAppBarState = topAppBarState,
@@ -137,32 +135,66 @@ private fun KeyedTopAppBarActions(
             )
         }
 
-        currentRoute == "reports" -> {
-            // Те же кнопки что на devices/schemes — тема + настройки
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ThemeToggleButton(contentColor = topAppBarContent)
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = { navController.navigate("settings") }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Настройки", tint = topAppBarContent)
-                }
+        currentRoute == "reports_with_filter" || currentRoute == "reports" -> {
+            // Проверяем, нужно ли показывать фильтр
+            if (topAppBarState.showReportFilterMenu) {
+                ReportDetailActions(
+                    topAppBarState = topAppBarState,
+                    topAppBarContent = topAppBarContent,
+                    navController = navController
+                )
+            } else {
+                BackButtonScreenActions(
+                    topAppBarState = topAppBarState,
+                    topAppBarContent = topAppBarContent
+                )
             }
         }
+    }
+}
 
-        topAppBarState.showBackButton -> {
-            BackButtonScreenActions(
-                topAppBarState = topAppBarState,
-                topAppBarContent = topAppBarContent
+// ── Детали отчёта ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReportDetailActions(
+    topAppBarState: TopAppBarData,
+    topAppBarContent: Color,
+    navController: NavController
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+        // Убираем modifier = Modifier.padding(end = 4.dp) - как в SchemesScreenActions и PhotosScreenActions
+    ) {
+        ReportsFilterMenu(
+            filter = topAppBarState.reportFilter,
+            availableStatuses = topAppBarState.reportFilterAvailableStatuses,
+            availableTypes = topAppBarState.reportFilterAvailableTypes,
+            availableManufacturers = topAppBarState.reportFilterAvailableManufacturers,
+            availableLocations = topAppBarState.reportFilterAvailableLocations,
+            availableYears = topAppBarState.reportFilterAvailableYears,
+            onFilterChange = { topAppBarState.onReportFilterChange?.invoke(it) },
+            contentColor = topAppBarContent,
+            modifier = Modifier.padding(end = 4.dp)  // ← Добавляем отступ здесь, как в SchemesScreenActions
+        )
+        ThemeToggleButton(contentColor = topAppBarContent)
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = { navController.navigate("settings") }) {
+            Icon(
+                Icons.Filled.Settings,
+                contentDescription = "Настройки",
+                tint = topAppBarContent
             )
         }
     }
 }
+
+// ── Редактор схем ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun SchemeEditorActions(
     topAppBarState: TopAppBarData,
     topAppBarContent: Color
 ) {
-
     val disabledTint = remember(topAppBarContent) {
         topAppBarContent.copy(alpha = 0.35f)
     }
@@ -171,7 +203,6 @@ private fun SchemeEditorActions(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(end = 4.dp)
     ) {
-        // ★ КНОПКА «ОЧИСТИТЬ СХЕМУ»
         if (topAppBarState.showClearButton) {
             IconButton(
                 onClick = {
@@ -188,7 +219,6 @@ private fun SchemeEditorActions(
             }
         }
 
-        // Кнопка свойств схемы
         if (topAppBarState.showSchemeEditorActions) {
             IconButton(
                 onClick = {
@@ -205,7 +235,6 @@ private fun SchemeEditorActions(
             }
         }
 
-        // Кнопка сохранения
         if (topAppBarState.canSave) {
             IconButton(
                 onClick = {
@@ -224,6 +253,8 @@ private fun SchemeEditorActions(
     }
 }
 
+// ── Схемы ─────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun SchemesScreenActions(
     topAppBarState: TopAppBarData,
@@ -236,9 +267,9 @@ private fun SchemesScreenActions(
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (topAppBarState.showSchemesFilterMenu) {
             SchemesFilterMenu(
-                searchQuery = uiState.searchQuery,        // ← из VM напрямую
+                searchQuery = uiState.searchQuery,
                 onSearchQueryChange = { schemesViewModel.setSearchQuery(it) },
-                currentSort = uiState.sortBy,             // ← из VM напрямую
+                currentSort = uiState.sortBy,
                 onSortSelected = { schemesViewModel.setSortBy(it) },
                 onResetAllFilters = { schemesViewModel.resetAllFilters() },
                 modifier = Modifier.padding(end = 4.dp)
@@ -251,6 +282,8 @@ private fun SchemesScreenActions(
         }
     }
 }
+
+// ── Фото ──────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PhotosScreenActions(
@@ -278,6 +311,8 @@ private fun PhotosScreenActions(
     }
 }
 
+// ── Приборы ───────────────────────────────────────────────────────────────────
+
 @Composable
 private fun DevicesScreenActions(
     topAppBarContent: Color,
@@ -288,9 +323,7 @@ private fun DevicesScreenActions(
     val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
     val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         DeviceFilterMenu(
             searchQuery = searchQuery,
             onSearchQueryChange = { devicesViewModel.setSearchQuery(it) },
@@ -312,6 +345,8 @@ private fun DevicesScreenActions(
         }
     }
 }
+
+// ── Полноэкранное фото ────────────────────────────────────────────────────────
 
 @Composable
 private fun FullScreenPhotoActions(
@@ -348,7 +383,6 @@ private fun FullScreenPhotoActions(
         IconButton(onClick = { showInfoDialog = true }) {
             Icon(Icons.Filled.Info, "Информация о фото", tint = topAppBarContent)
         }
-        // Кнопка Delete вызывает onDeletePhotoClick → открывает диалог в FullScreenPhotoScreen
         IconButton(onClick = { topAppBarState.onDeletePhotoClick?.invoke() }) {
             Icon(Icons.Filled.Delete, "Удалить фото", tint = topAppBarContent)
         }
@@ -363,6 +397,8 @@ private fun PhotoInfoRow(label: String, value: String) {
     }
 }
 
+// ── Экраны с кнопкой назад ────────────────────────────────────────────────────
+
 @Composable
 private fun BackButtonScreenActions(
     topAppBarState: TopAppBarData,
@@ -372,59 +408,39 @@ private fun BackButtonScreenActions(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(end = 4.dp)
     ) {
-        // Кнопка редактирования
         if (topAppBarState.showEditButton) {
             IconButton(
                 onClick = { topAppBarState.onEditClick?.invoke() },
                 enabled = topAppBarState.onEditClick != null
             ) {
-                Icon(
-                    Icons.Filled.Edit,
-                    contentDescription = "Редактировать",
-                    tint = topAppBarContent
-                )
+                Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = topAppBarContent)
             }
         }
 
-        // Кнопка сохранения
         if (topAppBarState.showSaveButton) {
             IconButton(
                 onClick = { topAppBarState.onSaveClick?.invoke() },
                 enabled = topAppBarState.onSaveClick != null
             ) {
-                Icon(
-                    Icons.Filled.Save,
-                    contentDescription = "Сохранить",
-                    tint = topAppBarContent
-                )
+                Icon(Icons.Filled.Save, contentDescription = "Сохранить", tint = topAppBarContent)
             }
         }
 
-        // Кнопка удаления
         if (topAppBarState.showDeleteButton) {
             IconButton(
                 onClick = { topAppBarState.onDeleteClick?.invoke() },
                 enabled = topAppBarState.onDeleteClick != null
             ) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "Удалить",
-                    tint = topAppBarContent
-                )
+                Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = topAppBarContent)
             }
         }
 
-        // Кнопка добавления
         if (topAppBarState.showAddButton) {
             IconButton(
                 onClick = { topAppBarState.onAddClick?.invoke() },
                 enabled = topAppBarState.onAddClick != null
             ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = "Добавить",
-                    tint = topAppBarContent
-                )
+                Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = topAppBarContent)
             }
         }
     }

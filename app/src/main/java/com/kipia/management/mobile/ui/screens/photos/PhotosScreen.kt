@@ -40,7 +40,14 @@ import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.components.photos.PhotoItem
 import com.kipia.management.mobile.ui.components.photos.PhotosActiveFiltersBadge
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
+import com.kipia.management.mobile.ui.components.stats.StatCard
+import com.kipia.management.mobile.ui.components.stats.StatGroup
+import com.kipia.management.mobile.ui.components.stats.StatItemData
+import com.kipia.management.mobile.ui.theme.AppColors
+import com.kipia.management.mobile.ui.theme.Dimens
+import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.viewmodel.LocationPhotoGroup
+import com.kipia.management.mobile.viewmodel.PhotoStats
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -62,6 +69,8 @@ fun PhotosScreen(
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
     val groupedByLocation by viewModel.groupedByLocation.collectAsStateWithLifecycle()
+    val totalStats by viewModel.totalStats.collectAsStateWithLifecycle()
+    val filteredStats by viewModel.filteredStats.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Состояния скролла для каждого режима
@@ -74,7 +83,13 @@ fun PhotosScreen(
     val isListViewMode = uiState.viewMode == ViewMode.LIST
 
     // ★ ИСПРАВЛЕНИЕ: Определяем shouldShowBottomNav для каждого режима отдельно
-    val shouldShowBottomNav by remember(groupedScrollState, gridScrollState, listScrollState, isGroupedMode, isListViewMode) {
+    val shouldShowBottomNav by remember(
+        groupedScrollState,
+        gridScrollState,
+        listScrollState,
+        isGroupedMode,
+        isListViewMode
+    ) {
         derivedStateOf {
             when {
                 isGroupedMode -> {
@@ -83,20 +98,19 @@ fun PhotosScreen(
                         firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
                     }
                 }
+
                 isListViewMode -> {
                     // Для FLAT режима в виде LIST (LazyColumn)
                     with(listScrollState) {
                         firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
                     }
                 }
+
                 else -> {
                     // Для FLAT режима в виде GRID (LazyStaggeredGrid)
-                    // Для LazyStaggeredGridState нет firstVisibleItemScrollOffset
                     with(gridScrollState) {
-                        // Проверяем, видим ли мы самый первый элемент
                         val isFirstItemVisible = layoutInfo.visibleItemsInfo
                             .any { it.index == 0 }
-                        // Проверяем, находится ли первый элемент в самом верху
                         val isFirstItemAtTop = layoutInfo.visibleItemsInfo
                             .firstOrNull { it.index == 0 }?.offset?.y == 0
 
@@ -169,7 +183,6 @@ fun PhotosScreen(
                 viewModel.selectDevice(deviceId)
             })
             put("onResetAllFilters", {
-                // ★ Вызываем метод ViewModel для сброса фильтров
                 viewModel.resetAllFilters()
             })
             put("onSortClick", {
@@ -206,162 +219,167 @@ fun PhotosScreen(
         }
     }
 
-    Scaffold { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(Dimens.screenPadding)
+        ) {
+            // Статистика фото
+            PhotoStatistics(
+                totalStats = totalStats,
+                filteredStats = filteredStats,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // ★★ ДОБАВЛЕНО: АКТИВНЫЕ ФИЛЬТРЫ ★★
-                PhotosActiveFiltersBadge(
-                    searchQuery = uiState.searchQuery,
-                    currentSort = uiState.sortBy,
-                    onClearFilters = { viewModel.resetAllFilters() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .fillMaxWidth()
+                    .padding(bottom = Dimens.spacingMedium)
+            )
+
+            // ★★ ДОБАВЛЕНО: АКТИВНЫЕ ФИЛЬТРЫ ★★
+            PhotosActiveFiltersBadge(
+                searchQuery = uiState.searchQuery,
+                currentSort = uiState.sortBy,
+                onClearFilters = { viewModel.resetAllFilters() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Dimens.spacingMedium)
+            )
+
+            // ★ ГАЛЕРЕЯ (основной контент)
+            when {
+                uiState.isLoading -> {
+                    PhotosLoadingState()
+                }
+
+                uiState.error != null -> {
+                    PhotosErrorState(
+                        error = uiState.error ?: "Неизвестная ошибка",
+                        onRetry = { viewModel.loadPhotos() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                groupedByLocation.isEmpty() && photos.isEmpty() -> {
+                    PhotosEmptyState(
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                uiState.displayMode == DisplayMode.GROUPED -> {
+                    Timber.d("══════════════════════════════════════════")
+                    Timber.d("PhotosScreen: Показ GROUPED режима")
+                    Timber.d("  Групп: ${groupedByLocation.size}")
+                    Timber.d("══════════════════════════════════════════")
+
+                    GroupedPhotosGallery(
+                        groups = groupedByLocation,
+                        viewMode = uiState.viewMode,
+                        scrollState = groupedScrollState,
+                        onGroupToggle = { location ->
+                            viewModel.toggleLocationGroup(location)
+                        },
+                        onPhotoClick = { photoItem ->
+                            onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                else -> {
+                    Timber.d("══════════════════════════════════════════")
+                    Timber.d("PhotosScreen: Показ FLAT режима")
+                    Timber.d("  Фото: ${photos.size}")
+                    Timber.d("══════════════════════════════════════════")
+
+                    PhotosGallery(
+                        photos = photos,
+                        viewMode = uiState.viewMode,
+                        selectedDeviceId = uiState.selectedDeviceId,
+                        selectedLocation = uiState.selectedLocation,
+                        gridScrollState = gridScrollState,
+                        listScrollState = listScrollState,
+                        onPhotoClick = { photoItem ->
+                            onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        // ★★★★ КНОПКИ КАК В DEVICESSCREEN ★★★★
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 46.dp,
+                    bottom = 30.dp
                 )
-
-                // ★ ГАЛЕРЕЯ (основной контент)
-                when {
-                    uiState.isLoading -> {
-                        PhotosLoadingState()
-                    }
-
-                    uiState.error != null -> {
-                        PhotosErrorState(
-                            error = uiState.error ?: "Неизвестная ошибка",
-                            onRetry = { viewModel.loadPhotos() },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    groupedByLocation.isEmpty() && photos.isEmpty() -> {
-                        PhotosEmptyState(
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    uiState.displayMode == DisplayMode.GROUPED -> {
-                        // ★★ ИСПРАВЛЕНО: используем groupedByLocation (уже отфильтрованный)
-                        Timber.d("══════════════════════════════════════════")
-                        Timber.d("PhotosScreen: Показ GROUPED режима")
-                        Timber.d("  Групп: ${groupedByLocation.size}")
-                        Timber.d("══════════════════════════════════════════")
-
-                        GroupedPhotosGallery(
-                            groups = groupedByLocation, // ← ВАЖНО: groupedByLocation
-                            viewMode = uiState.viewMode,
-                            scrollState = groupedScrollState,
-                            onGroupToggle = { location ->
-                                viewModel.toggleLocationGroup(location)
-                            },
-                            onPhotoClick = { photoItem ->
-                                onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    else -> {
-                        // ★★ ИСПРАВЛЕНО: используем photos (уже отфильтрованный)
-                        Timber.d("══════════════════════════════════════════")
-                        Timber.d("PhotosScreen: Показ FLAT режима")
-                        Timber.d("  Фото: ${photos.size}")
-                        Timber.d("══════════════════════════════════════════")
-
-                        PhotosGallery(
-                            photos = photos, // ← ВАЖНО: photos Flow
-                            viewMode = uiState.viewMode,
-                            selectedDeviceId = uiState.selectedDeviceId,
-                            selectedLocation = uiState.selectedLocation,
-                            gridScrollState = gridScrollState,
-                            listScrollState = listScrollState,
-                            onPhotoClick = { photoItem ->
-                                onNavigateToFullScreenPhoto(photoItem.fullPath, photoItem.device)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(Dimens.spacingFab)
+        ) {
+            // ★ КНОПКА "НАВЕРХ" (как в DevicesScreen)
+            AnimatedVisibility(
+                visible = showScrollToTopButton,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                FloatingActionButton(
+                    onClick = scrollToTop,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ArrowUpward,
+                        contentDescription = "Наверх",
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
 
-            // ★★★★ КНОПКИ КАК В DEVICESSCREEN ★★★★
+            // ★ ОСТАЛЬНЫЕ КНОПКИ FAB (как в DevicesScreen)
             Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = 46.dp,
-                        bottom = 30.dp
-                    )
-                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(Dimens.spacingFab)
             ) {
-                // ★ КНОПКА "НАВЕРХ" (как в DevicesScreen)
-                AnimatedVisibility(
-                    visible = showScrollToTopButton,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
+                // 1. Кнопка переключения вида (grid/list)
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.toggleViewMode()
+                    },
+                    modifier = Modifier.size(48.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
                 ) {
-                    FloatingActionButton(
-                        onClick = scrollToTop,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowUpward,
-                            contentDescription = "Наверх",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                    Icon(
+                        if (uiState.isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                        contentDescription = if (uiState.isGridView) "Список" else "Сетка",
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
 
-                // ★ ОСТАЛЬНЫЕ КНОПКИ FAB (как в DevicesScreen)
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                // 2. Кнопка переключения режима группировки
+                FloatingActionButton(
+                    onClick = {
+                        val newMode = if (uiState.displayMode == DisplayMode.GROUPED) {
+                            DisplayMode.FLAT
+                        } else {
+                            DisplayMode.GROUPED
+                        }
+                        viewModel.updateDisplayMode(newMode)
+                    },
+                    modifier = Modifier.size(48.dp),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
                 ) {
-                    // 1. Кнопка переключения вида (grid/list)
-                    FloatingActionButton(
-                        onClick = {
-                            viewModel.toggleViewMode()
-                        },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Icon(
-                            if (uiState.isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                            contentDescription = if (uiState.isGridView) "Список" else "Сетка",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    // 2. Кнопка переключения режима группировки
-                    FloatingActionButton(
-                        onClick = {
-                            val newMode = if (uiState.displayMode == DisplayMode.GROUPED) {
-                                DisplayMode.FLAT
-                            } else {
-                                DisplayMode.GROUPED
-                            }
-                            viewModel.updateDisplayMode(newMode)
-                        },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Icon(
-                            if (uiState.displayMode == DisplayMode.GROUPED)
-                                Icons.Default.ViewDay
-                            else
-                                Icons.Default.Folder,
-                            contentDescription = if (uiState.displayMode == DisplayMode.GROUPED)
-                                "Плоский вид"
-                            else "Группировка по папкам",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                    Icon(
+                        if (uiState.displayMode == DisplayMode.GROUPED)
+                            Icons.Default.ViewDay
+                        else
+                            Icons.Default.Folder,
+                        contentDescription = if (uiState.displayMode == DisplayMode.GROUPED)
+                            "Плоский вид"
+                        else "Группировка по папкам",
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
@@ -381,8 +399,8 @@ fun GroupedPhotosGallery(
     LazyColumn(
         state = scrollState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium),
+        contentPadding = PaddingValues(bottom = Dimens.spacingMedium)
     ) {
         groups.forEach { group ->
             item {
@@ -408,7 +426,7 @@ fun LocationGroupCard(
     Card(
         modifier = Modifier
             .fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Dimens.cardRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
@@ -420,7 +438,7 @@ fun LocationGroupCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onToggle)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = Dimens.spacingLarge, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -463,13 +481,13 @@ fun LocationGroupCard(
                 )
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(horizontal = Dimens.spacingLarge, vertical = Dimens.spacingLarge)
                 ) {
                     when (viewMode) {
                         ViewMode.GRID -> {
                             // Сетка внутри группы
                             LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                             ) {
                                 items(group.photos) { photoItem ->
                                     PhotoThumbnailCard(
@@ -483,7 +501,7 @@ fun LocationGroupCard(
                         ViewMode.LIST -> {
                             // Список внутри группы
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                             ) {
                                 group.photos.forEach { photoItem ->
                                     PhotoListItem(
@@ -512,7 +530,7 @@ fun PhotoThumbnailCard(
         modifier = modifier
             .width(120.dp)
             .height(150.dp),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Dimens.thumbRadius),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -545,7 +563,7 @@ fun PhotoThumbnailCard(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 6.dp, bottom = 6.dp)
+                    .padding(start = Dimens.spacingMedium, bottom = Dimens.spacingMedium)
             )
         }
     }
@@ -562,33 +580,22 @@ fun PhotosGallery(
     onPhotoClick: (PhotoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     Column(modifier = modifier) {
-        PhotosStats(
-            totalPhotos = photos.size, // ★ передаем общее количество фото
-            filteredPhotos = photos.size, // ★ и отфильтрованное (они уже отфильтрованы)
-            selectedLocation = selectedLocation,
-            selectedDeviceId = selectedDeviceId,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp)
-        )
-
         when (viewMode) {
             ViewMode.GRID -> {
                 PhotosGrid(
-                    photos = photos, // ★ передаем уже отфильтрованные фото
+                    photos = photos,
                     scrollState = gridScrollState,
                     onPhotoClick = onPhotoClick,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(6.dp)
+                        .padding(Dimens.spacingMedium)
                 )
             }
 
             ViewMode.LIST -> {
                 PhotosList(
-                    photos = photos, // ★ передаем уже отфильтрованные фото
+                    photos = photos,
                     scrollState = listScrollState,
                     onPhotoClick = onPhotoClick,
                     modifier = Modifier.fillMaxSize()
@@ -610,9 +617,9 @@ fun PhotosGrid(
         state = scrollState,
         columns = StaggeredGridCells.Adaptive(minSize = 120.dp),
         modifier = modifier,
-        verticalItemSpacing = 4.dp,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(4.dp)
+        verticalItemSpacing = Dimens.spacingSmall,
+        horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall),
+        contentPadding = PaddingValues(Dimens.spacingSmall)
     ) {
         items(photos.size, key = { index -> photos[index].fileName }) { index ->
             val photoItem = photos[index]
@@ -626,7 +633,7 @@ fun PhotosGrid(
 
 @Composable
 fun PhotoGridItem(
-    photoItem: PhotoItem, // ✅ ИЗМЕНЕНО
+    photoItem: PhotoItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -635,7 +642,7 @@ fun PhotoGridItem(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Dimens.thumbRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
@@ -666,7 +673,7 @@ fun PhotoGridItem(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(8.dp)
+                    .padding(Dimens.spacingMedium)
             ) {
                 Text(
                     text = photoItem.device.getDisplayName(),
@@ -698,8 +705,8 @@ fun PhotosList(
     LazyColumn(
         state = scrollState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(16.dp)
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium),
+        contentPadding = PaddingValues(Dimens.spacingLarge)
     ) {
         items(photos.size, key = { index -> photos[index].fileName }) { index ->
             val photoItem = photos[index]
@@ -720,7 +727,7 @@ fun PhotoListItem(
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Dimens.cardRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ),
@@ -740,10 +747,10 @@ fun PhotoListItem(
                     .width(110.dp)
                     .fillMaxHeight()
                     .padding(
-                        start = 15.dp,    // слева
-                        top = 15.dp,      // сверху
-                        end = 5.dp,     // справа
-                        bottom = 15.dp    // снизу
+                        start = 15.dp,
+                        top = 15.dp,
+                        end = 5.dp,
+                        bottom = 15.dp
                     )
             )
 
@@ -751,10 +758,10 @@ fun PhotoListItem(
             Column(
                 modifier = Modifier
                     .padding(
-                        start = 0.dp,    // слева
-                        top = 15.dp,      // сверху
-                        end = 15.dp,     // справа
-                        bottom = 0.dp    // снизу
+                        start = 0.dp,
+                        top = 15.dp,
+                        end = 15.dp,
+                        bottom = 0.dp
                     ),
             ) {
                 Text(
@@ -788,58 +795,41 @@ fun PhotoListItem(
     }
 }
 
+// ── Статистика фото ──────────────────────────────────────────────────────────
+
 @Composable
-fun PhotosStats(
-    totalPhotos: Int,
-    filteredPhotos: Int,
-    selectedLocation: String?,
-    selectedDeviceId: Int?,
+fun PhotoStatistics(
+    totalStats: PhotoStats,
+    filteredStats: PhotoStats,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val hasFilter = filteredStats.locations != totalStats.locations ||
+            filteredStats.devices != totalStats.devices ||
+            filteredStats.photos != totalStats.photos
+
+    val totalGroup = StatGroup(
+        title = if (hasFilter) "Общая статистика:" else null,
+        items = listOf(
+            StatItemData(totalStats.locations, "мест установки", DeviceStatusColors.Total),
+            StatItemData(totalStats.devices, "приборов", DeviceStatusColors.Working),
+            StatItemData(totalStats.photos, "фотографий", DeviceStatusColors.Storage)
         )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
-            Text(
-                text = "Фотографии: $filteredPhotos из $totalPhotos",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
+    )
 
-            Spacer(modifier = Modifier.height(4.dp))
+    val filteredGroup = StatGroup(
+        title = "Показано:",
+        items = listOf(
+            StatItemData(filteredStats.locations, "мест установки", DeviceStatusColors.Total),
+            StatItemData(filteredStats.devices, "приборов", DeviceStatusColors.Working),
+            StatItemData(filteredStats.photos, "фотографий", DeviceStatusColors.Storage),
+            StatItemData(filteredStats.devicesWithPhotos, "с фото", AppColors.IceBlueDark)
+        )
+    )
 
-            if (selectedLocation != null || selectedDeviceId != null) {
-                Text(
-                    text = buildString {
-                        if (selectedLocation != null) {
-                            append("Место: $selectedLocation")
-                        }
-                        if (selectedDeviceId != null && selectedLocation != null) {
-                            append(", ")
-                        }
-                        if (selectedDeviceId != null) {
-                            append("Прибор: #$selectedDeviceId")
-                        }
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    text = "Все фото",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+    StatCard(
+        groups = if (hasFilter) listOf(totalGroup, filteredGroup) else listOf(totalGroup),
+        modifier = modifier
+    )
 }
 
 @Composable

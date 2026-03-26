@@ -29,6 +29,7 @@ import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.ErrorDialog
 import com.kipia.management.mobile.ui.components.scheme.SchemesActiveFiltersBadge
 import com.kipia.management.mobile.ui.shared.NotificationManager
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.viewmodel.DeleteResult
 import com.kipia.management.mobile.viewmodel.SchemeWithStatus
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
@@ -56,7 +57,6 @@ fun SchemesScreen(
     var showDeleteDialog by remember { mutableStateOf<Scheme?>(null) }
     var showError by remember { mutableStateOf<String?>(null) }
 
-    // ★ ЛОГИКА СКРЫТИЯ BOTTOM NAV ПРИ ПРОКРУТКЕ (как в PhotosScreen)
     val shouldShowBottomNav by remember(scrollState) {
         derivedStateOf {
             with(scrollState) {
@@ -65,16 +65,13 @@ fun SchemesScreen(
         }
     }
 
-    // ★ Обновляем видимость BottomNav
     LaunchedEffect(shouldShowBottomNav) {
         Timber.d("SchemesScreen: BottomNav видимость = $shouldShowBottomNav")
         updateBottomNavVisibility(shouldShowBottomNav)
     }
 
-    // ★ ЛОГИКА ДЛЯ КНОПКИ "НАВЕРХ"
     val showScrollToTopButton = !shouldShowBottomNav
 
-    // ★ Настраиваем TopAppBar через контроллер
     LaunchedEffect(topAppBarController) {
         topAppBarController?.setForScreen("schemes", buildMap {
             put("title", "Учет приборов КИПиА")
@@ -88,29 +85,19 @@ fun SchemesScreen(
 
     LaunchedEffect(Unit) {
         notificationManager.notification.collect { notification ->
-            // Пропускаем пустые уведомления
-            if (notification is NotificationManager.Notification.None) {
-                return@collect
-            }
+            if (notification is NotificationManager.Notification.None) return@collect
 
             val message = when (notification) {
-                is NotificationManager.Notification.SchemeSaved -> {
+                is NotificationManager.Notification.SchemeSaved ->
                     "Схема '${notification.schemeName}' сохранена"
-                }
-                is NotificationManager.Notification.Error -> {
+                is NotificationManager.Notification.Error ->
                     "Ошибка: ${notification.message}"
-                }
-                // Можно добавить обработку других типов, если нужно
                 else -> null
             }
 
             if (message != null) {
                 scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = message,
-                        duration = SnackbarDuration.Short
-                    )
-                    // Очищаем replay cache после показа
+                    snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
                     delay(100)
                     notificationManager.clearLastNotification()
                 }
@@ -118,15 +105,11 @@ fun SchemesScreen(
         }
     }
 
-
     val scrollToTop: () -> Unit = {
-        scope.launch {
-            scrollState.animateScrollToItem(0)
-        }
+        scope.launch { scrollState.animateScrollToItem(0) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Основной контент
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -136,58 +119,44 @@ fun SchemesScreen(
                         .add(WindowInsets(bottom = 0.dp))
                 )
         ) {
-            // Активные фильтры
             SchemesActiveFiltersBadge(
                 searchQuery = uiState.searchQuery,
                 currentSort = uiState.sortBy,
                 onClearFilters = { viewModel.resetAllFilters() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .padding(horizontal = Dimens.screenPadding, vertical = Dimens.screenPadding)
             )
 
             when {
-                uiState.isLoading -> {
-                    LoadingState()
-                }
-                schemesWithStatus.isEmpty() -> {
-                    EmptySchemesState(
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                else -> {
-                    SchemesList(
-                        schemesWithStatus = schemesWithStatus,
-                        scrollState = scrollState,
-                        onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                        onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
-                        onDeleteScheme = { scheme ->
-                            if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
-                                showDeleteDialog = scheme
-                            } else {
-                                showError = "Нельзя удалить схему '${scheme.name}'. " +
-                                        "К ней привязаны приборы."
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                uiState.isLoading -> LoadingState()
+                schemesWithStatus.isEmpty() -> EmptySchemesState(modifier = Modifier.fillMaxSize())
+                else -> SchemesList(
+                    schemesWithStatus = schemesWithStatus,
+                    scrollState = scrollState,
+                    onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                    onEditScheme = { scheme -> onNavigateToSchemeEditor(scheme.id) },
+                    onDeleteScheme = { scheme ->
+                        if (schemesWithStatus.find { it.scheme.id == scheme.id }?.canDelete == true) {
+                            showDeleteDialog = scheme
+                        } else {
+                            showError = "Нельзя удалить схему '${scheme.name}'. К ней привязаны приборы."
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
 
-        // ★★★★ COLUMN ДЛЯ ВЕРТИКАЛЬНОГО РАСПОЛОЖЕНИЯ КНОПОК (как в DevicesScreen) ★★★★
+        // ── FAB-кнопки (наверх + добавить) ───────────────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(
-                    end = 46.dp,
-                    bottom = 30.dp
-                )
+                .padding(end = Dimens.spacingXLarge + Dimens.spacingMedium, bottom = Dimens.fabBottomPadding)
                 .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Dimens.spacingFab)
         ) {
-            // ★★★★ КНОПКА "ВВЕРХ" (появляется когда навигация скрыта) ★★★★
             AnimatedVisibility(
                 visible = showScrollToTopButton,
                 enter = fadeIn() + scaleIn(),
@@ -197,26 +166,26 @@ fun SchemesScreen(
                     onClick = scrollToTop,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(Dimens.fabSize)
                 ) {
                     Icon(
                         Icons.Default.ArrowUpward,
                         contentDescription = "Наверх",
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(Dimens.iconSizeMedium)
                     )
                 }
             }
         }
 
-        // Snackbar для уведомлений (поверх всего)
+        // Snackbar
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
+                .padding(bottom = Dimens.spacingLarge)
         )
 
-        // Диалог подтверждения удаления
+        // Диалог удаления
         showDeleteDialog?.let { scheme ->
             DeleteConfirmDialog(
                 title = "Удаление схемы",
@@ -236,7 +205,7 @@ fun SchemesScreen(
             )
         }
 
-        // Ошибка
+        // Диалог ошибки
         showError?.let { error ->
             ErrorDialog(
                 title = "Нельзя удалить схему",
@@ -259,8 +228,8 @@ fun SchemesList(
     LazyColumn(
         state = scrollState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(6.dp)
+        verticalArrangement = Arrangement.spacedBy(Dimens.screenPadding),
+        contentPadding = PaddingValues(Dimens.screenPadding)
     ) {
         items(schemesWithStatus.size, key = { index -> schemesWithStatus[index].scheme.id }) { index ->
             val item = schemesWithStatus[index]
@@ -290,7 +259,6 @@ fun SchemeCard(
     var showMenu by remember { mutableStateOf(false) }
     val schemeData = remember(scheme.id) { scheme.getSchemeData() }
 
-    // Кэшируем стили — пересчитываются только при смене темы
     val typography = MaterialTheme.typography
     val colorScheme = MaterialTheme.colorScheme
 
@@ -304,7 +272,6 @@ fun SchemeCard(
         colorScheme.surfaceVariant.copy(alpha = 0.3f)
     }
 
-    // Кэшируем форматирование даты — пересчитывается только при смене updatedAt
     val formattedDate = remember(scheme.updatedAt) {
         java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
             .format(java.util.Date(scheme.updatedAt))
@@ -319,7 +286,7 @@ fun SchemeCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(Dimens.spacingLarge)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -345,7 +312,7 @@ fun SchemeCard(
                 Box {
                     IconButton(
                         onClick = { showMenu = true },
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(Dimens.iconSizeXLarge)
                     ) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Меню")
                     }
@@ -373,7 +340,7 @@ fun SchemeCard(
                     text = "⚠️ Нельзя удалить: используется $deviceCount прибором(ами)",
                     style = typography.labelSmall,
                     color = colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = Dimens.spacingMedium)
                 )
             }
 
@@ -383,11 +350,11 @@ fun SchemeCard(
                     style = typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = Dimens.spacingSmall)
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(Dimens.spacingSmall))
             Text(
                 text = "Обновлено: $formattedDate",
                 style = typography.bodySmall,
@@ -395,10 +362,10 @@ fun SchemeCard(
             )
 
             schemeData.backgroundImage?.let { backgroundImage ->
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(Dimens.cardPadding))
                 Card(
                     modifier = Modifier.fillMaxWidth().height(100.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(Dimens.chipRadius)
                 ) {
                     AsyncImage(
                         model = backgroundImage,
@@ -418,11 +385,9 @@ fun LoadingState() {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Dimens.spacingLarge))
             Text("Загрузка схем...")
         }
     }
@@ -440,11 +405,11 @@ fun EmptySchemesState(
         Icon(
             Icons.Default.GridOn,
             contentDescription = "Нет схем",
-            modifier = Modifier.size(96.dp),
+            modifier = Modifier.size(Dimens.iconSizeXXLarge + Dimens.iconSizeXLarge),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingXLarge))
 
         Text(
             text = "Нет схем",
@@ -452,7 +417,7 @@ fun EmptySchemesState(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
         Text(
             text = "Схемы создаются автоматически на основе мест установки приборов.\nДобавьте прибор с новой локацией, чтобы создать схему.",

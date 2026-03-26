@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.managers.CameraManager
 import com.kipia.management.mobile.managers.PhotoManager
@@ -241,7 +242,7 @@ fun DeviceEditScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
+                .padding(bottom = Dimens.spacingMedium)
         )
     }
 }
@@ -353,8 +354,8 @@ fun DeviceEditForm(
     }
 
     Column(
-        modifier = modifier.padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = modifier.padding(Dimens.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
 
         // ---- Фото --------------------------------------------------------
@@ -443,7 +444,7 @@ fun DeviceEditForm(
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = Dimens.spacingSmall),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLocationDropdownExpanded)
                 },
@@ -475,7 +476,7 @@ fun DeviceEditForm(
                 text = error,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                modifier = Modifier.padding(start = Dimens.spacingLarge, top = Dimens.spacingSmall)
             )
         }
 
@@ -491,7 +492,7 @@ fun DeviceEditForm(
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = Dimens.spacingSmall),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = isStatusExpanded)
                 }
@@ -533,7 +534,7 @@ fun DeviceEditForm(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(100.dp)
-                .padding(vertical = 4.dp),
+                .padding(vertical = Dimens.spacingSmall),
             singleLine = false,
             maxLines = 5
         )
@@ -556,7 +557,7 @@ fun DeviceEditForm(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = "Ошибка",
-                        modifier = Modifier.padding(end = 8.dp),
+                        modifier = Modifier.padding(end = Dimens.spacingMedium),
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
@@ -604,7 +605,7 @@ private fun DeviceTextField(
         placeholder = placeholder?.let { { Text(it) } },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = Dimens.spacingSmall),
         singleLine = singleLine,
         isError = isError,
         keyboardOptions = KeyboardOptions.Default.copy(keyboardType = keyboardType)
@@ -614,7 +615,7 @@ private fun DeviceTextField(
             text = error,
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            modifier = Modifier.padding(start = Dimens.spacingLarge, top = Dimens.spacingSmall)
         )
     }
 }
@@ -625,7 +626,7 @@ fun DeviceEditSectionTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(bottom = 4.dp)
+        modifier = Modifier.padding(bottom = Dimens.spacingSmall)
     )
 }
 
@@ -667,10 +668,10 @@ fun DeviceEditMainPhotoSection(
                         Icon(
                             Icons.Default.PhotoCamera,
                             contentDescription = "Добавить фото",
-                            modifier = Modifier.size(48.dp),
+                            modifier = Modifier.size(Dimens.iconSizeXLarge),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
                         Text(
                             text = "Добавить основное фото",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -683,7 +684,7 @@ fun DeviceEditMainPhotoSection(
                 onClick = onPhotoClick,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(8.dp),
+                    .padding(Dimens.spacingMedium),
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -724,17 +725,17 @@ fun DeviceEditPhotoGallerySection(
                         Icon(
                             Icons.Default.AddPhotoAlternate,
                             contentDescription = "Добавить фото",
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(Dimens.iconSizeLarge),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(Dimens.spacingSmall))
                         Text("Добавить фото", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         } else {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 photoPaths.forEachIndexed { index, photoPath ->
@@ -758,7 +759,7 @@ fun DeviceEditPhotoGallerySection(
                             onClick = { onDeletePhoto(index) },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(24.dp),
+                                .size(Dimens.iconSizeMedium),
                             colors = IconButtonDefaults.iconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -790,7 +791,7 @@ fun DeviceEditPhotoGallerySection(
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = "Добавить фото",
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(Dimens.iconSizeLarge),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -802,7 +803,7 @@ fun DeviceEditPhotoGallerySection(
                 text = "Фото: ${photoPaths.size}/10",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = Dimens.spacingSmall)
             )
         }
     }
@@ -823,12 +824,12 @@ fun PhotoSourceDialog(
         title = { Text("Добавить фото") },
         text = { Text("Выберите источник фото:") },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)) {
                 TextButton(onClick = onTakePhoto) {
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(Dimens.iconSizeSmall)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Камера")
@@ -837,7 +838,7 @@ fun PhotoSourceDialog(
                     Icon(
                         Icons.Default.PhotoLibrary,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(Dimens.iconSizeSmall)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Галерея")

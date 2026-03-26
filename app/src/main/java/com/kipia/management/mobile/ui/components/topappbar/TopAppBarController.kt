@@ -2,29 +2,25 @@ package com.kipia.management.mobile.ui.components.topappbar
 
 import androidx.compose.runtime.*
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.screens.reports.models.ReportFilter
 import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 
 /**
  * Контроллер для управления состоянием TopAppBar во всем приложении
- * Упрощенная версия без хранения composable функций
  */
 class TopAppBarController {
 
-    // Состояние TopAppBar как MutableState
     private val _state = mutableStateOf(TopAppBarData.getDefault())
     val state: State<TopAppBarData> get() = _state
 
-    // Обновить состояние
     fun updateState(newState: TopAppBarData) {
         _state.value = newState
     }
 
-    // Сбросить к состоянию по умолчанию (главный экран)
     fun resetToDefault() {
         _state.value = TopAppBarData.getDefault()
     }
 
-    // Установить состояние для конкретного экрана
     fun setForScreen(screenRoute: String, additionalParams: Map<String, Any> = emptyMap()) {
         when (screenRoute) {
             "settings" -> {
@@ -88,11 +84,10 @@ class TopAppBarController {
             }
 
             "schemes" -> {
-                // Получаем параметры для фильтров схем
                 val searchQuery = additionalParams["searchQuery"] as? String ?: ""
                 additionalParams["selectedFilter"] as? String?
-                val currentSort = additionalParams["currentSort"] as? SchemesSortBy // ← ИЗМЕНИЛИ
-                    ?: SchemesSortBy.NAME_ASC // ← ИЗМЕНИЛИ
+                val currentSort = additionalParams["currentSort"] as? SchemesSortBy
+                    ?: SchemesSortBy.NAME_ASC
 
                 _state.value = TopAppBarData(
                     title = additionalParams["title"] as? String ?: "Учет приборов КИПиА",
@@ -100,40 +95,30 @@ class TopAppBarController {
                     showSettingsIcon = additionalParams["showSettingsIcon"] as? Boolean ?: true,
                     showThemeToggle = additionalParams["showThemeToggle"] as? Boolean ?: true,
                     showFilterMenu = true,
-
-                    // ★ ПЕРЕДАЕМ ДАННЫЕ ДЛЯ ФИЛЬТРОВ СХЕМ
                     showSchemesFilterMenu = true,
                     schemesSearchQuery = searchQuery,
                     schemesCurrentSort = currentSort,
                     onSchemesSearchQueryChange = additionalParams["onSearchQueryChange"] as? ((String) -> Unit),
-                    onSchemesSortSelected = additionalParams["onSortSelected"] as? ((SchemesSortBy) -> Unit), // ← ИЗМЕНИЛИ
+                    onSchemesSortSelected = additionalParams["onSortSelected"] as? ((SchemesSortBy) -> Unit),
                     onSchemesResetAllFilters = additionalParams["onResetAllFilters"] as? (() -> Unit)
                 )
             }
 
             "scheme_editor" -> {
-                val title = "Редактор"
-
                 _state.value = TopAppBarData(
-                    title = title,
+                    title = "Редактор",
                     showBackButton = true,
                     showSettingsIcon = false,
                     showThemeToggle = false,
                     showFilterMenu = false,
-
-                    // ★ ПАРАМЕТРЫ ДЛЯ РЕДАКТОРА СХЕМ
                     showSchemeEditorActions = true,
                     canSave = additionalParams["canSave"] as? Boolean ?: true,
                     canUndo = additionalParams["canUndo"] as? Boolean ?: false,
                     canRedo = additionalParams["canRedo"] as? Boolean ?: false,
                     isDirty = additionalParams["isDirty"] as? Boolean ?: false,
-
-                    // ★ ПАРАМЕТРЫ ДЛЯ КНОПКИ «ОЧИСТИТЬ»
-                    showClearButton = true,  // По умолчанию показываем кнопку
-                    canClear = additionalParams["canClear"] as? Boolean ?: true,  // Можно переопределить
-                    onClearClick = additionalParams["onClearClick"] as? (() -> Unit),  // Колбэк из SchemeEditorScreen
-
-                    // ★ КОЛБЭКИ
+                    showClearButton = true,
+                    canClear = additionalParams["canClear"] as? Boolean ?: true,
+                    onClearClick = additionalParams["onClearClick"] as? (() -> Unit),
                     onBackClick = additionalParams["onBackClick"] as? (() -> Unit),
                     onSaveClick = additionalParams["onSaveClick"] as? (() -> Unit),
                     onUndoClick = additionalParams["onUndoClick"] as? (() -> Unit),
@@ -165,38 +150,31 @@ class TopAppBarController {
                 )
             }
 
-            "reports" -> {
+            "reports_with_filter" -> {
                 _state.value = TopAppBarData(
-                    title = "Учет приборов КИПиА",
-                    showBackButton = false,
-                    showSettingsIcon = true,
-                    showThemeToggle = true,
-                    showFilterMenu = false   // фильтров на отчётах нет
-                )
-            }
-
-            "report_detail" -> {
-                _state.value = TopAppBarData(
-                    title = additionalParams["title"] as? String ?: "Отчёт",
-                    showBackButton = true,
-                    showSettingsIcon = false,
-                    showThemeToggle = false,
+                    title = additionalParams["title"] as? String ?: "Учет приборов КИПиА",
+                    showBackButton = additionalParams["showBackButton"] as? Boolean ?: false,
+                    showSettingsIcon = additionalParams["showSettingsIcon"] as? Boolean ?: true,
+                    showThemeToggle = additionalParams["showThemeToggle"] as? Boolean ?: true,
                     showFilterMenu = false,
-                    onBackClick = additionalParams["onBackClick"] as? (() -> Unit)  // ← добавь
+                    showReportFilterMenu = true,
+                    reportFilter = additionalParams["reportFilter"] as? ReportFilter ?: ReportFilter.Empty,
+                    reportFilterAvailableStatuses = additionalParams["availableStatuses"] as? List<String> ?: emptyList(),
+                    reportFilterAvailableTypes = additionalParams["availableTypes"] as? List<String> ?: emptyList(),
+                    reportFilterAvailableManufacturers = additionalParams["availableManufacturers"] as? List<String> ?: emptyList(),
+                    reportFilterAvailableLocations = additionalParams["availableLocations"] as? List<String> ?: emptyList(),
+                    reportFilterAvailableYears = additionalParams["availableYears"] as? List<Int> ?: emptyList(),
+                    onReportFilterChange = additionalParams["onFilterChange"] as? ((ReportFilter) -> Unit)
                 )
             }
 
             else -> {
-                // Главный экран или неизвестный экран - используем состояние по умолчанию
                 _state.value = TopAppBarData.getDefault()
             }
         }
     }
 }
 
-/**
- * Данные для TopAppBar
- */
 @Stable
 data class TopAppBarData(
     // ★ ОСНОВНЫЕ ПОЛЯ
@@ -258,7 +236,16 @@ data class TopAppBarData(
     val photoFilePath: String? = null,
     val onRotateLeftClick: (() -> Unit)? = null,
     val onRotateRightClick: (() -> Unit)? = null,
-    val onDeletePhotoClick: (() -> Unit)? = null
+    val onDeletePhotoClick: (() -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ ФИЛЬТРАЦИИ ОТЧЁТОВ
+    val showReportFilterMenu: Boolean = false,
+    val reportFilter: ReportFilter = ReportFilter.Empty,
+    val reportFilterAvailableStatuses: List<String> = emptyList(),
+    val reportFilterAvailableTypes: List<String> = emptyList(),
+    val reportFilterAvailableManufacturers: List<String> = emptyList(),
+    val reportFilterAvailableLocations: List<String> = emptyList(),
+    val reportFilterAvailableYears: List<Int> = emptyList(),
+    val onReportFilterChange: ((ReportFilter) -> Unit)? = null
 ) {
     companion object {
         fun getDefault(): TopAppBarData {
@@ -278,9 +265,6 @@ data class TopAppBarData(
     }
 }
 
-/**
- * Remember для TopAppBarController
- */
 @Composable
 fun rememberTopAppBarController(): TopAppBarController {
     return remember { TopAppBarController() }

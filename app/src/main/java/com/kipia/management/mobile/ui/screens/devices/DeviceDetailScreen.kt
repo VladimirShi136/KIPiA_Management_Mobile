@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
@@ -73,7 +74,7 @@ fun DeviceDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(6.dp)
+                    .padding(Dimens.screenPadding)
             )
         }
         else -> {
@@ -103,13 +104,13 @@ fun DeviceDetailContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 6.dp),
+                .padding(bottom = Dimens.spacingMedium),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
             Column(
-                modifier = Modifier.padding(10.dp)
+                modifier = Modifier.padding(Dimens.cardPadding)
             ) {
                 // Заголовок с инвентарным номером
                 Text(
@@ -121,7 +122,7 @@ fun DeviceDetailContent(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(Dimens.spacingSmall))
 
                 Text(
                     text = "Инвентарный номер: ${device.inventoryNumber}",
@@ -131,7 +132,7 @@ fun DeviceDetailContent(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(Dimens.spacingSmall))
 
                 Text(
                     text = "Обновлено: ${
@@ -144,7 +145,7 @@ fun DeviceDetailContent(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Dimens.spacingLarge))
 
                 // Статус с цветным индикатором
                 Row(
@@ -161,14 +162,14 @@ fun DeviceDetailContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 6.dp),
+                .padding(bottom = Dimens.spacingMedium),
         ) {
             Column(
-                modifier = Modifier.padding(10.dp)
+                modifier = Modifier.padding(Dimens.cardPadding)
             ) {
                 DeviceDetailSectionTitle("Основная информация")
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
                 DeviceDetailRow(
                     label = "Тип прибора:",
@@ -222,14 +223,14 @@ fun DeviceDetailContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 6.dp)
+                    .padding(bottom = Dimens.spacingMedium)
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(Dimens.cardPadding)
                 ) {
                     DeviceDetailSectionTitle("Дополнительная информация")
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
                     Text(
                         text = info,
@@ -246,14 +247,14 @@ fun DeviceDetailContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = Dimens.spacingMedium), // ← единый отступ между карточками
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(Dimens.cardPadding) // ← единый внутренний отступ
                 ) {
                     DeviceDetailSectionTitle("Фотографии (${photos.size})")
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
                     DevicePhotoGallery(
                         photos = photos,
@@ -268,7 +269,7 @@ fun DeviceDetailContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
         ) {
             // Кнопка "Поделиться"
             OutlinedButton(
@@ -278,10 +279,10 @@ fun DeviceDetailContent(
                 Icon(
                     Icons.Filled.Share,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = Dimens.spacingMedium)
                 )
                 Text("Поделиться",
-                color = MaterialTheme.colorScheme.primary)
+                    color = MaterialTheme.colorScheme.primary)
             }
 
             // Кнопка "QR код"
@@ -292,10 +293,10 @@ fun DeviceDetailContent(
                 Icon(
                     Icons.Filled.QrCode,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = Dimens.spacingMedium)
                 )
                 Text("QR код",
-                color = MaterialTheme.colorScheme.primary)
+                    color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -308,7 +309,7 @@ fun StatusBadge(status: String) {
     Surface(
         color = deviceStatus.containerColor, // ИЗМЕНЕНИЕ: используем containerColor
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.padding(horizontal = 8.dp),
+        modifier = Modifier.padding(horizontal = Dimens.spacingMedium),
         border = BorderStroke(
             width = 1.dp,
             color = deviceStatus.color.copy(alpha = 0.3f) // Тонкая рамка цвета статуса
@@ -318,7 +319,7 @@ fun StatusBadge(status: String) {
             text = status,
             color = deviceStatus.textColor,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = Dimens.spacingFab, vertical = Dimens.spacingSmall)
         )
     }
 }
@@ -332,7 +333,7 @@ fun DeviceDetailRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = Dimens.spacingMedium)
     ) {
         Text(
             text = label,
@@ -358,12 +359,12 @@ fun DevicePhotoGallery(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
         // Показываем до 3 фото в ряд
         photos.chunked(3).forEach { rowPhotos ->
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 rowPhotos.forEachIndexed { _, photo ->
@@ -416,9 +417,9 @@ fun DeviceDetailLoadingState() {
             CircularProgressIndicator(
                 color = MaterialTheme.colorScheme.primary, // ДОБАВЛЕНО
                 strokeWidth = 3.dp,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(Dimens.iconSizeXLarge)
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Dimens.spacingLarge))
             Text(
                 "Загрузка...",
                 color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
@@ -441,11 +442,11 @@ fun DeviceDetailErrorState(
         Icon(
             Icons.Filled.Error,
             contentDescription = "Ошибка",
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(Dimens.iconSizeXXLarge),
             tint = MaterialTheme.colorScheme.error
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingLarge))
 
         Text(
             text = "Ошибка",
@@ -453,17 +454,17 @@ fun DeviceDetailErrorState(
             color = MaterialTheme.colorScheme.error
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
         Text(
             text = error,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = Dimens.spacingXXLarge)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingXLarge))
 
         Button(onClick = onRetry) {
             Text("Повторить")
@@ -484,11 +485,11 @@ fun DeviceDetailEmptyState(
         Icon(
             Icons.Filled.SearchOff,
             contentDescription = "Не найдено",
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier.size(Dimens.iconSizeXXLarge),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingLarge))
 
         Text(
             text = "Прибор не найден",
@@ -496,17 +497,17 @@ fun DeviceDetailEmptyState(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
         Text(
             text = "Прибор был удален или произошла ошибка",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = Dimens.spacingXXLarge)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(Dimens.spacingXLarge))
 
         Button(onClick = onNavigateBack) {
             Text("Вернуться")

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.kipia.management.mobile.data.entities.Device
+import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.PhotoDetailViewModel
@@ -114,8 +115,8 @@ fun FullScreenPhotoScreen(
             CircularProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .size(24.dp),
+                    .padding(Dimens.spacingLarge)
+                    .size(Dimens.iconSizeMedium),
                 strokeWidth = 2.dp,
                 color = Color.White
             )
@@ -124,14 +125,14 @@ fun FullScreenPhotoScreen(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(bottom = Dimens.fabBottomPadding),
+            horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             FloatingActionButton(
                 onClick = { viewModel.rotatePhoto(currentPhotoPath, -90f) },
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(Dimens.fabSize)
             ) {
                 Icon(Icons.AutoMirrored.Filled.RotateLeft, contentDescription = "Повернуть влево")
             }
@@ -140,18 +141,18 @@ fun FullScreenPhotoScreen(
                 FloatingActionButton(
                     onClick = { scale = 1f; offsetX = 0f; offsetY = 0f },
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(Dimens.fabSizeLarge)
                 ) {
                     Icon(Icons.Default.RestartAlt, contentDescription = "Сбросить")
                 }
             } else {
-                Spacer(modifier = Modifier.size(56.dp))
+                Spacer(modifier = Modifier.size(Dimens.fabSizeLarge))
             }
 
             FloatingActionButton(
                 onClick = { viewModel.rotatePhoto(currentPhotoPath, 90f) },
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(Dimens.fabSize)
             ) {
                 Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Повернуть вправо")
             }
