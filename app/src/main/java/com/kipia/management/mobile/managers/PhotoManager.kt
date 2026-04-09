@@ -183,6 +183,107 @@ class PhotoManager @Inject constructor(
         return getDevicePhotos(device).map { it.absolutePath }
     }
 
+    // === МИГРАЦИЯ ФОТО ПРИ СМЕНЕ ЛОКАЦИИ ===
+
+    /**
+     * Мигрирует все фото устройства из старой локации в новую
+     * @param device устройство с текущей локацией (новой)
+     * @param oldLocation старая локация, откуда нужно переместить фото
+     * @return список новых путей к фото или null в случае ошибки
+     */
+    fun migratePhotosToNewLocation(
+        device: Device,
+        oldLocation: String
+    ): Result<List<String>> {
+        return try {
+            val oldLocationDir = getLocationDir(oldLocation)
+            val newLocationDir = getLocationDir(device.location)
+
+            // Если старая и новая локация совпадают - ничего не делаем
+            if (oldLocation == device.location) {
+                return Result.success(device.photos)
+            }
+
+            val migratedPaths = mutableListOf<String>()
+            val failedFiles = mutableListOf<String>()
+
+            device.photos.forEach { fileName ->
+                val oldFile = File(oldLocationDir, fileName)
+                val newFile = File(newLocationDir, fileName)
+
+                if (oldFile.exists()) {
+                    // Копируем файл в новую папку
+                    oldFile.copyTo(newFile, overwrite = true)
+
+                    // Проверяем, что файл успешно скопирован
+                    if (newFile.exists()) {
+                        // Удаляем старый файл
+                        oldFile.delete()
+                        migratedPaths.add(newFile.absolutePath)
+                    } else {
+                        failedFiles.add(fileName)
+                    }
+                } else {
+                    // Файл уже в новой локации или потерян
+                    if (newFile.exists()) {
+                        migratedPaths.add(newFile.absolutePath)
+                    } else {
+                        failedFiles.add(fileName)
+                    }
+                }
+            }
+
+            if (failedFiles.isNotEmpty()) {
+                return Result.failure(
+                    IOException("Не удалось переместить файлы: $failedFiles")
+                )
+            }
+
+            // Удаляем старую папку локации, если она стала пустой
+            if (oldLocationDir.exists() && oldLocationDir.listFiles().isNullOrEmpty()) {
+                oldLocationDir.delete()
+            }
+
+            Result.success(migratedPaths)
+
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Проверяет, изменилась ли локация, и выполняет миграцию если нужно
+     * @param oldDevice старое состояние устройства
+     * @param newDevice новое состояние устройства
+     * @return обновленное устройство с актуальными путями фото
+     */
+    fun migrateIfLocationChanged(
+        oldDevice: Device,
+        newDevice: Device
+    ): Device {
+        return if (oldDevice.id > 0 && oldDevice.location != newDevice.location) {
+            println("DEBUG: Локация изменилась: '${oldDevice.location}' -> '${newDevice.location}'")
+            println("DEBUG: Начинаем миграцию ${newDevice.photos.size} фото...")
+
+            val migrationResult = migratePhotosToNewLocation(newDevice, oldDevice.location)
+
+            if (migrationResult.isSuccess) {
+                val newPaths = migrationResult.getOrNull() ?: newDevice.photos
+                println("DEBUG: Миграция успешна, перемещено ${newPaths.size} фото")
+
+                // Возвращаем устройство с теми же именами файлов (они не изменились)
+                // Пути к файлам будут вычисляться из новой локации
+                newDevice
+            } else {
+                println("DEBUG: Ошибка миграции: ${migrationResult.exceptionOrNull()?.message}")
+                // В случае ошибки возвращаем устройство как есть
+                newDevice
+            }
+        } else {
+            newDevice
+        }
+    }
+
     // === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
 
     /**

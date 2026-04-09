@@ -1,6 +1,5 @@
 package com.kipia.management.mobile.ui.theme
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -24,7 +23,7 @@ object AppColors {
         Timber.d("🎨 AppColors.MediumDarkGray: ${it.toHex()}")
     } // Для навигации - #6C7884
     val MediumGray = Color(0xFF848C9B)    // Для второстепенного текста - #848C9B
-    val Pinkish = Color(0xFFE4BEBE)       // Розоватый (исправленный) - #E4BEBE
+    val Pinkish = Color(0xFFE4BEBE)       // Розоватый - #E4BEBE
 
     // Производные цвета (для состояний)
     val CoralDark = Color(0xFFD2693B)      // Для dark theme primary
@@ -94,7 +93,7 @@ object SystemColors {
         val LightUnselectedText = Color.White.copy(alpha = 0.8f)
         val LightBorder = Color.White.copy(alpha = 0.3f)
 
-        // Темная тема (можно настроить позже)
+        // Темная тема
         val DarkBackground = Color(0xFF4A5568).also {
             Timber.d("BottomNav.DarkBackground инициализирован: ${it.toHex()}")
         }         // Для dark theme

@@ -312,14 +312,11 @@ fun DeviceTableWithScroll(
     val horizontalScrollState = rememberScrollState()
     val headerColor = MaterialTheme.colorScheme.surfaceVariant
 
-    // ★ ПАТЧ 1: цвета вычисляются ОДИН РАЗ здесь, не в каждой строке
     val colorScheme = MaterialTheme.colorScheme
     val evenColor      = remember(colorScheme) { colorScheme.surface }
     val oddColor       = remember(colorScheme) { colorScheme.surfaceVariant.copy(alpha = 0.1f) }
     val highlightColor = remember(colorScheme) { colorScheme.primary.copy(alpha = 0.3f) }
 
-    // ★ ПАТЧ 3: вычисляем ширину через BoxWithConstraints СНАРУЖИ Column
-    //   чтобы передать её и в шапку и в тело таблицы
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // На широком экране растягиваемся, на узком — горизонтальный скролл
         val actualTableWidth = maxOf(COL_MIN_WIDTH, maxWidth)
@@ -377,7 +374,6 @@ fun DeviceTableWithScroll(
 @Composable
 fun TableRowWithDivider(
     device: Device,
-    // ★ ПАТЧ 1: принимаем готовые цвета вместо isEven
     bgColor: Color,
     highlightColor: Color,
     searchQuery: String,
@@ -498,11 +494,11 @@ fun TableHeader(
     }
 }
 
-// TableHeaderCell — убираем Dp, принимаем готовый Modifier
+
 @Composable
 fun TableHeaderCell(
     title: String,
-    modifier: Modifier = Modifier,   // ← теперь сюда приходит weight ИЛИ width
+    modifier: Modifier = Modifier,
     isSorted: Boolean,
     sortAscending: Boolean,
     onClick: () -> Unit
@@ -543,7 +539,6 @@ fun TableHeaderCell(
 @Composable
 fun TableRow(
     device: Device,
-    // ★ ПАТЧ 1: принимаем готовые цвета — не читаем colorScheme внутри каждой строки
     bgColor: Color,
     highlightColor: Color,
     searchQuery: String,
@@ -579,7 +574,6 @@ fun TableRow(
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Меню", modifier = Modifier.size(18.dp))
             }
-            // ★ ПАТЧ 2: убран if(showMenu), expanded = showMenu
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false }
@@ -604,7 +598,7 @@ fun TableRow(
     }
 }
 
-// TableCell — тоже убираем Dp, принимаем Modifier
+// TableCell
 @OptIn(ExperimentalTextApi::class)
 @Composable
 fun TableCell(

@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,8 +28,10 @@ class DeviceEditViewModel @Inject constructor(
     private val notificationManager: NotificationManager
 ) : ViewModel() {
 
-    private val _device = MutableStateFlow(Device.createEmpty())
-    val device: StateFlow<Device> = _device
+    private val _device = MutableStateFlow<Device?>(null) // ★ ИЗМЕНЯЕМ на nullable
+    val device: StateFlow<Device?> = _device
+
+    private var originalDevice: Device? = null
 
     private val _uiState = MutableStateFlow(DeviceEditUiState())
     val uiState: StateFlow<DeviceEditUiState> = _uiState
@@ -38,12 +42,13 @@ class DeviceEditViewModel @Inject constructor(
         // Валидируем форму при каждом изменении устройства
         viewModelScope.launch {
             _device.collect { device ->
-                println("DEBUG init: Устройство изменено, валидация...")
-                validateForm(device)
+                if (device != null) {
+                    println("DEBUG init: Устройство изменено, валидация...")
+                    validateForm(device)
+                }
             }
         }
 
-        // ★★★★ ДОБАВЛЕНО: Логирование изменений UIState ★★★★
         viewModelScope.launch {
             _uiState.collect { uiState ->
                 println("DEBUG init: UIState изменен: isFormValid=${uiState.isFormValid}, errors=${uiState.validationErrors}")
@@ -53,39 +58,118 @@ class DeviceEditViewModel @Inject constructor(
 
     fun loadDevice(deviceId: Int) {
         viewModelScope.launch {
-            println("DEBUG: Загрузка устройства ID: $deviceId")
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 repository.getDeviceById(deviceId).collect { loadedDevice ->
-                    println("DEBUG: Загружено устройство: $loadedDevice")
-                    loadedDevice?.let {
-                        _device.value = it
+                    if (loadedDevice == null) {
+                        _uiState.value = _uiState.value.copy(
+                            error = "Прибор не найден",
+                            isLoading = false
+                        )
+                        _device.value = null
+                    } else {
+                        // ★★★ ПРОВЕРЯЕМ ЦЕЛОСТНОСТЬ ФОТО ★★★
+                        val validatedDevice = validateAndFixDevicePhotos(loadedDevice)
+                        _device.value = validatedDevice
+                        originalDevice = validatedDevice // ★ СОХРАНЯЕМ оригинал
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false
+                            // Убираем isFavorite, так как его нет в DeviceEditUiState
+                        )
                     }
-                    _uiState.update { it.copy(isLoading = false) }
                 }
             } catch (e: Exception) {
-                println("DEBUG: Ошибка загрузки: ${e.message}")
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = "Ошибка загрузки: ${e.message}"
-                    )
-                }
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Ошибка загрузки: ${e.message}"
+                )
             }
         }
     }
 
+    /**
+     * Проверяет и исправляет целостность фото устройства
+     */
+    private suspend fun validateAndFixDevicePhotos(device: Device): Device {
+        // Получаем все фото из папки текущей локации
+        val currentLocationDir = photoManager.getLocationDir(device.location)
+        val unknownDir = photoManager.getLocationDir("unknown")
+
+        val validPhotos = mutableListOf<String>()
+        var needFix = false
+
+        device.photos.forEach { fileName ->
+            // Проверяем наличие файла в текущей локации
+            val fileInCurrent = File(currentLocationDir, fileName)
+            // Проверяем наличие файла в папке unknown
+            val fileInUnknown = File(unknownDir, fileName)
+
+            when {
+                fileInCurrent.exists() -> {
+                    // Фото в правильной папке
+                    validPhotos.add(fileName)
+                }
+                fileInUnknown.exists() -> {
+                    // Фото в папке unknown - перемещаем в текущую локацию
+                    Timber.d("Найдено фото в unknown для устройства ${device.id}: $fileName")
+                    try {
+                        fileInUnknown.copyTo(fileInCurrent, overwrite = true)
+                        if (fileInCurrent.exists()) {
+                            fileInUnknown.delete()
+                            validPhotos.add(fileName)
+                            needFix = true
+                            Timber.d("  ✓ Фото перемещено в ${device.location}")
+                        } else {
+                            Timber.e("  ✗ Не удалось скопировать фото")
+                            validPhotos.add(fileName)
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Ошибка при перемещении фото: $fileName")
+                        validPhotos.add(fileName)
+                    }
+                }
+                else -> {
+                    // Фото потеряно - пропускаем
+                    Timber.w("Фото потеряно для устройства ${device.id}: $fileName")
+                    needFix = true
+                    // Не добавляем в validPhotos - удаляем из списка
+                }
+            }
+        }
+
+        // Если список фото изменился, обновляем устройство в БД
+        if (needFix && validPhotos.size != device.photos.size) {
+            Timber.d("Обновляем список фото для устройства ${device.id}: ${device.photos.size} -> ${validPhotos.size}")
+            val updatedDevice = device.copy(photos = validPhotos)
+            repository.updateDevice(updatedDevice)
+            return updatedDevice
+        }
+
+        return device
+    }
+
     fun updateDevice(transform: (Device) -> Device) {
-        val updatedDevice = transform(_device.value)
-        _device.value = updatedDevice
+        _device.value?.let { currentDevice ->
+            val updatedDevice = transform(currentDevice)
+            _device.value = updatedDevice
+        }
     }
 
     fun saveDevice() {
         viewModelScope.launch {
-            println("DEBUG: Начало сохранения")
-
-            // Получаем актуальные значения напрямую из device
             val currentDevice = _device.value
+            if (currentDevice == null) {
+                _uiState.update {
+                    it.copy(
+                        error = "Устройство не загружено",
+                        isLoading = false
+                    )
+                }
+                return@launch
+            }
+
+            println("DEBUG: Начало сохранения")
             println("DEBUG: Текущее устройство: тип='${currentDevice.type}', инв='${currentDevice.inventoryNumber}', локация='${currentDevice.location}'")
 
             // Проверяем обязательные поля напрямую
@@ -98,8 +182,6 @@ class DeviceEditViewModel @Inject constructor(
 
             if (validationErrors.isNotEmpty()) {
                 println("DEBUG: Форма не валидна: $validationErrors")
-
-                // Обновляем UIState с ошибками
                 _uiState.update {
                     it.copy(
                         error = "Заполните обязательные поля",
@@ -113,8 +195,8 @@ class DeviceEditViewModel @Inject constructor(
                 return@launch
             }
 
-            // Форма валидна - продолжаем сохранение
             _uiState.update { it.copy(isLoading = true, error = null) }
+
             try {
                 println("DEBUG: Сохранение устройства: ${currentDevice.type} - ${currentDevice.inventoryNumber}")
 
@@ -122,20 +204,27 @@ class DeviceEditViewModel @Inject constructor(
                     throw IllegalArgumentException("Некорректный статус: ${currentDevice.status}")
                 }
 
-                val result = if (currentDevice.id > 0) {
+                // ★★★ НОВОЕ: миграция фото при изменении локации ★★★
+                val deviceToSave = if (originalDevice != null) {
+                    photoManager.migrateIfLocationChanged(originalDevice!!, currentDevice)
+                } else {
+                    currentDevice
+                }
+
+                val result = if (deviceToSave.id > 0) {
                     // Обновление существующего
-                    val rowsUpdated = repository.updateDeviceWithTimestamp(currentDevice)
+                    val rowsUpdated = repository.updateDeviceWithTimestamp(deviceToSave)
                     if (rowsUpdated > 0) {
                         println("DEBUG: Устройство обновлено, затронуто строк: $rowsUpdated")
-                        currentDevice
+                        deviceToSave
                     } else {
                         throw IllegalStateException("Устройство не найдено для обновления")
                     }
                 } else {
                     // Создание нового
-                    val newId = repository.insertDeviceWithTimestamp(currentDevice)
+                    val newId = repository.insertDeviceWithTimestamp(deviceToSave)
                     println("DEBUG: Устройство вставлено, новый ID: $newId")
-                    currentDevice.copy(id = newId.toInt())
+                    deviceToSave.copy(id = newId.toInt())
                 }
 
                 // Обновляем состояние с новым ID
@@ -143,18 +232,19 @@ class DeviceEditViewModel @Inject constructor(
                     _device.value = result
                 }
 
+                // ★ ОБНОВЛЯЕМ originalDevice после успешного сохранения
+                originalDevice = result
+
                 schemeSyncUseCase.syncSchemeOnDeviceSave(result)
 
                 println("DEBUG: Устройство успешно сохранено, ID: ${result.id}")
 
-                // ★★★★ Отправляем уведомление через notificationManager ★★★★
                 notificationManager.notifyDeviceSaved(currentDevice.getDisplayName())
 
-                // Сбрасываем состояние загрузки
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        isSaved = true, // ← ДОБАВИТЬ ЭТУ СТРОКУ!
+                        isSaved = true,
                         error = null
                     )
                 }
@@ -175,11 +265,10 @@ class DeviceEditViewModel @Inject constructor(
         return DeviceStatus.ALL_STATUSES.contains(status)
     }
 
-    // ИСПРАВЛЕНИЕ: добавить параметр deleteScheme
     fun deleteDevice(deleteScheme: Boolean = false) {
         viewModelScope.launch {
             val deviceToDelete = _device.value
-            if (deviceToDelete.id <= 0) {
+            if (deviceToDelete == null || deviceToDelete.id <= 0) {
                 _uiState.update { it.copy(error = "Нельзя удалить несохраненное устройство") }
                 return@launch
             }
@@ -198,18 +287,15 @@ class DeviceEditViewModel @Inject constructor(
                 if (rowsDeleted > 0) {
                     println("DEBUG: Устройство успешно удалено, затронуто строк: $rowsDeleted")
 
-                    // ★★★★ ИСПРАВЛЕНИЕ: Удаляем схему если нужно ★★★★
                     if (deleteScheme && deviceToDelete.location.isNotBlank()) {
                         schemeSyncUseCase.deleteSchemeIfEmpty(deviceToDelete.location)
                     }
 
-                    // ★★★★ Отправляем уведомление с правильным флагом ★★★★
                     notificationManager.notifyDeviceDeleted(
                         deviceName = deviceToDelete.getDisplayName(),
                         withScheme = deleteScheme
                     )
 
-                    // Устанавливаем флаг удаления для навигации
                     _uiState.update {
                         it.copy(
                             isDeleted = true,
@@ -228,7 +314,6 @@ class DeviceEditViewModel @Inject constructor(
             }
         }
     }
-
 
     private fun validateForm(device: Device) {
         println("DEBUG validateForm: тип='${device.type}', инв='${device.inventoryNumber}', локация='${device.location}'")
@@ -281,11 +366,10 @@ class DeviceEditViewModel @Inject constructor(
         _uiState.update { it.copy(error = null, statusError = null) }
     }
 
-    suspend fun savePhotoFromUri(uri: android.net.Uri): String? {
+    fun savePhotoFromUri(uri: android.net.Uri): String? {
         return photoManager.savePhotoFromUri(uri)
     }
 
-    // ★★★★ ДОБАВЛЯЕМ: Список всех местоположений ★★★★
     val allLocations = repository.getAllLocations()
         .stateIn(
             scope = viewModelScope,

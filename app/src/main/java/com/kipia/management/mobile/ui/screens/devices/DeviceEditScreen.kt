@@ -121,7 +121,16 @@ fun DeviceEditScreen(
             topAppBarController.state.value.copy(
                 onSaveClick = { viewModel.saveDevice() },
                 onDeleteClick = {
-                    scope.launch { deleteViewModel.checkAndShowDialog(device) }
+                    scope.launch {
+                        // ★ ИСПРАВЛЕНИЕ: проверяем device на null
+                        device?.let { nonNullDevice ->
+                            deleteViewModel.checkAndShowDialog(nonNullDevice)
+                        } ?: run {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Устройство не загружено")
+                            }
+                        }
+                    }
                 }
             )
         )

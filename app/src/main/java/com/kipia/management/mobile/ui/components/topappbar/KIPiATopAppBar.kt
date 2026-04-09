@@ -150,6 +150,13 @@ private fun KeyedTopAppBarActions(
                 )
             }
         }
+
+        else -> {
+            BackButtonScreenActions(
+                topAppBarState = topAppBarState,
+                topAppBarContent = topAppBarContent
+            )
+        }
     }
 }
 
@@ -163,7 +170,6 @@ private fun ReportDetailActions(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically
-        // Убираем modifier = Modifier.padding(end = 4.dp) - как в SchemesScreenActions и PhotosScreenActions
     ) {
         ReportsFilterMenu(
             filter = topAppBarState.reportFilter,
