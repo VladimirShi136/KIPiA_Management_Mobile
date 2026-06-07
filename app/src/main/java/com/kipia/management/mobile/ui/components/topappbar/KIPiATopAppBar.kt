@@ -17,7 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
+import com.kipia.management.mobile.ui.components.dialogs.InfoDialog
 import com.kipia.management.mobile.ui.components.photos.PhotosFilterMenu
 import com.kipia.management.mobile.ui.components.reports.ReportsFilterMenu
 import com.kipia.management.mobile.ui.components.scheme.SchemesFilterMenu
@@ -95,7 +95,8 @@ private fun KeyedTopAppBarActions(
     topAppBarContent: Color,
     navController: NavController
 ) {
-    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     when {
         topAppBarState.showSchemeEditorActions -> {
@@ -135,8 +136,16 @@ private fun KeyedTopAppBarActions(
             )
         }
 
+        currentRoute?.startsWith("device_detail") == true || 
+        currentRoute?.startsWith("device_edit") == true ||
+        currentRoute == "settings" -> {
+            BackButtonScreenActions(
+                topAppBarState = topAppBarState,
+                topAppBarContent = topAppBarContent
+            )
+        }
+
         currentRoute == "reports_with_filter" || currentRoute == "reports" -> {
-            // Проверяем, нужно ли показывать фильтр
             if (topAppBarState.showReportFilterMenu) {
                 ReportDetailActions(
                     topAppBarState = topAppBarState,
@@ -180,7 +189,7 @@ private fun ReportDetailActions(
             availableYears = topAppBarState.reportFilterAvailableYears,
             onFilterChange = { topAppBarState.onReportFilterChange?.invoke(it) },
             contentColor = topAppBarContent,
-            modifier = Modifier.padding(end = 4.dp)  // ← Добавляем отступ здесь, как в SchemesScreenActions
+            modifier = Modifier.padding(end = 4.dp)
         )
         ThemeToggleButton(contentColor = topAppBarContent)
         Spacer(modifier = Modifier.width(8.dp))
@@ -362,11 +371,12 @@ private fun FullScreenPhotoActions(
     var showInfoDialog by remember { mutableStateOf(false) }
 
     if (showInfoDialog) {
-        AlertDialog(
-            onDismissRequest = { showInfoDialog = false },
-            icon = { Icon(Icons.Filled.Info, null) },
-            title = { Text("Информация о фото") },
-            text = {
+        InfoDialog(
+            title = "Информация о фото",
+            icon = Icons.Filled.Info,
+            onDismiss = { showInfoDialog = false },
+            confirmText = "Закрыть",
+            content = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     PhotoInfoRow("Файл", topAppBarState.photoFileName ?: "—")
                     PhotoInfoRow("Путь", topAppBarState.photoFilePath ?: "—")
@@ -375,9 +385,6 @@ private fun FullScreenPhotoActions(
                         PhotoInfoRow("Кран №", topAppBarState.photoValveNumber)
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showInfoDialog = false }) { Text("Закрыть") }
             }
         )
     }

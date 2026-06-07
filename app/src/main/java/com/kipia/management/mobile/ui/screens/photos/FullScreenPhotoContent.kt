@@ -22,7 +22,7 @@ fun FullScreenPhotoContent(
     isLoading: Boolean,
     error: String?,
     photoDetailViewModel: PhotoDetailViewModel,
-    topAppBarController: TopAppBarController, // ★ добавлен параметр
+    topAppBarController: TopAppBarController,
     onNavigateBack: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
@@ -39,18 +39,18 @@ fun FullScreenPhotoContent(
         }
 
         device != null && photos.isNotEmpty() && photoIndex < photos.size -> {
-            val photoPath = photos[photoIndex]
-
             LaunchedEffect(device) {
                 photoDetailViewModel.setCurrentDevice(device)
             }
 
             FullScreenPhotoScreen(
-                photoPath = photoPath,
+                initialPhotoPath = photos[photoIndex],
+                photos = photos,
+                initialIndex = photoIndex,
                 device = device,
                 onNavigateBack = onNavigateBack,
                 viewModel = photoDetailViewModel,
-                topAppBarController = topAppBarController // ★ передаём
+                topAppBarController = topAppBarController
             )
         }
 

@@ -8,6 +8,7 @@ import com.kipia.management.mobile.managers.PhotoManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -15,7 +16,6 @@ import javax.inject.Inject
 class PhotoDetailViewModel @Inject constructor(
     private val photoManager: PhotoManager,
     private val repository: DeviceRepository,
-
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PhotoDetailUiState())
@@ -23,10 +23,21 @@ class PhotoDetailViewModel @Inject constructor(
 
     private var currentDevice: Device? = null
 
-    var onPhotoDeleted: (() -> Unit)? = null // Callback для обновления
+    var onPhotoDeleted: (() -> Unit)? = null
 
     fun setCurrentDevice(device: Device) {
         currentDevice = device
+    }
+
+    /**
+     * Вызывается при переключении на другое фото для сброса состояния поворота в UI
+     */
+    fun resetPhotoState(photoPath: String) {
+        _uiState.update { it.copy(
+            currentPhotoPath = photoPath,
+            rotationDegrees = 0f,
+            error = null
+        ) }
     }
 
     fun rotatePhoto(photoPath: String, degrees: Float) {
@@ -40,6 +51,8 @@ class PhotoDetailViewModel @Inject constructor(
             try {
                 val rotatedPath = photoManager.rotatePhoto(photoPath, degrees)
                 if (rotatedPath != null) {
+                    repository.updateDeviceWithTimestamp(device)
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         currentPhotoPath = rotatedPath,
@@ -61,12 +74,12 @@ class PhotoDetailViewModel @Inject constructor(
     }
 
     suspend fun deletePhoto(fileName: String): Boolean {
-        val device = currentDevice ?: return false // Защита от null
+        val device = currentDevice ?: return false
 
         return try {
             val success = photoManager.deleteDevicePhoto(device, fileName)
             if (success) {
-                onPhotoDeleted?.invoke() // Сообщаем, что фото удалено
+                onPhotoDeleted?.invoke()
             }
             success
         } catch (_: Exception) {

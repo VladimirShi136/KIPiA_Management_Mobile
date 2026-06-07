@@ -94,9 +94,10 @@ fun KIPiANavHost(
                     deviceId = deviceId,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEdit = { navController.navigate("device_edit/$deviceId") },
-                    onNavigateToPhotos = { photoIndex, device ->
+                    onNavigateToPhotos = { photoIndex, _ ->
                         navController.navigate("fullscreen_photo/$deviceId/$photoIndex")
-                    }
+                    },
+                    topAppBarController = topAppBarController
                 )
             }
         }
@@ -107,19 +108,14 @@ fun KIPiANavHost(
             DeviceEditScreen(
                 deviceId = deviceId,
                 onNavigateBack = {
-                    navController.popBackStack("devices", false)
-                    if (!navController.popBackStack()) {
-                        navController.navigate("devices") {
-                            popUpTo(0) { saveState = false }
-                            launchSingleTop = true
-                        }
-                    }
+                    // Просто возвращаемся назад, чтобы вернуться на вызывающий экран (схему или детализацию)
+                    navController.popBackStack()
                 },
                 topAppBarController = topAppBarController,
                 viewModel = hiltViewModel(),
                 notificationManager = notificationManager,
                 deleteViewModel = hiltViewModel(),
-                photoManager = photoManager // ✅ ПЕРЕДАЕМ photoManager
+                photoManager = photoManager
             )
         }
 
@@ -127,12 +123,14 @@ fun KIPiANavHost(
         composable("device_edit") {
             DeviceEditScreen(
                 deviceId = null,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
                 topAppBarController = topAppBarController,
                 viewModel = hiltViewModel(),
                 notificationManager = notificationManager,
                 deleteViewModel = hiltViewModel(),
-                photoManager = photoManager // ✅ ПЕРЕДАЕМ photoManager
+                photoManager = photoManager
             )
         }
 
@@ -148,7 +146,7 @@ fun KIPiANavHost(
                 topAppBarController = topAppBarController,
                 updateBottomNavVisibility = updateBottomNavVisibility,
                 notificationManager = notificationManager,
-                viewModel = schemesViewModel  // ← добавить
+                viewModel = schemesViewModel
             )
         }
 
@@ -160,7 +158,10 @@ fun KIPiANavHost(
                 schemeId = schemeId,
                 onNavigateBack = { navController.popBackStack() },
                 topAppBarController = topAppBarController,
-                notificationManager = notificationManager
+                notificationManager = notificationManager,
+                onNavigateToDeviceEdit = { id -> navController.navigate("device_edit/$id") },
+                onNavigateToDeviceDetail = { id -> navController.navigate("device_detail/$id") },
+                onNavigateToDevicePhotos = { id -> navController.navigate("fullscreen_photo/$id/0") }
             )
         }
 
@@ -199,7 +200,7 @@ fun KIPiANavHost(
             arguments = listOf(
                 navArgument("deviceId") {
                     type = NavType.IntType
-                    nullable = false  // Явно укажите, что НЕ может быть null
+                    nullable = false
                 },
                 navArgument("photoIndex") {
                     type = NavType.IntType
@@ -211,12 +212,11 @@ fun KIPiANavHost(
             val deviceId = backStackEntry.arguments?.getInt("deviceId") ?: 0
             val photoIndex = backStackEntry.arguments?.getInt("photoIndex") ?: 0
 
-            // ✅ Используем отдельный экран, а не функцию в NavHost
             FullScreenPhotoContainer(
                 deviceId = deviceId,
                 photoIndex = photoIndex,
                 onNavigateBack = { navController.popBackStack() },
-                topAppBarController = topAppBarController // ★ передаём контроллер
+                topAppBarController = topAppBarController
             )
         }
 

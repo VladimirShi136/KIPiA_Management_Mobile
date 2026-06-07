@@ -7,8 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ShapeManager {
+@Singleton
+class ShapeManager @Inject constructor() {
     private val _shapes = MutableStateFlow<List<ComposeShape>>(emptyList())
     val shapes = _shapes.asStateFlow()
 

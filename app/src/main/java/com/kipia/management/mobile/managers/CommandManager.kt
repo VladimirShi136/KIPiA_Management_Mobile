@@ -3,10 +3,12 @@ package com.kipia.management.mobile.managers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class CommandManager(
+@Singleton
+class CommandManager @Inject constructor() {
     private val maxHistorySize: Int = 50
-) {
     private val undoStack = ArrayDeque<Command>(maxHistorySize)
     private val redoStack = ArrayDeque<Command>(maxHistorySize)
 

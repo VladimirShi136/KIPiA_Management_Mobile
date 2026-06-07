@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.remember
-import timber.log.Timber
 
 
 // ===== ОСНОВНАЯ ПАЛИТРА ИЗ ИКОНКИ =====
@@ -16,12 +15,8 @@ object AppColors {
     val LightGrayBlue = Color(0xFFB6C0C9) // Нейтральный - #B6C0C9
 
     // Дополнительные из градации
-    val DarkBlue = Color(0xFF465261).also {
-        Timber.d("🎨 AppColors.DarkBlue: ${it.toHex()}")
-    }     // Для шапки - #465261
-    val MediumDarkGray = Color(0xFF6C7884).also {
-        Timber.d("🎨 AppColors.MediumDarkGray: ${it.toHex()}")
-    } // Для навигации - #6C7884
+    val DarkBlue = Color(0xFF465261)     // Для шапки - #465261
+    val MediumDarkGray = Color(0xFF6C7884) // Для навигации - #6C7884
     val MediumGray = Color(0xFF848C9B)    // Для второстепенного текста - #848C9B
     val Pinkish = Color(0xFFE4BEBE)       // Розоватый - #E4BEBE
 
@@ -64,39 +59,23 @@ object SystemColors {
 
     // ★★★★ ЦВЕТА ДЛЯ TOP APP BAR ★★★★
     object TopAppBar {
-        // Светлая тема
-        val LightBackground = AppColors.DarkBlue.also {
-            Timber.d("🎨 TopAppBar.LightBackground инициализирован: ${it.toHex()}")
-        }
-        val LightContent = Color.White.also {
-            Timber.d("🎨 TopAppBar.LightContent инициализирован: ${it.toHex()}")
-        }
+        val LightBackground = AppColors.DarkBlue
+        val LightContent = Color.White
         val LightBorder = Color.White.copy(alpha = 0.8f)
 
-        // Темная тема (можно настроить позже)
-        val DarkBackground = Color(0xFF1E2A3A).also {
-            Timber.d("🎨 TopAppBar.DarkBackground инициализирован: ${it.toHex()}")
-        }
-        val DarkContent = Color.White.also {
-            Timber.d("🎨 TopAppBar.DarkContent инициализирован: ${it.toHex()}")
-        }
+        val DarkBackground = Color(0xFF1E2A3A)
+        val DarkContent = Color.White
         val DarkBorder = Color.White.copy(alpha = 0.8f)
     }
 
     // ★★★★ ЦВЕТА ДЛЯ BOTTOM NAVIGATION ★★★★
     object BottomNav {
-        // Светлая тема
-        val LightBackground = AppColors.MediumDarkGray.also {
-            Timber.d("🎨 BottomNav.LightBackground инициализирован: ${it.toHex()}")
-        }
+        val LightBackground = AppColors.MediumDarkGray
         val LightSelectedText = Color.White
         val LightUnselectedText = Color.White.copy(alpha = 0.8f)
         val LightBorder = Color.White.copy(alpha = 0.3f)
 
-        // Темная тема
-        val DarkBackground = Color(0xFF4A5568).also {
-            Timber.d("BottomNav.DarkBackground инициализирован: ${it.toHex()}")
-        }         // Для dark theme
+        val DarkBackground = Color(0xFF4A5568)
         val DarkSelectedText = Color.White
         val DarkUnselectedText = Color.White.copy(alpha = 0.8f)
         val DarkBorder = Color.White.copy(alpha = 0.3f)
@@ -104,12 +83,11 @@ object SystemColors {
 
     // ★★★★ ЦВЕТА ДЛЯ КНОПОК BOTTOM NAV ★★★★
     object BottomNavButtons {
-        val Devices = AppColors.Coral          // #F58352
-        val Photos = AppColors.Peach           // #E2A58C
-        val Schemes = AppColors.IceBlue        // #DBECF0
-        val Reports = AppColors.LightGrayBlue  // #B6C0C9
+        val Devices = AppColors.Coral
+        val Photos = AppColors.Peach
+        val Schemes = AppColors.IceBlue
+        val Reports = AppColors.LightGrayBlue
 
-        // Текст на кнопках
         val TextOnCoral = Color.Black
         val TextOnPeach = Color.Black
         val TextOnIceBlue = Color.Black
@@ -130,161 +108,87 @@ object SystemColors {
     }
 }
 
-// ===== ЦВЕТА СТАТУСОВ (обновленные под Material 3) =====
+// ===== ЦВЕТА СТАТУСОВ =====
 object DeviceStatusColors {
-    // Основные цвета (семантические)
     val Total = Color(0xFF1D5A73)
-    val Working = Color(0xFF4CAF50)      // Success - зеленый
-    val Storage = AppColors.Coral        // Primary (гармония с темой!)
-    val Lost = AppColors.MediumGray      // Outline/neutral
-    val Broken = Color(0xFFF44336)       // Error - красный
+    val Working = Color(0xFF4CAF50)
+    val Storage = AppColors.Coral
+    val Lost = AppColors.MediumGray
+    val Broken = Color(0xFFF44336)
 
-    // Контейнеры (light theme)
     val WorkingContainer = Color(0xFFE8F5E9)
     val StorageContainer = AppColors.PeachLight
     val LostContainer = AppColors.IceBlue.copy(alpha = 0.3f)
     val BrokenContainer = Color(0xFFFFEBEE)
 
-    // Текст (onContainer colors)
     val WorkingText = Color(0xFF2E7D32)
     val StorageText = AppColors.CoralDark
     val LostText = AppColors.MediumGray
     val BrokenText = Color(0xFFD32F2F)
 }
 
-// Статусы прибора как enum (обновляем для использования в композе)
 enum class DeviceStatus(
     val displayName: String,
-    val color: Color,              // Основной цвет статуса
-    val containerColor: Color,     // Цвет фона (контейнера)
-    val textColor: Color           // Цвет текста на контейнере
+    val color: Color,
+    val containerColor: Color,
+    val textColor: Color
 ) {
-    WORKING("В работе",
-        DeviceStatusColors.Working,
-        DeviceStatusColors.WorkingContainer,
-        DeviceStatusColors.WorkingText),
-
-    STORAGE("Хранение",
-        DeviceStatusColors.Storage,
-        DeviceStatusColors.StorageContainer,
-        DeviceStatusColors.StorageText),
-
-    LOST("Утерян",
-        DeviceStatusColors.Lost,
-        DeviceStatusColors.LostContainer,
-        DeviceStatusColors.LostText),
-
-    BROKEN("Испорчен",
-        DeviceStatusColors.Broken,
-        DeviceStatusColors.BrokenContainer,
-        DeviceStatusColors.BrokenText);
+    WORKING("В работе", DeviceStatusColors.Working, DeviceStatusColors.WorkingContainer, DeviceStatusColors.WorkingText),
+    STORAGE("Хранение", DeviceStatusColors.Storage, DeviceStatusColors.StorageContainer, DeviceStatusColors.StorageText),
+    LOST("Утерян", DeviceStatusColors.Lost, DeviceStatusColors.LostContainer, DeviceStatusColors.LostText),
+    BROKEN("Испорчен", DeviceStatusColors.Broken, DeviceStatusColors.BrokenContainer, DeviceStatusColors.BrokenText);
 
     companion object {
-        fun fromString(status: String): DeviceStatus {
-            return when (status) {
-                "В работе" -> WORKING
-                "Хранение" -> STORAGE
-                "Утерян" -> LOST
-                "Испорчен" -> BROKEN
-                else -> WORKING
-            }
+        fun fromString(status: String): DeviceStatus = when (status) {
+            "В работе" -> WORKING
+            "Хранение" -> STORAGE
+            "Утерян" -> LOST
+            "Испорчен" -> BROKEN
+            else -> WORKING
         }
-
-        val ALL_STATUSES = listOf(
-            "В работе",
-            "Хранение",
-            "Утерян",
-            "Испорчен"
-        )
+        val ALL_STATUSES = listOf("В работе", "Хранение", "Утерян", "Испорчен")
     }
 }
 
-// ===== ДОПОЛНИТЕЛЬНЫЕ ВСПОМОГАТЕЛЬНЫЕ ЦВЕТА =====
 object UtilityColors {
-    // Тени и elevation
     val ShadowLight = Color.Black.copy(alpha = 0.1f)
     val ShadowMedium = Color.Black.copy(alpha = 0.2f)
     val ShadowDark = Color.Black.copy(alpha = 0.3f)
-
-    // Overlay и затемнения
     val ScrimLight = Color.Black.copy(alpha = 0.3f)
     val ScrimMedium = Color.Black.copy(alpha = 0.5f)
     val ScrimDark = Color.Black.copy(alpha = 0.7f)
-
-    // Полупрозрачные
-    val White10 = Color.White.copy(alpha = 0.1f)
-    val White20 = Color.White.copy(alpha = 0.2f)
-    val White50 = Color.White.copy(alpha = 0.5f)
-    val White80 = Color.White.copy(alpha = 0.8f)
-
-    val Black10 = Color.Black.copy(alpha = 0.1f)
-    val Black20 = Color.Black.copy(alpha = 0.2f)
-    val Black50 = Color.Black.copy(alpha = 0.5f)
-    val Black80 = Color.Black.copy(alpha = 0.8f)
-
-    // Градиенты (опционально)
-    val GradientStart = AppColors.Coral
-    val GradientEnd = AppColors.Peach
-    val GradientBlueStart = AppColors.IceBlue
-    val GradientBlueEnd = AppColors.LightGrayBlue
 }
 
-// ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ЦВЕТАМИ =====
-
-/**
- * Получить цвет для кнопки BottomNav по индексу
- */
-fun getBottomNavButtonColor(index: Int): Color {
-    return when (index) {
-        0 -> SystemColors.BottomNavButtons.Devices    // Devices
-        1 -> SystemColors.BottomNavButtons.Photos     // Photos
-        2 -> SystemColors.BottomNavButtons.Schemes    // Schemes
-        3 -> SystemColors.BottomNavButtons.Reports    // Reports
-        else -> SystemColors.Primary
-    }
+fun getBottomNavButtonColor(index: Int): Color = when (index) {
+    0 -> SystemColors.BottomNavButtons.Devices
+    1 -> SystemColors.BottomNavButtons.Photos
+    2 -> SystemColors.BottomNavButtons.Schemes
+    3 -> SystemColors.BottomNavButtons.Reports
+    else -> SystemColors.Primary
 }
 
-/**
- * Получить цвет текста для кнопки BottomNav
- */
-fun getBottomNavTextColor(backgroundColor: Color): Color {
-    return when (backgroundColor) {
-        SystemColors.BottomNavButtons.Devices -> SystemColors.BottomNavButtons.TextOnCoral
-        SystemColors.BottomNavButtons.Photos -> SystemColors.BottomNavButtons.TextOnPeach
-        SystemColors.BottomNavButtons.Schemes -> SystemColors.BottomNavButtons.TextOnIceBlue
-        SystemColors.BottomNavButtons.Reports -> SystemColors.BottomNavButtons.TextOnGrayBlue
-        else -> Color.White
-    }
+fun getBottomNavTextColor(backgroundColor: Color): Color = when (backgroundColor) {
+    SystemColors.BottomNavButtons.Devices -> SystemColors.BottomNavButtons.TextOnCoral
+    SystemColors.BottomNavButtons.Photos -> SystemColors.BottomNavButtons.TextOnPeach
+    SystemColors.BottomNavButtons.Schemes -> SystemColors.BottomNavButtons.TextOnIceBlue
+    SystemColors.BottomNavButtons.Reports -> SystemColors.BottomNavButtons.TextOnGrayBlue
+    else -> Color.White
 }
 
-/**
- * Получить цвета для TopAppBar в зависимости от темы
- */
 @Composable
 fun getTopAppBarColors(isDarkTheme: Boolean = isSystemInDarkTheme()): Pair<Color, Color> {
-    // Используем remember с ключом isDarkTheme
     return remember(isDarkTheme) {
-        Timber.d("🎨 getTopAppBarColors() ВЫЧИСЛЕНИЕ: isDarkTheme=$isDarkTheme")
-
         if (isDarkTheme) {
             Pair(SystemColors.TopAppBar.DarkBackground, SystemColors.TopAppBar.DarkContent)
         } else {
             Pair(SystemColors.TopAppBar.LightBackground, SystemColors.TopAppBar.LightContent)
         }
-    }.also { (bg, content) ->
-        // Логируем только при изменении темы (1 раз)
-        Timber.d("🎨 TopAppBar цвета установлены: bg=${bg.toHex()}, content=${content.toHex()}")
     }
 }
 
-/**
- * Получить цвета для BottomNav в зависимости от темы
- */
 @Composable
 fun getBottomNavColors(isDarkTheme: Boolean = isSystemInDarkTheme()): BottomNavColors {
     return remember(isDarkTheme) {
-        Timber.d("🎨 getBottomNavColors() ВЫЧИСЛЕНИЕ: isDarkTheme=$isDarkTheme")
-
         if (isDarkTheme) {
             BottomNavColors(
                 background = SystemColors.BottomNav.DarkBackground,
@@ -300,15 +204,10 @@ fun getBottomNavColors(isDarkTheme: Boolean = isSystemInDarkTheme()): BottomNavC
                 border = SystemColors.BottomNav.LightBorder
             )
         }
-    }.also { colors ->
-        Timber.d("🎨 BottomNav цвета установлены: bg=${colors.background.toHex()}")
     }
 }
 
-// Вспомогательная функция
-fun Color.toHex(): String {
-    return String.format("#%08X", this.value.toInt())
-}
+fun Color.toHex(): String = String.format("#%08X", (this.value shr 32).toInt())
 
 data class BottomNavColors(
     val background: Color,

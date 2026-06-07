@@ -1,7 +1,6 @@
 package com.kipia.management.mobile
 
 import android.app.Activity
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -10,21 +9,20 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -32,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.kipia.management.mobile.managers.PhotoManager
@@ -53,6 +50,7 @@ import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -70,17 +68,9 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Тема Material 3
         setTheme(R.style.Theme_KipiaManagement)
-
-        // ★★★★ УПРОЩЕННАЯ НАСТРОЙКА ДЛЯ ВСЕХ ВЕРСИЙ ★★★★
         setupEdgeToEdge()
-
-        Timber.d("MainActivity создан")
-
         setContent {
-            Timber.d("Compose начал рендеринг")
             KIPiAApp(
                 notificationManager = notificationManager,
                 photoManager = photoManager
@@ -90,24 +80,16 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun setupEdgeToEdge() {
-        // Базовый edge-to-edge
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        // Прозрачные панели
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
-
-        // Для Android 8.0+ (Oreo)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-
-        // Для Android 11+ (R) - используем новые API
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
         } else {
-            // Для старых версий используем старый API с suppress warning
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility =
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
@@ -126,19 +108,15 @@ fun KIPiAApp(
     val photosViewModel: PhotosViewModel = hiltViewModel()
     val themeViewModel: ThemeViewModel = hiltViewModel()
     val schemesViewModel: SchemesViewModel = hiltViewModel()
-
-    // ★★★★ ПОЛУЧАЕМ ТЕКУЩУЮ ТЕМУ ★★★★
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val systemUiController = rememberSystemUiController()
 
-    // Определяем, темная ли тема (простое вычисление без derivedStateOf)
     val isDarkTheme = when (themeMode) {
         PreferencesRepository.THEME_LIGHT -> false
         PreferencesRepository.THEME_DARK -> true
         else -> isSystemInDarkTheme()
     }
 
-    // ★★★★ Мемоизация цветов (вычисляются ТОЛЬКО при смене темы) ★★★★
     val topAppBarColors = remember(isDarkTheme) {
         if (isDarkTheme) {
             Pair(SystemColors.TopAppBar.DarkBackground, SystemColors.TopAppBar.DarkContent)
@@ -165,100 +143,47 @@ fun KIPiAApp(
         }
     }
 
-    // ★★★★ Извлекаем цвета для удобства использования ★★★★
     val (topAppBarBg, topAppBarContent) = topAppBarColors
-
-    // ★★★★ КОНФИГУРАЦИЯ СИСТЕМНЫХ ПАНЕЛЕЙ (с rememberUpdatedState) ★★★★
-    val statusBarColor = if (isDarkTheme) {
-        SystemColors.TopAppBar.DarkBackground
-    } else {
-        SystemColors.TopAppBar.LightBackground
-    }
-
-    val navBarColor = if (isDarkTheme) {
-        SystemColors.BottomNav.DarkBackground
-    } else {
-        SystemColors.BottomNav.LightBackground
-    }
-
+    val statusBarColor = if (isDarkTheme) SystemColors.TopAppBar.DarkBackground else SystemColors.TopAppBar.LightBackground
+    val navBarColor = if (isDarkTheme) SystemColors.BottomNav.DarkBackground else SystemColors.BottomNav.LightBackground
     val darkIcons = !isDarkTheme
     val context = LocalContext.current
 
-    // Используем rememberUpdatedState для актуальных значений в эффекте
-    val currentIsDarkTheme by rememberUpdatedState(isDarkTheme)
-    val currentStatusBarColor by rememberUpdatedState(statusBarColor)
-    val currentNavBarColor by rememberUpdatedState(navBarColor)
-    val currentDarkIcons by rememberUpdatedState(darkIcons)
-    val currentSystemUiController by rememberUpdatedState(systemUiController)
-
-    // ★★★★ ЭФФЕКТ ДЛЯ СИСТЕМНЫХ ПАНЕЛЕЙ ★★★★
-    DisposableEffect(currentIsDarkTheme, currentSystemUiController) {
-        Timber.d("Настройка системных панелей:")
-        Timber.d("  isDarkTheme: $currentIsDarkTheme")
-        Timber.d("  statusBarColor: ${currentStatusBarColor.toHex()}")
-        Timber.d("  navBarColor: ${currentNavBarColor.toHex()}")
-        Timber.d("  darkIcons: $currentDarkIcons")
-
-        // Настраиваем системные панели
-        currentSystemUiController.setStatusBarColor(
-            color = currentStatusBarColor,
-            darkIcons = currentDarkIcons
-        )
-
-        currentSystemUiController.setNavigationBarColor(
-            color = currentNavBarColor,
-            darkIcons = currentDarkIcons,
-            navigationBarContrastEnforced = false
-        )
-
-        // ★★★★ ОСОБЫЙ СЛУЧАЙ ДЛЯ REALME/OPPO ★★★★
+    DisposableEffect(isDarkTheme, systemUiController) {
+        systemUiController.setStatusBarColor(color = statusBarColor, darkIcons = darkIcons)
+        systemUiController.setNavigationBarColor(color = navBarColor, darkIcons = darkIcons, navigationBarContrastEnforced = false)
         val activity = context as Activity
         activity.window.decorView.post {
-            activity.window.statusBarColor = currentStatusBarColor.toArgb()
-            activity.window.navigationBarColor = currentNavBarColor.toArgb()
-
-            // Для Android 11+ используем новый API
+            activity.window.statusBarColor = statusBarColor.toArgb()
+            activity.window.navigationBarColor = navBarColor.toArgb()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val insetsController = activity.window.insetsController
-                insetsController?.setSystemBarsAppearance(
-                    if (currentDarkIcons) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
-                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                            WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                activity.window.insetsController?.setSystemBarsAppearance(
+                    if (darkIcons) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
                 )
-            } else {
-                // Для старых версий Android
-                @Suppress("DEPRECATION")
-                activity.window.decorView.systemUiVisibility =
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                            (if (currentDarkIcons) View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0) or
-                            (if (currentDarkIcons) View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0)
             }
-
-            // Повторная настройка через systemUiController
-            currentSystemUiController.setStatusBarColor(
-                color = currentStatusBarColor,
-                darkIcons = currentDarkIcons
-            )
-
-            currentSystemUiController.setNavigationBarColor(
-                color = currentNavBarColor,
-                darkIcons = currentDarkIcons,
-                navigationBarContrastEnforced = false
-            )
         }
-
-        onDispose {
-            Timber.d("Очистка настроек системных панелей")
-        }
+        onDispose {}
     }
 
-    // ★★★★ ПОЛУЧАЕМ СОСТОЯНИЯ (с lifecycle-aware коллекшенами) ★★★★
     val photosState by photosViewModel.uiState.collectAsStateWithLifecycle()
     val photosDevices by photosViewModel.devices.collectAsStateWithLifecycle()
     val photosLocations by photosViewModel.allLocations.collectAsStateWithLifecycle()
     val schemesState by schemesViewModel.uiState.collectAsStateWithLifecycle()
+
+    // --- ГЛОБАЛЬНЫЕ УВЕДОМЛЕНИЯ ---
+    var globalNotification by remember { mutableStateOf<NotificationManager.Notification>(NotificationManager.Notification.None) }
+    
+    LaunchedEffect(Unit) {
+        notificationManager.notification.collect { notification ->
+            if (notification != NotificationManager.Notification.None) {
+                globalNotification = notification
+                delay(3000) // Показываем 3 секунды
+                globalNotification = NotificationManager.Notification.None
+                notificationManager.clearLastNotification()
+            }
+        }
+    }
 
     KIPiATheme {
         Surface(
@@ -268,165 +193,71 @@ fun KIPiAApp(
             val navController = rememberNavController()
             var showBottomNav by rememberSaveable { mutableStateOf(true) }
             val topAppBarController = rememberTopAppBarController()
-            val topAppBarState = topAppBarController.state.value
+            
+            // Используем Property Delegation для реактивности TopAppBar
+            val topAppBarState by topAppBarController.state
 
-            LaunchedEffect(Unit) {
-                topAppBarController.resetToDefault()
-            }
+            LaunchedEffect(Unit) { topAppBarController.resetToDefault() }
 
-            // ★★★★ Колбэк для кнопки назад (мемоизирован) ★★★★
             val onBackClick: () -> Unit = {
-                Timber.d("Нажата кнопка 'Назад'")
-                topAppBarController.state.value.onBackClick?.invoke() ?: navController.navigateUp()
+                topAppBarState.onBackClick?.invoke() ?: navController.navigateUp()
             }
 
-            // ★★★★ Функция обновления BottomNav (мемоизирована) ★★★★
-            val updateBottomNavVisibility = remember {
-                { isVisible: Boolean ->
-                    Timber.d("updateBottomNavVisibility вызван: $isVisible")
-                    showBottomNav = isVisible
-                }
-            }
-
-            // ★★★★ НАВИГАЦИОННЫЙ ЛИСТЕНЕР (оптимизирован) ★★★★
             LaunchedEffect(navController) {
                 navController.addOnDestinationChangedListener { _, destination, arguments ->
                     val route = destination.route
-
-                    // Обновляем BottomNav visibility
                     showBottomNav = when {
                         route?.startsWith("device_edit") == true -> false
                         route?.startsWith("device_detail") == true -> false
                         route == "settings" -> false
                         route?.startsWith("fullscreen_photo") == true -> false
                         route?.startsWith("scheme_editor") == true -> false
-                        route == "devices" -> true
-                        route in listOf("schemes", "reports", "photos") -> true
                         else -> true
                     }
-
-                    // Обновляем TopAppBar состояние
+                    
                     when {
-                        route?.startsWith("device_edit") == true -> {
-                            val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
-                            val isNew = deviceId == null
-                            topAppBarController.setForScreen("device_edit", mapOf("isNew" to isNew))
+                        route == "devices" -> topAppBarController.resetToDefault()
+                        
+                        // Игнорируем эти маршруты в MainActivity, так как экраны сами настраивают TopAppBar.
+                        // Если оставить resetToDefault() в блоке else, кнопки на этих экранах будут "мигать".
+                        route?.startsWith("device_edit") == true -> { /* Экран настроит сам */ }
+                        route?.startsWith("device_detail") == true -> { /* Экран настроит сам */ }
+                        
+                        route == "settings" -> topAppBarController.setForScreen("settings")
+                        
+                        route == "photos" -> topAppBarController.setForScreen("photos", mapOf(
+                            "locations" to photosLocations, 
+                            "devices" to photosDevices,
+                            "selectedLocation" to (photosState.selectedLocation ?: ""),
+                            "selectedDeviceId" to (photosState.selectedDeviceId ?: 0)
+                        ))
+                        
+                        route == "schemes" -> topAppBarController.setForScreen("schemes", mapOf(
+                            "title" to "Учет приборов КИПиА",
+                            "searchQuery" to schemesState.searchQuery,
+                            "currentSort" to (schemesState.sortBy ?: SchemesSortBy.NAME_ASC)
+                        ))
+                        
+                        route?.startsWith("scheme_editor") == true -> {
+                            // Здесь можно оставить базовую настройку, либо тоже вынести полностью в экран
+                            topAppBarController.setForScreen("scheme_editor", mapOf("canSave" to true))
                         }
-
-                        route?.startsWith("device_detail") == true -> {
-                            val deviceId = arguments?.getString("deviceId")?.toIntOrNull()
-                            topAppBarController.setForScreen(
-                                "device_detail", mapOf(
-                                    "deviceName" to "Прибор #${deviceId ?: "?"}",
-                                    "onEdit" to { navController.navigate("device_edit/$deviceId") }
-                                ))
-                        }
-
-                        route == "devices" -> {
-                            topAppBarController.resetToDefault()
-                        }
-
-                        route == "settings" -> {
-                            topAppBarController.setForScreen("settings")
-                        }
-
-                        route == "photos" -> {
-                            topAppBarController.setForScreen(
-                                "photos", mapOf(
-                                    "selectedLocation" to (photosState.selectedLocation ?: ""),
-                                    "selectedDeviceId" to (photosState.selectedDeviceId ?: 0),
-                                    "locations" to photosLocations,
-                                    "devices" to photosDevices,
-                                    "onLocationFilterChange" to { location: String? ->
-                                        photosViewModel.selectLocation(location)
-                                    },
-                                    "onDeviceFilterChange" to { deviceId: Int? ->
-                                        photosViewModel.selectDevice(deviceId)
-                                    }
-                                ))
-                        }
-
-                        route == "schemes" -> {
-                            topAppBarController.setForScreen(
-                                "schemes", mapOf(
-                                    "title" to "Учет приборов КИПиА",
-                                    "searchQuery" to schemesState.searchQuery,
-                                    "currentSort" to (schemesState.sortBy ?: SchemesSortBy.NAME_ASC),
-                                    "showThemeToggle" to true,
-                                    "showSettingsIcon" to true,
-                                    "onSearchQueryChange" to { query: String ->
-                                        schemesViewModel.setSearchQuery(query)
-                                    },
-                                    "onSortSelected" to { sortBy: SchemesSortBy ->
-                                        schemesViewModel.setSortBy(sortBy)
-                                    },
-                                    "onResetAllFilters" to {
-                                        schemesViewModel.resetAllFilters()
-                                    }
-                                ))
-                        }
-
-                        route == "scheme_editor" -> {
-                            // Получаем параметры из аргументов или устанавливаем по умолчанию
-                            val schemeId = arguments?.getString("schemeId")?.toIntOrNull()
-                            topAppBarController.setForScreen(
-                                "scheme_editor", mapOf(
-                                    "canSave" to true,
-                                    "canUndo" to false,
-                                    "canRedo" to false,
-                                    "isDirty" to false,
-                                    "onBackClick" to { navController.navigateUp() },
-                                    "onSaveClick" to { /* будет установлено из SchemeEditorScreen */ },
-                                    "onPropertiesClick" to { /* будет установлено из SchemeEditorScreen */ }
-                                ))
-                        }
-
-                        route == "reports" || route == "reports_with_filter" -> {
-                            // Не переустанавливаем фильтр, так как он будет передан из ReportsScreen
-                            // Просто устанавливаем базовое состояние
-                            topAppBarController.setForScreen(
-                                "reports_with_filter",
-                                mapOf(
-                                    "title" to "Учет приборов КИПиА",
-                                    "showBackButton" to false,
-                                    "showSettingsIcon" to true,
-                                    "showThemeToggle" to true,
-                                    "reportFilter" to ReportFilter.Empty,
-                                    "availableStatuses" to emptyList<String>(),
-                                    "availableTypes" to emptyList<String>(),
-                                    "availableManufacturers" to emptyList<String>(),
-                                    "availableLocations" to emptyList<String>(),
-                                    "availableYears" to emptyList<Int>(),
-                                    "onFilterChange" to { filter: ReportFilter ->
-                                        // Этот колбэк будет заменен из ReportsScreen
-                                    }
-                                )
-                            )
-                        }
-
-                        // ★ fullscreen_photo — начальное состояние, детали установит сам экран
+                        
                         route?.startsWith("fullscreen_photo") == true -> {
-                            topAppBarController.setForScreen(
-                                "fullscreen_photo", mapOf(
-                                    "inventoryNumber" to "",
-                                    "valveNumber" to "",
-                                    "onBackClick" to { navController.navigateUp() }
-                                ))
+                            topAppBarController.setForScreen("fullscreen_photo", mapOf(
+                                "inventoryNumber" to "", "valveNumber" to "",
+                                "onBackClick" to { navController.navigateUp() }
+                            ))
                         }
-
-                        else -> {
-                            topAppBarController.resetToDefault()
-                        }
+                        
+                        else -> topAppBarController.resetToDefault()
                     }
                 }
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(topAppBarBg) // цвет уже есть в scope — AppColors.DarkBlue или DarkBackground
-            ) {
+
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                 Scaffold(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    containerColor = Color.Transparent,
                     topBar = {
                         KIPiATopAppBar(
                             topAppBarState = topAppBarState,
@@ -434,54 +265,80 @@ fun KIPiAApp(
                             topAppBarContent = topAppBarContent,
                             onBackClick = onBackClick,
                             navController = navController,
-                            modifier = Modifier
-                                .windowInsetsPadding(WindowInsets.statusBars)
+                            modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
                         )
                     },
                     bottomBar = {
                         AnimatedVisibility(
-                            visible = showBottomNav,
-                            enter = slideInVertically(
-                                initialOffsetY = { fullHeight -> fullHeight },
-                                animationSpec = tween(durationMillis = 300)
-                            ) + fadeIn(animationSpec = tween(durationMillis = 200)),
-                            exit = slideOutVertically(
-                                targetOffsetY = { fullHeight -> fullHeight },
-                                animationSpec = tween(durationMillis = 300)
-                            ) + fadeOut(animationSpec = tween(durationMillis = 200)),
+                            visible = showBottomNav, 
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(), 
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                         ) {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .windowInsetsPadding(WindowInsets.navigationBars),
-                                color = bottomNavColors.background,
-                                shape = RectangleShape,
+                                    .windowInsetsPadding(WindowInsets.navigationBars), 
+                                color = bottomNavColors.background, 
+                                shape = RectangleShape, 
                                 tonalElevation = 4.dp
                             ) {
-                                BottomNavigationBar(
-                                    navController = navController,
-                                    isDarkTheme = isDarkTheme
-                                )
+                                BottomNavigationBar(navController = navController, isDarkTheme = isDarkTheme)
                             }
                         }
-                    },
-                    contentWindowInsets = WindowInsets.safeDrawing
+                    }
                 ) { innerPadding ->
-                    KIPiANavHost(
-                        navController = navController,
-                        devicesViewModel = hiltViewModel(),
-                        photosViewModel = photosViewModel,
-                        schemesViewModel = schemesViewModel,
-                        topAppBarController = topAppBarController,
-                        notificationManager = notificationManager,
-                        photoManager = photoManager,
-                        updateBottomNavVisibility = updateBottomNavVisibility,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .background(MaterialTheme.colorScheme.background)
-                            .consumeWindowInsets(innerPadding)
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        KIPiANavHost(
+                            navController = navController,
+                            devicesViewModel = hiltViewModel(),
+                            photosViewModel = photosViewModel,
+                            schemesViewModel = schemesViewModel,
+                            topAppBarController = topAppBarController,
+                            notificationManager = notificationManager,
+                            photoManager = photoManager,
+                            updateBottomNavVisibility = { showBottomNav = it },
+                            modifier = Modifier.fillMaxSize().padding(innerPadding).background(MaterialTheme.colorScheme.background).consumeWindowInsets(innerPadding)
+                        )
+
+                        // --- ПЛАВАЮЩЕЕ УВЕДОМЛЕНИЕ (ПОВЕРХ ВСЕГО) ---
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).statusBarsPadding(),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            AnimatedVisibility(
+                                visible = globalNotification != NotificationManager.Notification.None,
+                                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+                            ) {
+                                val (color, icon, text) = when (val n = globalNotification) {
+                                    is NotificationManager.Notification.DeviceSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Прибор '${n.deviceName}' сохранен")
+                                    is NotificationManager.Notification.SchemeSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Схема '${n.schemeName}' сохранена")
+                                    is NotificationManager.Notification.DeviceDeleted -> Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Прибор '${n.deviceName}' удален")
+                                    is NotificationManager.Notification.Error -> Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, n.message)
+                                    else -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "")
+                                }
+
+                                if (text.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = color,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        shadowElevation = 8.dp,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Icon(icon, null, modifier = Modifier.size(20.dp))
+                                            Text(text = text, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

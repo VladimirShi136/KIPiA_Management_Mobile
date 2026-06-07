@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,16 +8,35 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
 }
 
+// Читаем local.properties
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+val vCode = localProperties.getProperty("app.version.code")?.toInt() ?: 1
+val vName = localProperties.getProperty("app.version.name") ?: "1.0"
+
 android {
     namespace = "com.kipia.management.mobile"
     compileSdk = libs.versions.compileSdk.get().toInt()
+
+    signingConfigs {
+        create("release") {
+            storeFile = localProperties.getProperty("signing.store.file")?.let { rootProject.file(it) }
+            storePassword = localProperties.getProperty("signing.store.password")
+            keyAlias = localProperties.getProperty("signing.key.alias")
+            keyPassword = localProperties.getProperty("signing.key.password")
+        }
+    }
 
     defaultConfig {
         applicationId = "com.kipia.management.mobile"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = vCode
+        versionName = vName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,12 +46,21 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // Настройка имени выходного APK файла
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            output.outputFileName = "KIPiA_Management_v${vName}.apk"
         }
     }
 
@@ -43,7 +74,6 @@ android {
     }
 
     buildFeatures {
-        viewBinding = false
         buildConfig = true
         compose = true
     }
@@ -104,7 +134,7 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso)
 
-    // DataStore (НОВОЕ) ⬅️
+    // DataStore
     implementation(libs.datastore.preferences)
     implementation(libs.datastore.preferences.core)
 

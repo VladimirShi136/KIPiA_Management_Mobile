@@ -18,7 +18,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.kipia.management.mobile.BuildConfig
 import com.kipia.management.mobile.repository.PreferencesRepository
+import com.kipia.management.mobile.ui.components.sync.ConflictResolutionDialog
 import com.kipia.management.mobile.viewmodel.SettingsViewModel
 import com.kipia.management.mobile.viewmodel.SyncState
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
@@ -45,6 +47,7 @@ fun SettingsScreen(
     val lastExport by settingsViewModel.lastExportTimestamp.collectAsStateWithLifecycle()
     val lastImport by settingsViewModel.lastImportTimestamp.collectAsStateWithLifecycle()
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
@@ -57,6 +60,7 @@ fun SettingsScreen(
         uri?.let { pendingImportUri = it }
     }
 
+    // 1. Диалог подтверждения импорта
     if (pendingImportUri != null) {
         AlertDialog(
             onDismissRequest = { pendingImportUri = null },
@@ -77,44 +81,47 @@ fun SettingsScreen(
         )
     }
 
+    // 2. Обработка состояний синхронизации (Результаты и Конфликты)
     when (val state = syncState) {
         is SyncState.ExportSuccess -> {
-            AlertDialog(
-                onDismissRequest = { settingsViewModel.resetState() },
-                icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                title = { Text("Экспорт завершён") },
-                text = { Text("База данных и фотографии успешно сохранены в файл.") },
-                confirmButton = {
-                    TextButton(onClick = { settingsViewModel.resetState() }) { Text("OK") }
-                }
+            SyncResultDialog(
+                title = "Экспорт завершён",
+                message = "База данных и фотографии успешно сохранены в файл.",
+                icon = Icons.Filled.CheckCircle,
+                iconColor = MaterialTheme.colorScheme.primary,
+                onDismiss = { settingsViewModel.resetState() }
             )
         }
         is SyncState.ImportSuccess -> {
-            AlertDialog(
-                onDismissRequest = { settingsViewModel.resetState() },
-                icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                title = { Text("Импорт завершён") },
-                text = { Text(state.stats.toSummary()) },
-                confirmButton = {
-                    TextButton(onClick = { settingsViewModel.resetState() }) { Text("OK") }
-                }
+            SyncResultDialog(
+                title = "Импорт завершён",
+                message = state.stats.toSummary(),
+                icon = Icons.Filled.CheckCircle,
+                iconColor = MaterialTheme.colorScheme.primary,
+                onDismiss = { settingsViewModel.resetState() }
             )
         }
         is SyncState.Error -> {
-            AlertDialog(
-                onDismissRequest = { settingsViewModel.resetState() },
-                icon = { Icon(Icons.Filled.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text("Ошибка") },
-                text = { Text(state.message) },
-                confirmButton = {
-                    TextButton(onClick = { settingsViewModel.resetState() }) { Text("OK") }
+            SyncResultDialog(
+                title = "Ошибка",
+                message = state.message,
+                icon = Icons.Filled.Error,
+                iconColor = MaterialTheme.colorScheme.error,
+                onDismiss = { settingsViewModel.resetState() }
+            )
+        }
+        is SyncState.ConflictsDetected -> {
+            ConflictResolutionDialog(
+                conflicts = state.conflicts,
+                onDismiss = { settingsViewModel.resetState() },
+                onResolve = { resolutions ->
+                    settingsViewModel.resolveConflicts(resolutions)
                 }
             )
         }
         else -> {}
     }
 
-    // Единый отступ для всех карточек
     val cardModifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = Dimens.screenPadding)
@@ -123,8 +130,8 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(vertical = Dimens.spacingMedium), // верхний и нижний отступ колонки
-        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium) // равные отступы между карточками
+            .padding(vertical = Dimens.spacingMedium),
+        verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
         // ─── Синхронизация ───────────────────────────────────────
         Card(modifier = cardModifier) {
@@ -141,17 +148,13 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = Dimens.spacingLarge)
                 )
                 Text(
-                    text = "Последний экспорт: ${
-                        lastExport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"
-                    }",
+                    text = "Последний экспорт: ${lastExport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = Dimens.spacingSmall)
                 )
                 Text(
-                    text = "Последний импорт: ${
-                        lastImport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"
-                    }",
+                    text = "Последний импорт: ${lastImport?.let { dateFormat.format(Date(it)) } ?: "не выполнялся"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = Dimens.spacingLarge)
@@ -165,14 +168,13 @@ fun SettingsScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
-                                .format(Date())
+                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
                             exportLauncher.launch("kipia_backup_$timestamp.zip")
                         },
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(Dimens.iconSizeSmall))
+                        Icon(Icons.Filled.Upload, null, modifier = Modifier.size(Dimens.iconSizeSmall))
                         Spacer(Modifier.width(Dimens.spacingMedium))
                         Text("Экспорт", maxLines = 1)
                     }
@@ -182,7 +184,7 @@ fun SettingsScreen(
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(Dimens.iconSizeSmall))
+                        Icon(Icons.Filled.Download, null, modifier = Modifier.size(Dimens.iconSizeSmall))
                         Spacer(Modifier.width(Dimens.spacingMedium))
                         Text("Импорт", maxLines = 1)
                     }
@@ -228,7 +230,7 @@ fun SettingsScreen(
                         icon = { Icon(Icons.Filled.SettingsBrightness, null, modifier = Modifier.size(Dimens.iconSizeSmall)) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Системная", fontSize = 10.sp, maxLines = 1) }
+                    ) { Text("Система", fontSize = 10.sp, maxLines = 1) }
 
                     SegmentedButton(
                         selected = themeMode == PreferencesRepository.THEME_LIGHT,
@@ -254,15 +256,12 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Динамические цвета", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            text = if (supportsDynamicColors) "Использовать цвета обоев системы"
-                            else "Доступно на Android 12 и выше",
+                            text = if (supportsDynamicColors) "Использовать цвета системы" else "Доступно на Android 12+",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = if (supportsDynamicColors) 1f else 0.7f
-                            )
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (supportsDynamicColors) 1f else 0.7f)
                         )
                     }
                     Switch(
@@ -275,7 +274,6 @@ fun SettingsScreen(
         }
 
         // ─── О приложении ─────────────────────────────────────────
-        // ListItem имеет свой фон и острые углы — заменяем на Row внутри Card
         Card(modifier = cardModifier) {
             Column(modifier = Modifier.padding(Dimens.cardPadding)) {
                 Text(
@@ -284,52 +282,41 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = Dimens.spacingFab)
                 )
 
-                // Версия
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = Dimens.spacingMedium),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
-                ) {
-                    Icon(
-                        Icons.Filled.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Column {
-                        Text("Версия", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "1.0.0",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Разработчик
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = Dimens.spacingMedium),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
-                ) {
-                    Icon(
-                        Icons.Filled.Code,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Column {
-                        Text("Разработчик", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "KIPiA Management",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                AboutRow(icon = Icons.Filled.Info, label = "Версия", value = BuildConfig.VERSION_NAME)
+                AboutRow(icon = Icons.Filled.Code, label = "Разработчик", value = "KIPiA Management")
             }
         }
     }
+}
+
+@Composable
+private fun AboutRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.spacingMedium),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SyncResultDialog(
+    title: String,
+    message: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: androidx.compose.ui.graphics.Color,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(icon, null, tint = iconColor) },
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
+    )
 }

@@ -2,50 +2,31 @@ package com.kipia.management.mobile.ui.components.scheme.dialogs
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
-import com.kipia.management.mobile.ui.components.scheme.dialogs.DraggableCard
 import com.kipia.management.mobile.viewmodel.EditorMode
 import com.kipia.management.mobile.viewmodel.EditorState
 import com.kipia.management.mobile.viewmodel.SchemeEditorViewModel
 
-/**
- * Плавающая карточка свойств выбранного прибора.
- *
- * Показывает:
- *  - название, тип, инвентарный номер
- *  - текущие координаты (X, Y)
- *  - кнопки поворота: 0° / 90° / 180° / 270°  ← аналог контекстного меню из JavaFX
- *
- * Поворот сохраняется через [SchemeEditorViewModel.rotateDevice] и
- * записывается в [SchemeDevice.rotation] (Float, градусы).
- *
- * ⚠️ Если `SchemeDevice.rotation` ещё не существует — добавь поле:
- *
- *   @Entity(tableName = "scheme_devices")
- *   data class SchemeDevice(
- *       ...
- *       val rotation: Float = 0f   // ← добавить + миграция Room
- *   )
- *
- * ⚠️ В ViewModel нужен метод:
- *
- *   fun rotateDevice(deviceId: Int, angleDeg: Float) {
- *       // обновляет SchemeDevice.rotation и вызывает markDirty()
- *   }
- */
 @Composable
 fun DevicePropertiesPanel(
     editorState: EditorState,
     allDevices: List<Device>,
     devices: List<SchemeDevice>,
     viewModel: SchemeEditorViewModel,
+    onEditDevice: (Int) -> Unit,
+    onViewDetails: (Int) -> Unit,
+    onViewPhotos: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val selectedDeviceInfo = editorState.selection.selectedDeviceId?.let { id ->
@@ -60,189 +41,114 @@ fun DevicePropertiesPanel(
     ) return
 
     DraggableCard(
-        modifier = modifier.width(280.dp),
-        showDragHandle = true
+        modifier = modifier.width(320.dp),
+        onClose = { viewModel.toggleDeviceProperties() }
     ) {
         val (device, schemeDevice) = selectedDeviceInfo
 
-        // ── Заголовок ─────────────────────────────────────────────────────
-        Text(
-            text  = "Свойства прибора",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        EditorDialogHeader(title = "Свойства прибора", onClose = { viewModel.toggleDeviceProperties() })
 
-        // ── Информация об устройстве ──────────────────────────────────────
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Инфо-карточка
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
             ) {
-                Text(
-                    text  = device.name ?: device.type,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text  = "Тип: ${device.type}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                )
-                Text(
-                    text  = "Инв. №${device.inventoryNumber}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Позиция ───────────────────────────────────────────────────────
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Text(text = "Позиция:", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    text  = "(${schemeDevice.x.toInt()}, ${schemeDevice.y.toInt()})",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Поворот ───────────────────────────────────────────────────────
-        // Точная копия логики createRotateMenu() из JavaFX DeviceIconService:
-        //   0° стандартно / 90° вправо / 180° перевернуть / 270° влево
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector        = Icons.Default.RotateRight,
-                        contentDescription = null,
-                        modifier           = Modifier.size(16.dp),
-                        tint               = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text  = "Поворот",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text  = device.getDisplayName(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text  = "Инв. №: ${device.inventoryNumber}",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
 
-                // Текущий угол
-                Text(
-                    text  = "Текущий: ${schemeDevice.rotation.toInt()}°",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                // Кнопки поворота — 2 × 2
+            // Ряд кнопок действий
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
-                    modifier            = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    RotationButton(
-                        label       = "0°",
-                        description = "Стандартно",
-                        selected    = schemeDevice.rotation == 0f,
-                        onClick     = { viewModel.rotateDevice(device.id, 0f) },
-                        modifier    = Modifier.weight(1f)
-                    )
-                    RotationButton(
-                        label       = "90°",
-                        description = "Вправо",
-                        selected    = schemeDevice.rotation == 90f,
-                        onClick     = { viewModel.rotateDevice(device.id, 90f) },
-                        modifier    = Modifier.weight(1f)
-                    )
+                    // Изменить
+                    Button(
+                        onClick = { onEditDevice(device.id) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Изменить", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    // Фото
+                    Button(
+                        onClick = { onViewPhotos(device.id) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Фото", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+                // Кнопка данных (широкая)
+                OutlinedButton(
+                    onClick = { onViewDetails(device.id) },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(8.dp)
                 ) {
-                    RotationButton(
-                        label       = "180°",
-                        description = "Перевернуть",
-                        selected    = schemeDevice.rotation == 180f,
-                        onClick     = { viewModel.rotateDevice(device.id, 180f) },
-                        modifier    = Modifier.weight(1f)
-                    )
-                    RotationButton(
-                        label       = "270°",
-                        description = "Влево",
-                        selected    = schemeDevice.rotation == 270f,
-                        onClick     = { viewModel.rotateDevice(device.id, 270f) },
-                        modifier    = Modifier.weight(1f)
+                    Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Просмотр данных прибора", 
+                        style = MaterialTheme.typography.labelMedium,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            // Управление поворотом
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
+            
+            Text(
+                text = "Поворот",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
-        // ── Закрыть ───────────────────────────────────────────────────────
-        TextButton(
-            onClick  = { viewModel.toggleDeviceProperties() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Закрыть")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RotationButton("0°", schemeDevice.rotation == 0f, { viewModel.rotateDevice(device.id, 0f) }, Modifier.weight(1f))
+                RotationButton("90°", schemeDevice.rotation == 90f, { viewModel.rotateDevice(device.id, 90f) }, Modifier.weight(1f))
+                RotationButton("180°", schemeDevice.rotation == 180f, { viewModel.rotateDevice(device.id, 180f) }, Modifier.weight(1f))
+                RotationButton("270°", schemeDevice.rotation == 270f, { viewModel.rotateDevice(device.id, 270f) }, Modifier.weight(1f))
+            }
         }
     }
 }
 
-/**
- * Кнопка выбора угла поворота.
- * Подсвечивается, если [selected] == true (соответствует текущему углу).
- */
 @Composable
 private fun RotationButton(
     label: String,
-    description: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val containerColor = if (selected)
-        MaterialTheme.colorScheme.primary
-    else
-        MaterialTheme.colorScheme.surface
-
-    val contentColor = if (selected)
-        MaterialTheme.colorScheme.onPrimary
-    else
-        MaterialTheme.colorScheme.onSurface
+    val containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
     OutlinedButton(
         onClick  = onClick,
@@ -250,17 +156,9 @@ private fun RotationButton(
         colors   = ButtonDefaults.outlinedButtonColors(
             containerColor = containerColor,
             contentColor   = contentColor
-        )
+        ),
+        contentPadding = PaddingValues(0.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text  = label,
-                style = MaterialTheme.typography.labelLarge
-            )
-            Text(
-                text  = description,
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
+        Text(text = label, style = MaterialTheme.typography.labelMedium)
     }
 }

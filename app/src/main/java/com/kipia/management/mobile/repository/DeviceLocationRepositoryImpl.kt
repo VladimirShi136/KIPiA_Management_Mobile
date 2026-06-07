@@ -17,14 +17,14 @@ class DeviceLocationRepositoryImpl @Inject constructor(
         deviceLocationDao.getLocation(deviceId, schemeId)
 
     override suspend fun saveLocation(location: DeviceLocation) =
-        deviceLocationDao.insertOrUpdateLocation(location)
+        deviceLocationDao.insertOrUpdateLocation(location.withUpdatedNow())
 
     override suspend fun deleteLocation(location: DeviceLocation) =
-        deviceLocationDao.deleteLocation(location)
+        deviceLocationDao.softDeleteLocation(location.deviceId, location.schemeId)
 
     override suspend fun deleteAllLocationsForScheme(schemeId: Int) =
-        deviceLocationDao.deleteAllLocationsForScheme(schemeId)
+        deviceLocationDao.softDeleteAllLocationsForScheme(schemeId)
 
     override suspend fun deleteAllLocationsForDevice(deviceId: Int) =
-        deviceLocationDao.deleteAllLocationsForDevice(deviceId)
+        deviceLocationDao.softDeleteAllLocationsForDevice(deviceId)
 }

@@ -20,6 +20,7 @@ import coil.compose.AsyncImage
 import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.ui.theme.DeviceStatus
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.DeviceDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,7 +33,8 @@ fun DeviceDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
     onNavigateToPhotos: (Int, Device) -> Unit,
-    viewModel: DeviceDetailViewModel = hiltViewModel()
+    viewModel: DeviceDetailViewModel = hiltViewModel(),
+    topAppBarController: TopAppBarController? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val device by viewModel.device.collectAsStateWithLifecycle()
@@ -42,6 +44,19 @@ fun DeviceDetailScreen(
     LaunchedEffect(deviceId) {
         if (deviceId > 0) {
             viewModel.loadDevice(deviceId)
+        }
+    }
+
+    // Настройка TopAppBar (исправлены ключи колбэков)
+    LaunchedEffect(device) {
+        device?.let {
+            topAppBarController?.setForScreen(
+                screenRoute = "device_detail",
+                additionalParams = mapOf(
+                    "onEditClick" to { onNavigateToEdit(deviceId) },
+                    "onBackClick" to onNavigateBack
+                )
+            )
         }
     }
 
@@ -62,13 +77,11 @@ fun DeviceDetailScreen(
                 photos = photos,
                 isFavorite = uiState.isFavorite,
                 onPhotoClick = { index ->
-                    // 🆕 Теперь передаем индекс фото и Device
                     onNavigateToPhotos(index, device!!)
                 },
                 onShare = { viewModel.shareDeviceInfo() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onNavigateToEdit = {
-                    // ★★★★ ВЫЗЫВАЕМ КОЛБЭК С deviceId ★★★★
                     onNavigateToEdit(deviceId)
                 },
                 modifier = Modifier
@@ -97,6 +110,8 @@ fun DeviceDetailContent(
     onNavigateToEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()) }
+
     Column(
         modifier = modifier
     ) {
@@ -135,10 +150,15 @@ fun DeviceDetailContent(
                 Spacer(modifier = Modifier.height(Dimens.spacingSmall))
 
                 Text(
-                    text = "Обновлено: ${
-                        SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-                            .format(Date(device.updatedAt))
-                    }",
+                    text = "Обновлено: ${if (device.updatedAt > 0) dateFormat.format(Date(device.updatedAt)) else "неизвестно"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Синхронизировано: ${if (device.lastSyncedAt > 0) dateFormat.format(Date(device.lastSyncedAt)) else "никогда"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.fillMaxWidth(),
@@ -247,10 +267,10 @@ fun DeviceDetailContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = Dimens.spacingMedium), // ← единый отступ между карточками
+                    .padding(bottom = Dimens.spacingMedium),
             ) {
                 Column(
-                    modifier = Modifier.padding(Dimens.cardPadding) // ← единый внутренний отступ
+                    modifier = Modifier.padding(Dimens.cardPadding)
                 ) {
                     DeviceDetailSectionTitle("Фотографии (${photos.size})")
 
@@ -307,12 +327,12 @@ fun StatusBadge(status: String) {
     val deviceStatus = DeviceStatus.fromString(status)
 
     Surface(
-        color = deviceStatus.containerColor, // ИЗМЕНЕНИЕ: используем containerColor
+        color = deviceStatus.containerColor,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.padding(horizontal = Dimens.spacingMedium),
         border = BorderStroke(
             width = 1.dp,
-            color = deviceStatus.color.copy(alpha = 0.3f) // Тонкая рамка цвета статуса
+            color = deviceStatus.color.copy(alpha = 0.3f)
         )
     ) {
         Text(
@@ -345,7 +365,7 @@ fun DeviceDetailRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface, // ДОБАВЛЕНО
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
     }
@@ -361,7 +381,6 @@ fun DevicePhotoGallery(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
-        // Показываем до 3 фото в ряд
         photos.chunked(3).forEach { rowPhotos ->
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium),
@@ -376,7 +395,6 @@ fun DevicePhotoGallery(
                     )
                 }
 
-                // Заполняем оставшиеся места пустыми
                 repeat(3 - rowPhotos.size) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
@@ -415,14 +433,14 @@ fun DeviceDetailLoadingState() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary, // ДОБАВЛЕНО
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 3.dp,
                 modifier = Modifier.size(Dimens.iconSizeXLarge)
             )
             Spacer(modifier = Modifier.height(Dimens.spacingLarge))
             Text(
                 "Загрузка...",
-                color = MaterialTheme.colorScheme.onSurfaceVariant // ДОБАВЛЕНО
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

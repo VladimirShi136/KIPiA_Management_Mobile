@@ -7,8 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class DeviceManager {
+@Singleton
+class DeviceManager @Inject constructor() {
     private val _devices = MutableStateFlow<List<SchemeDevice>>(emptyList())
     val devices = _devices.asStateFlow()
 

@@ -35,11 +35,31 @@ data class DeviceLocation(
     val schemeId: Int,
 
     @ColumnInfo(name = "x")
-    val x: Float,
+    val x: Double, // Используем Double для совместимости с JavaFX REAL
 
     @ColumnInfo(name = "y")
-    val y: Float,
+    val y: Double,
 
     @ColumnInfo(name = "rotation")
-    val rotation: Float = 0f
-)
+    val rotation: Double = 0.0,
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "last_synced_at")
+    val lastSyncedAt: Long = 0,
+
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long = 0
+) {
+    fun isDeleted(): Boolean = deletedAt > 0
+
+    fun withUpdatedNow(): DeviceLocation {
+        return this.copy(updatedAt = System.currentTimeMillis())
+    }
+
+    fun asDeleted(): DeviceLocation {
+        val now = System.currentTimeMillis()
+        return this.copy(updatedAt = now, deletedAt = now)
+    }
+}

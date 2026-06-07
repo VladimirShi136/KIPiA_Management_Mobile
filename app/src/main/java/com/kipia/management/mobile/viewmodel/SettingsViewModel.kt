@@ -57,13 +57,41 @@ class SettingsViewModel @Inject constructor(
             _syncState.value = SyncState.Loading("Импорт...")
             syncManager.importFromZip(inputUri).fold(
                 onSuccess = { stats ->
-                    preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
-                    _syncState.value = SyncState.ImportSuccess(stats)
+                    if (stats.conflicts.isNotEmpty()) {
+                        // Если есть конфликты, переходим в состояние ожидания решения
+                        _syncState.value = SyncState.ConflictsDetected(stats.conflicts, stats)
+                    } else {
+                        preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                        _syncState.value = SyncState.ImportSuccess(stats)
+                    }
                 },
                 onFailure = { e ->
                     _syncState.value = SyncState.Error(e.message ?: "Ошибка импорта")
                 }
             )
+        }
+    }
+
+    /**
+     * Вызывается из UI после того, как пользователь выбрал решения для всех конфликтов
+     */
+    fun resolveConflicts(resolutions: List<SyncManager.ConflictResolution>) {
+        val currentState = _syncState.value
+        if (currentState is SyncState.ConflictsDetected) {
+            viewModelScope.launch {
+                _syncState.value = SyncState.Loading("Применение решений...")
+                syncManager.applyConflictResolutions(currentState.conflicts, resolutions).fold(
+                    onSuccess = {
+                        preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                        // После разрешения конфликтов считаем импорт успешным
+                        // Можно передать накопленную статистику
+                        _syncState.value = SyncState.ImportSuccess(currentState.initialStats)
+                    },
+                    onFailure = { e ->
+                        _syncState.value = SyncState.Error(e.message ?: "Ошибка разрешения конфликтов")
+                    }
+                )
+            }
         }
     }
 
@@ -78,4 +106,10 @@ sealed class SyncState {
     data object ExportSuccess : SyncState()
     data class ImportSuccess(val stats: SyncManager.SyncStats) : SyncState()
     data class Error(val message: String) : SyncState()
+    
+    // Новое состояние для ручного разрешения конфликтов
+    data class ConflictsDetected(
+        val conflicts: List<SyncManager.ConflictInfo>,
+        val initialStats: SyncManager.SyncStats
+    ) : SyncState()
 }

@@ -192,12 +192,15 @@ class DevicesViewModel @Inject constructor(
 
     // ── Удаление ──────────────────────────────────────────────────────────────
 
-    fun deleteDevice(device: Device, deleteScheme: Boolean = false) {
+    fun deleteDevice(device: Device, deletePhotos: Boolean, deleteScheme: Boolean = false) {
         viewModelScope.launch {
             try {
-                // Удаляем физические файлы фото до удаления записи из БД
-                val deletedPhotos = photoManager.deleteAllDevicePhotos(device)
-                Timber.d("deleteDevice: удалено $deletedPhotos фото для ${device.getDisplayName()}")
+                if (deletePhotos) {
+                    val deletedPhotos = photoManager.deleteAllDevicePhotos(device)
+                    Timber.d("deleteDevice: удалено $deletedPhotos фото для ${device.getDisplayName()}")
+                } else {
+                    Timber.d("deleteDevice: фотографии сохранены для ${device.getDisplayName()}")
+                }
 
                 repository.deleteDevice(device)
 

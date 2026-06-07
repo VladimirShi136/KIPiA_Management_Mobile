@@ -41,7 +41,8 @@ class TopAppBarController {
                     showThemeToggle = false,
                     showFilterMenu = false,
                     showEditButton = true,
-                    onEditClick = additionalParams["onEdit"] as? () -> Unit
+                    onEditClick = additionalParams["onEditClick"] as? () -> Unit,
+                    onBackClick = additionalParams["onBackClick"] as? () -> Unit
                 )
             }
 
@@ -55,8 +56,9 @@ class TopAppBarController {
                     showFilterMenu = false,
                     showSaveButton = true,
                     showDeleteButton = !isNew,
-                    onSaveClick = additionalParams["onSave"] as? () -> Unit,
-                    onDeleteClick = additionalParams["onDelete"] as? () -> Unit
+                    onBackClick = additionalParams["onBackClick"] as? () -> Unit,
+                    onSaveClick = additionalParams["onSaveClick"] as? () -> Unit,
+                    onDeleteClick = additionalParams["onDeleteClick"] as? () -> Unit
                 )
             }
 

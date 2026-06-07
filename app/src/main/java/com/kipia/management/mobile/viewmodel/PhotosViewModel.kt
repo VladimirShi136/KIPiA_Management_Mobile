@@ -26,10 +26,12 @@ class PhotosViewModel @Inject constructor(
     private val _selectedDeviceId = MutableStateFlow<Int?>(null)
     private val _selectedLocation = MutableStateFlow<String?>(null)
     private val _viewMode = MutableStateFlow(ViewMode.GRID)
-    private val _uiState = MutableStateFlow(PhotosUiState())
     private val _searchQuery = MutableStateFlow("")
     private val _sortBy = MutableStateFlow(PhotosSortBy.NAME_ASC)
-    val uiState: StateFlow<PhotosUiState> = _uiState
+    private val _displayMode = MutableStateFlow(DisplayMode.FLAT)
+    private val _expandedGroups = MutableStateFlow<Set<String>>(emptySet())
+    private val _isLoading = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
 
     // Все устройства
     val devices = combine(
@@ -43,44 +45,70 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    // Все уникальные местоположения из устройств
-    val allLocations = devices.map { deviceList ->
-        deviceList.map { it.location }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sorted()
+    // Состояние UI
+    val uiState: StateFlow<PhotosUiState> = combine(
+        _selectedDeviceId,
+        _selectedLocation,
+        _viewMode,
+        _displayMode,
+        _searchQuery,
+        _sortBy,
+        _isLoading,
+        _error
+    ) { args ->
+        PhotosUiState(
+            selectedDeviceId = args[0] as? Int,
+            selectedLocation = args[1] as? String,
+            viewMode = args[2] as ViewMode,
+            isGridView = (args[2] as ViewMode) == ViewMode.GRID,
+            displayMode = args[3] as DisplayMode,
+            searchQuery = args[4] as String,
+            sortBy = args[5] as PhotosSortBy,
+            isLoading = args[6] as Boolean,
+            error = args[7] as? String
+        )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = emptyList()
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PhotosUiState()
     )
 
-    // Все фото с фильтрацией по устройству и местоположению
+    // Основной список отфильтрованных фотографий
     val photos = combine(
         devices,
         _selectedLocation,
-        _selectedDeviceId
-    ) { deviceList, locationFilter, deviceFilter ->
+        _selectedDeviceId,
+        _searchQuery,
+        _sortBy
+    ) { args ->
+        val deviceList = args[0] as List<Device>
+        val locationFilter = args[1] as? String
+        val deviceFilter = args[2] as? Int
+        val searchQuery = args[3] as String
+        val sortBy = args[4] as PhotosSortBy
 
         deviceList
             .filter { device ->
-                // Фильтр по местоположению
-                (locationFilter == null || device.location == locationFilter) &&
-                        // Фильтр по устройству
-                        (deviceFilter == null || device.id == deviceFilter)
+                val matchesLocation = locationFilter == null || device.location == locationFilter
+                val matchesDevice = deviceFilter == null || device.id == deviceFilter
+                val matchesSearch = searchQuery.isBlank() ||
+                        device.location.contains(searchQuery, ignoreCase = true) ||
+                        device.name?.contains(searchQuery, ignoreCase = true) == true ||
+                        device.inventoryNumber.contains(searchQuery, ignoreCase = true)
+                matchesLocation && matchesDevice && matchesSearch
             }
             .flatMap { device ->
                 device.photos.mapNotNull { fileName ->
                     val fullPath = photoManager.getFullPhotoPath(device, fileName)
                     if (fullPath != null && File(fullPath).exists()) {
-                        PhotoItem(
-                            fileName = fileName,
-                            fullPath = fullPath,
-                            device = device
-                        )
-                    } else {
-                        null
-                    }
+                        PhotoItem(fileName = fileName, fullPath = fullPath, device = device)
+                    } else null
+                }
+            }
+            .let { list ->
+                when (sortBy) {
+                    PhotosSortBy.NAME_ASC -> list.sortedBy { it.device.getDisplayName() }
+                    PhotosSortBy.NAME_DESC -> list.sortedByDescending { it.device.getDisplayName() }
                 }
             }
     }.stateIn(
@@ -89,314 +117,109 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    // ── Статистика ────────────────────────────────────────────────────────────
-
-    // Общая статистика — по всем устройствам, без фильтров
-    val totalStats: StateFlow<PhotoStats> = devices
-        .map { deviceList ->
-            val totalLocations = deviceList.map { it.location }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .size
-            val totalDevices = deviceList.size
-            val totalPhotos = deviceList.sumOf { device ->
-                device.photos.count { fileName ->
-                    val fullPath = photoManager.getFullPhotoPath(device, fileName)
-                    fullPath != null && File(fullPath).exists()
-                }
+    // Сгруппированные фотографии
+    val groupedByLocation = combine(
+        photos,
+        _expandedGroups
+    ) { photoList, expandedSet ->
+        photoList.groupBy { it.device.location.ifEmpty { "Без локации" } }
+            .map { (location, items) ->
+                LocationPhotoGroup(
+                    location = location,
+                    photos = items.sortedByDescending { File(it.fullPath).lastModified() },
+                    isExpanded = expandedSet.contains(location)
+                )
             }
-            PhotoStats(
-                locations = totalLocations,
-                devices   = totalDevices,
-                photos    = totalPhotos
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = PhotoStats()
-        )
-
-    // Статистика по отфильтрованным данным
-    val filteredStats: StateFlow<PhotoStats> = combine(
-        devices,
-        _selectedLocation,
-        _selectedDeviceId,
-        _searchQuery
-    ) { deviceList, locationFilter, deviceFilter, searchQuery ->
-        val filteredDevices = deviceList.filter { device ->
-            val matchesLocation = locationFilter == null || device.location == locationFilter
-            val matchesDevice   = deviceFilter == null   || device.id == deviceFilter
-            val matchesSearch   = searchQuery.isBlank()  ||
-                    device.location.contains(searchQuery, ignoreCase = true) ||
-                    device.name?.contains(searchQuery, ignoreCase = true) == true ||
-                    device.inventoryNumber.contains(searchQuery, ignoreCase = true)
-            matchesLocation && matchesDevice && matchesSearch
-        }
-        val filteredLocations = filteredDevices.map { it.location }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .size
-        val filteredPhotos = filteredDevices.sumOf { device ->
-            device.photos.count { fileName ->
-                val fullPath = photoManager.getFullPhotoPath(device, fileName)
-                fullPath != null && File(fullPath).exists()
-            }
-        }
-        val devicesWithPhotos = filteredDevices.count { device ->
-            device.photos.any { fileName ->
-                val fullPath = photoManager.getFullPhotoPath(device, fileName)
-                fullPath != null && File(fullPath).exists()
-            }
-        }
-        PhotoStats(
-            locations        = filteredLocations,
-            devices          = filteredDevices.size,
-            photos           = filteredPhotos,
-            devicesWithPhotos = devicesWithPhotos
-        )
+            .sortedBy { it.location }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = PhotoStats()
+        initialValue = emptyList()
     )
 
-    //  Функция для сброса всех фильтров
+    // Статистика (всегда в синхроне)
+    val totalStats: StateFlow<PhotoStats> = devices.map { list ->
+        val locations = list.filter { it.photos.isNotEmpty() }.map { it.location }.distinct().size
+        val photoCount = list.sumOf { d -> 
+            d.photos.count { f -> 
+                photoManager.getFullPhotoPath(d, f)?.let { File(it).exists() } == true 
+            } 
+        }
+        PhotoStats(locations = locations, devices = list.size, photos = photoCount)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PhotoStats())
+
+    val filteredStats: StateFlow<PhotoStats> = photos.map { list ->
+        val devicesWithPhotos = list.map { it.device.id }.distinct().size
+        PhotoStats(
+            locations = list.map { it.device.location }.distinct().size,
+            devices = list.map { it.device.id }.distinct().size,
+            photos = list.size,
+            devicesWithPhotos = devicesWithPhotos
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PhotoStats())
+
+    val allLocations = devices.map { list ->
+        list.map { it.location }.filter { it.isNotBlank() }.distinct().sorted()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        // Раскрываем все группы при первом получении данных
+        viewModelScope.launch {
+            allLocations.collect { locations ->
+                if (locations.isNotEmpty() && _expandedGroups.value.isEmpty()) {
+                    _expandedGroups.value = locations.toSet()
+                }
+            }
+        }
+    }
+
     fun resetAllFilters() {
         _searchQuery.value = ""
         _sortBy.value = PhotosSortBy.NAME_ASC
         _selectedLocation.value = null
         _selectedDeviceId.value = null
-        _uiState.value = _uiState.value.copy(
-            selectedLocation = null,
-            selectedDeviceId = null,
-            searchQuery = "",
-            sortBy = PhotosSortBy.NAME_ASC
-        )
     }
 
     fun forceLoadData() {
-        _forceRefresh.value++
-    }
-
-    // ★ ДОБАВЛЯЕМ: Flow для сгруппированных данных
-    private val _groupedByLocation = MutableStateFlow<List<LocationPhotoGroup>>(emptyList())
-    val groupedByLocation: StateFlow<List<LocationPhotoGroup>> = _groupedByLocation
-
-    // ★ ДОБАВЛЯЕМ: Состояние раскрытия/сворачивания групп
-    private val _expandedGroups = MutableStateFlow<Set<String>>(emptySet())
-    val expandedGroups: StateFlow<Set<String>> = _expandedGroups
-
-
-    init {
-        Timber.d("══════════════════════════════════════════")
-        Timber.d("${this::class.simpleName} СОЗДАН")
-        Timber.d("  HashCode: ${System.identityHashCode(this)}")
-        Timber.d("  Thread: ${Thread.currentThread().name}")
-
-        // Логирование загрузки данных
-        viewModelScope.launch {
-            devices.collect {
-                Timber.d("${this::class.simpleName}: devices loaded - ${it.size}")
-            }
-        }
-
-        viewModelScope.launch {
-            allLocations.collect {
-                Timber.d("${this::class.simpleName}: locations loaded - ${it.size}")
-            }
-        }
-
-        loadPhotos()
-
-        // ★ ОБНОВЛЯЕМ: группировка должна обновляться при изменении фильтров ИЛИ устройств
-        viewModelScope.launch {
-            // Объединяем потоки: устройства и фильтры
-            combine(
-                devices,
-                _selectedLocation,
-                _selectedDeviceId,
-                _searchQuery,
-                _sortBy
-            ) { deviceList, locationFilter, deviceFilter, _, _ ->
-                Triple(deviceList, locationFilter, deviceFilter)
-            }.collect { (deviceList, locationFilter, deviceFilter) ->
-                updateGroupedPhotos(deviceList)
-            }
-        }
+        _forceRefresh.update { it + 1 }
     }
 
     fun loadPhotos() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                error = null
-            )
-
-            try {
-                // Загрузка происходит автоматически через Flow
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    selectedDeviceId = _selectedDeviceId.value,
-                    selectedLocation = _selectedLocation.value, // ★ ДОБАВЛЕНО
-                    viewMode = _viewMode.value,
-                    isGridView = _viewMode.value == ViewMode.GRID
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Ошибка загрузки фото: ${e.message}"
-                )
-            }
-        }
+        forceLoadData()
     }
 
-    // ★ ИСПРАВЛЕННЫЙ: Метод для обновления сгруппированных данных с фильтрацией
-    private fun updateGroupedPhotos(deviceList: List<Device>) {
-        viewModelScope.launch {
-            val locationFilter = _selectedLocation.value
-            val deviceFilter = _selectedDeviceId.value
-
-            val filteredDevices = deviceList.filter { device ->
-                val matchesLocation = locationFilter == null || device.location == locationFilter
-                val matchesDevice = deviceFilter == null || device.id == deviceFilter
-                matchesLocation && matchesDevice
-            }
-
-            val groups = mutableMapOf<String, MutableList<PhotoItem>>()
-
-            filteredDevices.forEach { device ->
-                val location = device.location.ifEmpty { "Без локации" }
-                device.photos.forEach { fileName ->
-                    val fullPath = photoManager.getFullPhotoPath(device, fileName)
-                    if (fullPath != null && File(fullPath).exists()) {
-                        groups.getOrPut(location) { mutableListOf() }.add(
-                            PhotoItem(fileName = fileName, fullPath = fullPath, device = device)
-                        )
-                    }
-                }
-            }
-
-            val searchQuery = _searchQuery.value
-
-            val sortedGroups = groups.map { (location, photos) ->
-                LocationPhotoGroup(
-                    location = location,
-                    photos = photos.sortedByDescending { File(it.fullPath).lastModified() },
-                    isExpanded = _expandedGroups.value.contains(location)
-                )
-            }
-                .filter { group ->
-                    searchQuery.isBlank() || group.location.contains(searchQuery, ignoreCase = true)
-                }
-                .let { list ->
-                    when (_sortBy.value) {
-                        PhotosSortBy.NAME_ASC -> list.sortedBy { it.location }
-                        PhotosSortBy.NAME_DESC -> list.sortedByDescending { it.location }
-                    }
-                }
-
-            _groupedByLocation.value = sortedGroups
-        }
-    }
-
-    // ★ ДОБАВЛЯЕМ: Метод для переключения раскрытия группы
     fun toggleLocationGroup(location: String) {
-        val newExpanded = _expandedGroups.value.toMutableSet()
-        if (newExpanded.contains(location)) {
-            newExpanded.remove(location)
-        } else {
-            newExpanded.add(location)
+        _expandedGroups.update { current ->
+            if (current.contains(location)) current - location else current + location
         }
-        _expandedGroups.value = newExpanded
-
-        // Обновляем группы с новым состоянием
-        val updatedGroups = _groupedByLocation.value.map { group ->
-            if (group.location == location) {
-                group.copy(isExpanded = !group.isExpanded)
-            } else {
-                group
-            }
-        }
-        _groupedByLocation.value = updatedGroups
     }
 
-    // ★ ДОБАВЛЯЕМ: Метод для раскрытия/сворачивания всех групп
     fun toggleAllGroups(expand: Boolean) {
-        if (expand) {
-            // Раскрыть все
-            val allLocations = _groupedByLocation.value.map { it.location }.toSet()
-            _expandedGroups.value = allLocations
-
-            val updatedGroups = _groupedByLocation.value.map { group ->
-                group.copy(isExpanded = true)
-            }
-            _groupedByLocation.value = updatedGroups
-        } else {
-            // Свернуть все
-            _expandedGroups.value = emptySet()
-
-            val updatedGroups = _groupedByLocation.value.map { group ->
-                group.copy(isExpanded = false)
-            }
-            _groupedByLocation.value = updatedGroups
-        }
+        _expandedGroups.value = if (expand) allLocations.value.toSet() else emptySet()
     }
 
-    // ★ ДОБАВЛЕНО: фильтр по местоположению с логами
     fun selectLocation(location: String?) {
-        Timber.d("═══════════════════════════════════════")
-        Timber.d("ВЫБРАНА ЛОКАЦИЯ: $location")
-        Timber.d("  Было: ${_selectedLocation.value}")
-        Timber.d("  Стало: $location")
-        Timber.d("═══════════════════════════════════════")
-
         _selectedLocation.value = location
-        _uiState.value = _uiState.value.copy(
-            selectedLocation = location
-        )
     }
 
-    // ★ ИЗМЕНЕНО: переименовано для ясности с логами
     fun selectDevice(deviceId: Int?) {
-        Timber.d("═══════════════════════════════════════")
-        Timber.d("ВЫБРАНО УСТРОЙСТВО: $deviceId")
-        Timber.d("  Было: ${_selectedDeviceId.value}")
-        Timber.d("  Стало: $deviceId")
-        Timber.d("═══════════════════════════════════════")
-
         _selectedDeviceId.value = deviceId
-        _uiState.value = _uiState.value.copy(
-            selectedDeviceId = deviceId
-        )
     }
 
     fun toggleViewMode() {
-        val newMode = if (_viewMode.value == ViewMode.GRID) {
-            ViewMode.LIST
-        } else {
-            ViewMode.GRID
-        }
-
-        _viewMode.value = newMode
-        _uiState.value = _uiState.value.copy(
-            viewMode = newMode,
-            isGridView = newMode == ViewMode.GRID
-        )
+        _viewMode.update { if (it == ViewMode.GRID) ViewMode.LIST else ViewMode.GRID }
     }
 
     fun updateDisplayMode(mode: DisplayMode) {
-        _uiState.value = _uiState.value.copy(displayMode = mode)
+        _displayMode.value = mode
     }
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
     fun setSortBy(sortBy: PhotosSortBy) {
         _sortBy.value = sortBy
-        _uiState.value = _uiState.value.copy(sortBy = sortBy)
     }
 }
 

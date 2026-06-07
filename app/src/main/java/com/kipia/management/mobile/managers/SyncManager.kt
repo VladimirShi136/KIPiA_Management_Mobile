@@ -9,6 +9,7 @@ import com.kipia.management.mobile.data.database.AppDatabase
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.DeviceLocation
 import com.kipia.management.mobile.data.entities.Scheme
+import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +29,8 @@ class SyncManager @Inject constructor(
     private val deviceDao: DeviceDao,
     private val schemeDao: SchemeDao,
     private val deviceLocationDao: DeviceLocationDao,
-    private val photoManager: PhotoManager
+    private val photoManager: PhotoManager,
+    private val schemeSyncUseCase: SchemeSyncUseCase
 ) {
 
     companion object {
@@ -37,49 +39,47 @@ class SyncManager @Inject constructor(
         private const val TEMP_DIR = "sync_temp"
     }
 
-    // ─────────────────────────────────────────────
-    // ЭКСПОРТ
-    // ─────────────────────────────────────────────
+    data class ConflictInfo(
+        val type: String,
+        val key: String,
+        val local: Any,
+        val remote: Any,
+        val base: Any? = null
+    )
 
-    /**
-     * Экспортирует БД + фото в ZIP-файл по указанному Uri.
-     * Uri получается через ActivityResultLauncher (ACTION_CREATE_DOCUMENT) в ViewModel.
-     */
+    enum class ConflictResolution {
+        LOCAL, REMOTE, SKIP
+    }
+
     suspend fun exportToZip(outputUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // WAL checkpoint — сбрасываем все незафиксированные страницы в основной файл БД
-            // database.close() использовать нельзя: Room после этого не переоткрывается
-            database.openHelper.writableDatabase
-                .query("PRAGMA wal_checkpoint(FULL)", emptyArray())
-                .use { it.moveToFirst() }
+            val db = database.openHelper.writableDatabase
+            db.query("PRAGMA wal_checkpoint(TRUNCATE)", emptyArray()).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(0)
+                    Timber.d("SyncManager: WAL checkpoint status = $status")
+                }
+            }
 
             val dbFile = context.getDatabasePath(DB_NAME)
             val photosDir = photoManager.getBasePhotosDir()
 
+            if (!dbFile.exists()) return@withContext Result.failure(Exception("БД не найдена"))
+
             context.contentResolver.openOutputStream(outputUri)?.use { outStream ->
                 ZipOutputStream(outStream.buffered()).use { zip ->
+                    zip.putNextEntry(ZipEntry(DB_NAME))
+                    dbFile.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
 
-                    // 1. Добавляем файл БД
-                    if (dbFile.exists()) {
-                        zip.putNextEntry(ZipEntry(DB_NAME))
-                        dbFile.inputStream().use { it.copyTo(zip) }
-                        zip.closeEntry()
-                        Timber.d("SyncManager: добавлена БД ${dbFile.length()} байт")
-                    }
-
-                    // 2. Добавляем фото (сохраняем структуру папок)
                     if (photosDir.exists()) {
                         addDirToZip(zip, photosDir, PHOTOS_DIR)
-                        Timber.d("SyncManager: добавлена папка фото")
                     }
                 }
-            } ?: return@withContext Result.failure(Exception("Не удалось открыть выходной файл"))
+            } ?: return@withContext Result.failure(Exception("Ошибка открытия файла"))
 
-            Timber.d("SyncManager: экспорт завершён")
             Result.success(Unit)
-
         } catch (e: Exception) {
-            Timber.e(e, "SyncManager: ошибка экспорта")
             Result.failure(e)
         }
     }
@@ -87,8 +87,7 @@ class SyncManager @Inject constructor(
     private fun addDirToZip(zip: ZipOutputStream, dir: File, zipPath: String) {
         dir.walkTopDown().forEach { file ->
             if (file.isFile) {
-                val relativePath = "$zipPath/${file.relativeTo(dir).path}"
-                    .replace("\\", "/") // Windows-safe
+                val relativePath = "$zipPath/${file.relativeTo(dir).path}".replace("\\", "/")
                 zip.putNextEntry(ZipEntry(relativePath))
                 file.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
@@ -96,31 +95,20 @@ class SyncManager @Inject constructor(
         }
     }
 
-    // ─────────────────────────────────────────────
-    // ИМПОРТ
-    // ─────────────────────────────────────────────
-
-    /**
-     * Импортирует ZIP-файл: распаковывает во временную папку,
-     * делает merge БД и фото.
-     */
     suspend fun importFromZip(inputUri: Uri): Result<SyncStats> = withContext(Dispatchers.IO) {
         val tempDir = File(context.cacheDir, TEMP_DIR)
         try {
-            // Очищаем temp
             tempDir.deleteRecursively()
             tempDir.mkdirs()
 
-            // Распаковываем ZIP
             context.contentResolver.openInputStream(inputUri)?.use { inStream ->
                 ZipInputStream(inStream.buffered()).use { zip ->
                     var entry = zip.nextEntry
                     while (entry != null) {
                         val target = sanitizePath(tempDir, entry.name)
                         if (target != null) {
-                            if (entry.isDirectory) {
-                                target.mkdirs()
-                            } else {
+                            if (entry.isDirectory) target.mkdirs()
+                            else {
                                 target.parentFile?.mkdirs()
                                 FileOutputStream(target).use { zip.copyTo(it) }
                             }
@@ -129,322 +117,373 @@ class SyncManager @Inject constructor(
                         entry = zip.nextEntry
                     }
                 }
-            } ?: return@withContext Result.failure(Exception("Не удалось открыть ZIP-файл"))
+            } ?: return@withContext Result.failure(Exception("Ошибка открытия архива"))
 
-            // Merge
             val importedDb = File(tempDir, DB_NAME)
             val importedPhotos = File(tempDir, PHOTOS_DIR)
 
-            // Сначала merge БД — она определяет актуальный список фото для каждого устройства.
-            // mergePhotos вызывается после, чтобы знать какие файлы реально нужны.
-            val stats = mergeDatabase(importedDb)
-            mergePhotos(importedPhotos)
+            if (!importedDb.exists()) throw Exception("БД не найдена в архиве")
 
-            Timber.d("SyncManager: импорт завершён — $stats")
+            validateImportedSchema(importedDb)
+            val stats = performMerge(importedDb, importedPhotos)
+
+            // Обновляем метки синхронизации для всех успешно перенесенных данных, 
+            // даже если по другим элементам возникли конфликты.
+            updateLastSyncedTimestamps(stats)
+
             Result.success(stats)
-
         } catch (e: Exception) {
-            Timber.e(e, "SyncManager: ошибка импорта")
             Result.failure(e)
         } finally {
             tempDir.deleteRecursively()
         }
     }
 
-    /** Защита от Zip Slip: проверяем что target находится внутри destDir */
     private fun sanitizePath(destDir: File, entryName: String): File? {
         val target = File(destDir, entryName).canonicalFile
         return if (target.path.startsWith(destDir.canonicalPath)) target else null
     }
 
-    // ─────────────────────────────────────────────
-    // MERGE БД
-    // ─────────────────────────────────────────────
-
-    private suspend fun mergeDatabase(importedDbFile: File): SyncStats {
-        if (!importedDbFile.exists()) {
-            Timber.w("SyncManager: файл БД для импорта не найден")
-            return SyncStats()
-        }
-
-        // Читаем данные из импортируемой БД напрямую через SQLite
+    private suspend fun performMerge(importedDbFile: File, importedPhotosDir: File): SyncStats {
         val importedData = readImportedDatabase(importedDbFile)
+        val stats = SyncStats()
 
-        var devicesAdded = 0
-        var devicesUpdated = 0
-        var schemesAdded = 0
-        var schemesUpdated = 0
-        var locationsAdded = 0
+        val deviceIdMap = mutableMapOf<Int, Int>()
+        val schemeIdMap = mutableMapOf<Int, Int>()
 
-        // Карты перепривязки id: oldId (из импортируемой БД) → newId (в нашей БД)
-        // Нужны чтобы правильно вставить device_locations с корректными внешними ключами
-        val deviceIdMap = mutableMapOf<Int, Int>()  // importedDeviceId → localDeviceId
-        val schemeIdMap = mutableMapOf<Int, Int>()  // importedSchemeId → localSchemeId
-
-        // Merge devices — ключ: inventoryNumber
-        importedData.devices.forEach { importedDevice ->
-            val existing = deviceDao.getAllDevicesSync()
-                .find { it.inventoryNumber == importedDevice.inventoryNumber }
-
+        val localDevices = deviceDao.getAllDevicesForExport().associateBy { it.inventoryNumber }
+        
+        // 1. Сначала приборы
+        importedData.devices.forEach { imported ->
+            val existing = localDevices[imported.inventoryNumber]
             if (existing == null) {
-                val newId = deviceDao.insertDevice(importedDevice.copy(id = 0)).toInt()
-                deviceIdMap[importedDevice.id] = newId
-                devicesAdded++
+                if (!imported.isDeleted()) {
+                    val newId = deviceDao.insertDevice(imported.copy(id = 0, lastSyncedAt = 0)).toInt()
+                    deviceIdMap[imported.id] = newId
+                    stats.devicesAdded++
+                    stats.changedDevices.add(imported.copy(id = newId))
+                }
             } else {
-                deviceIdMap[importedDevice.id] = existing.id
-                if (importedDevice.updatedAt > existing.updatedAt) {
-                    // Физически удаляем файлы фото, которые были убраны на другой стороне.
-                    // Без этого шага удалённые на JavaFX (или другом Android) фото
-                    // навсегда оставались бы на диске в виде мусора.
-                    syncRemovedPhotos(existing, importedDevice)
+                deviceIdMap[imported.id] = existing.id
+                val localChanged = existing.updatedAt > existing.lastSyncedAt
+                val remoteChanged = imported.updatedAt > imported.lastSyncedAt
 
-                    deviceDao.updateDevice(importedDevice.copy(id = existing.id))
-                    devicesUpdated++
+                if (localChanged && remoteChanged) {
+                    if (!devicesEqual(existing, imported)) {
+                        stats.conflicts.add(ConflictInfo("device", imported.inventoryNumber, existing, imported))
+                    } else {
+                        stats.changedDevices.add(existing)
+                    }
+                } else if (remoteChanged) {
+                    syncRemovedPhotos(existing, imported)
+                    val toUpdate = imported.copy(id = existing.id)
+                    deviceDao.updateDevice(toUpdate)
+                    stats.devicesUpdated++
+                    stats.changedDevices.add(toUpdate)
+                } else {
+                    stats.changedDevices.add(existing)
                 }
             }
         }
 
-        // Merge schemes — ключ: name
-        importedData.schemes.forEach { importedScheme ->
-            val existing = schemeDao.getSchemeByName(importedScheme.name)
+        // 2. Затем схемы
+        val localSchemes = schemeDao.getAllSchemesForExport().associateBy { it.name }
 
+        importedData.schemes.forEach { imported ->
+            val existing = localSchemes[imported.name]
             if (existing == null) {
-                val newId = schemeDao.insertScheme(importedScheme.copy(id = 0)).toInt()
-                schemeIdMap[importedScheme.id] = newId
-                schemesAdded++
+                if (!imported.isDeleted()) {
+                    val fixed = fixSchemeDataIds(imported, deviceIdMap)
+                    val newId = schemeDao.insertScheme(fixed.copy(id = 0, lastSyncedAt = 0)).toInt()
+                    schemeIdMap[imported.id] = newId
+                    stats.schemesAdded++
+                    stats.changedSchemes.add(fixed.copy(id = newId))
+                }
             } else {
-                schemeIdMap[importedScheme.id] = existing.id
+                schemeIdMap[imported.id] = existing.id
+                val localChanged = existing.updatedAt > existing.lastSyncedAt
+                val remoteChanged = imported.updatedAt > imported.lastSyncedAt
 
-                val existingIsEmpty = existing.data.length <= 2 // "{}" = 2 символа
-                val importedHasData = importedScheme.data.length > 2
-
-                if (importedScheme.updatedAt > existing.updatedAt
-                    || (importedHasData && existingIsEmpty)) {
-                    schemeDao.updateScheme(importedScheme.copy(id = existing.id))
-                    schemesUpdated++
+                if (localChanged && remoteChanged) {
+                    if (!schemesEqual(existing, imported)) {
+                        stats.conflicts.add(ConflictInfo("scheme", imported.name, existing, imported))
+                    } else {
+                        stats.changedSchemes.add(existing)
+                    }
+                } else if (remoteChanged) {
+                    val fixed = fixSchemeDataIds(imported, deviceIdMap)
+                    val toUpdate = fixed.copy(id = existing.id)
+                    schemeDao.updateScheme(toUpdate)
+                    stats.schemesUpdated++
+                    stats.changedSchemes.add(toUpdate)
+                } else {
+                    stats.changedSchemes.add(existing)
                 }
             }
         }
 
-        // Merge device_locations — перепривязываем id через карты, добавляем только отсутствующие
-        importedData.locations.forEach { importedLocation ->
-            val localDeviceId = deviceIdMap[importedLocation.deviceId]
-            val localSchemeId = schemeIdMap[importedLocation.schemeId]
+        // 3. Локации
+        val remoteInvNumMap = importedData.devices.associate { it.id to it.inventoryNumber }
+        val remoteSchNameMap = importedData.schemes.associate { it.id to it.name }
 
-            if (localDeviceId == null || localSchemeId == null) {
-                Timber.w("SyncManager: пропущена локация — device ${importedLocation.deviceId} или scheme ${importedLocation.schemeId} не найдены в карте")
-                return@forEach
-            }
+        importedData.locations.forEach { imported ->
+            val localDeviceId = deviceIdMap[imported.deviceId] ?: return@forEach
+            val localSchemeId = schemeIdMap[imported.schemeId] ?: return@forEach
 
-            val existing = deviceLocationDao.getLocation(localDeviceId, localSchemeId)
+            val existing = deviceLocationDao.getAnyLocationSync(localDeviceId, localSchemeId)
             if (existing == null) {
-                deviceLocationDao.insertOrUpdateLocation(
-                    importedLocation.copy(deviceId = localDeviceId, schemeId = localSchemeId)
-                )
-                locationsAdded++
+                if (!imported.isDeleted()) {
+                    val toInsert = imported.copy(deviceId = localDeviceId, schemeId = localSchemeId, lastSyncedAt = 0)
+                    deviceLocationDao.insertOrUpdateLocation(toInsert)
+                    stats.locationsAdded++
+                    stats.changedLocations.add(toInsert)
+                }
+            } else {
+                val localChanged = existing.updatedAt > existing.lastSyncedAt
+                val remoteChanged = imported.updatedAt > imported.lastSyncedAt
+
+                if (localChanged && remoteChanged) {
+                    if (!locationsEqual(existing, imported)) {
+                        val invNum = remoteInvNumMap[imported.deviceId] ?: "unknown"
+                        val schName = remoteSchNameMap[imported.schemeId] ?: "unknown"
+                        stats.conflicts.add(ConflictInfo("location", "$invNum|$schName", existing, imported))
+                    } else {
+                        stats.changedLocations.add(existing)
+                    }
+                } else if (remoteChanged) {
+                    val toUpdate = imported.copy(deviceId = localDeviceId, schemeId = localSchemeId)
+                    deviceLocationDao.insertOrUpdateLocation(toUpdate)
+                    stats.locationsUpdated++
+                    stats.changedLocations.add(toUpdate)
+                } else {
+                    stats.changedLocations.add(existing)
+                }
             }
         }
 
-        Timber.d("SyncManager: merge завершён — +$devicesAdded dev, ~$devicesUpdated dev, +$schemesAdded sch, ~$schemesUpdated sch, +$locationsAdded loc")
-
-        return SyncStats(
-            devicesAdded = devicesAdded,
-            devicesUpdated = devicesUpdated,
-            schemesAdded = schemesAdded,
-            schemesUpdated = schemesUpdated,
-            locationsAdded = locationsAdded
-        )
+        // 4. Фотографии
+        stats.photosAdded = mergePhotos(importedPhotosDir)
+        updateDevicePhotosAfterImport(stats.changedDevices)
+        
+        // 5. Авто-создание схем для новых приборов
+        stats.changedDevices.filter { !it.isDeleted() }.forEach { device ->
+            schemeSyncUseCase.syncSchemeOnDeviceSave(device)
+        }
+        
+        return stats
     }
 
-    /**
-     * Удаляет физические файлы фото, которые присутствуют в [localDevice],
-     * но отсутствуют в [importedDevice].
-     *
-     * Вызывается перед обновлением записи в БД, когда импортируемая версия новее.
-     * Это единственное место, где файлы фото могут быть удалены при импорте —
-     * все остальные операции только добавляют файлы.
-     *
-     * Пример: на JavaFX удалили photo_2.jpg → в импортируемой БД его нет →
-     * здесь удаляем физический файл на Android, иначе он остался бы мусором на диске.
-     */
-    private fun syncRemovedPhotos(localDevice: Device, importedDevice: Device) {
-        val removedPhotos = localDevice.photos.toSet() - importedDevice.photos.toSet()
-        if (removedPhotos.isEmpty()) return
+    private fun fixSchemeDataIds(scheme: Scheme, deviceIdMap: Map<Int, Int>): Scheme {
+        val schemeData = scheme.getSchemeData()
+        val devices = schemeData.devices
+        if (devices.isEmpty()) return scheme
+        val updatedDevices = devices.map { sd ->
+            val localId = deviceIdMap[sd.deviceId]
+            if (localId != null) sd.copy(deviceId = localId) else sd
+        }
+        return scheme.setSchemeData(schemeData.copy(devices = updatedDevices))
+    }
 
-        // Используем location локального устройства: файлы лежат именно там.
-        // Если location тоже изменился — старые файлы всё равно удалятся корректно,
-        // т.к. мы ищем их по старому пути.
-        val locationDir = photoManager.getLocationDir(localDevice.location)
-
-        removedPhotos.forEach { fileName ->
-            val file = File(locationDir, fileName)
-            if (file.exists()) {
-                val deleted = file.delete()
-                Timber.d("SyncManager: удалён устаревший файл фото $fileName (deleted=$deleted)")
+    private suspend fun updateDevicePhotosAfterImport(devices: List<Device>) {
+        devices.forEach { device ->
+            val actualPhotos = device.photos.filter { photoName ->
+                File(photoManager.getLocationDir(device.location), photoName).exists()
+            }
+            if (actualPhotos.size != device.photos.size) {
+                deviceDao.updateDevice(device.copy(photos = actualPhotos))
             }
         }
+    }
 
-        // Если после удаления папка локации опустела — убираем и её
-        if (locationDir.exists() && locationDir.listFiles().isNullOrEmpty()) {
-            locationDir.delete()
-            Timber.d("SyncManager: удалена пустая папка локации ${locationDir.name}")
+    suspend fun applyConflictResolutions(
+        conflicts: List<ConflictInfo>,
+        resolutions: List<ConflictResolution>
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val stats = SyncStats()
+            conflicts.forEachIndexed { index, conflict ->
+                val resolution = resolutions.getOrNull(index) ?: ConflictResolution.SKIP
+                if (resolution == ConflictResolution.SKIP) return@forEachIndexed
+
+                when (conflict.type) {
+                    "device" -> {
+                        val local = conflict.local as Device
+                        val remote = conflict.remote as Device
+                        if (resolution == ConflictResolution.REMOTE) {
+                            syncRemovedPhotos(local, remote)
+                            val resolved = remote.copy(id = local.id)
+                            deviceDao.updateDevice(resolved)
+                            stats.changedDevices.add(resolved)
+                            schemeSyncUseCase.syncSchemeOnDeviceSave(resolved)
+                        } else stats.changedDevices.add(local)
+                    }
+                    "scheme" -> {
+                        val local = conflict.local as Scheme
+                        val remote = conflict.remote as Scheme
+                        if (resolution == ConflictResolution.REMOTE) {
+                            val resolved = remote.copy(id = local.id)
+                            schemeDao.updateScheme(resolved)
+                            stats.changedSchemes.add(resolved)
+                        } else stats.changedSchemes.add(local)
+                    }
+                    "location" -> {
+                        val local = conflict.local as DeviceLocation
+                        val remote = conflict.remote as DeviceLocation
+                        if (resolution == ConflictResolution.REMOTE) {
+                            val resolved = remote.copy(deviceId = local.deviceId, schemeId = local.schemeId)
+                            deviceLocationDao.insertOrUpdateLocation(resolved)
+                            stats.changedLocations.add(resolved)
+                        } else stats.changedLocations.add(local)
+                    }
+                }
+            }
+            updateLastSyncedTimestamps(stats)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
-    /**
-     * Читает данные из импортированной БД через прямой SQLite (android.database.sqlite).
-     * Room нельзя использовать для произвольного файла, поэтому используем низкоуровневый API.
-     */
+    private suspend fun updateLastSyncedTimestamps(stats: SyncStats) {
+        val now = System.currentTimeMillis()
+        stats.changedDevices.forEach { deviceDao.updateDevice(it.copy(lastSyncedAt = now)) }
+        stats.changedSchemes.forEach { schemeDao.updateScheme(it.copy(lastSyncedAt = now)) }
+        stats.changedLocations.forEach { deviceLocationDao.insertOrUpdateLocation(it.copy(lastSyncedAt = now)) }
+    }
+
+    private fun devicesEqual(a: Device, b: Device) =
+        a.type == b.type && a.name == b.name && a.inventoryNumber == b.inventoryNumber &&
+        a.location == b.location && a.status == b.status && a.photos == b.photos &&
+        a.deletedAt == b.deletedAt
+
+    private fun schemesEqual(a: Scheme, b: Scheme) =
+        a.name == b.name && a.data == b.data && a.deletedAt == b.deletedAt
+
+    private fun locationsEqual(a: DeviceLocation, b: DeviceLocation) =
+        a.x == b.x && a.y == b.y && a.rotation == b.rotation && a.deletedAt == b.deletedAt
+
+    private fun validateImportedSchema(dbFile: File) {
+        android.database.sqlite.SQLiteDatabase.openDatabase(
+            dbFile.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+        ).use { db ->
+            listOf("devices", "schemes", "device_locations").forEach { table ->
+                db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+                    val cols = mutableSetOf<String>()
+                    while (cursor.moveToNext()) cols.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                    if (!cols.contains("last_synced_at") || !cols.contains("updated_at") || !cols.contains("deleted_at")) {
+                        throw Exception("БД несовместима: $table")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun syncRemovedPhotos(local: Device, imported: Device) {
+        val removed = local.photos.toSet() - imported.photos.toSet()
+        val dir = photoManager.getLocationDir(local.location)
+        removed.forEach { File(dir, it).delete() }
+    }
+
     private fun readImportedDatabase(dbFile: File): ImportedData {
         val devices = mutableListOf<Device>()
         val schemes = mutableListOf<Scheme>()
         val locations = mutableListOf<DeviceLocation>()
-
-        val db = android.database.sqlite.SQLiteDatabase.openDatabase(
-            dbFile.absolutePath,
-            null,
-            android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-        )
-
+        val db = android.database.sqlite.SQLiteDatabase.openDatabase(dbFile.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
         db.use {
-            // Читаем devices
-            it.rawQuery("SELECT * FROM devices", null).use { cursor ->
-                while (cursor.moveToNext()) {
-                    try {
-                        val photosRaw = cursor.getString(cursor.getColumnIndexOrThrow("photos")) ?: ""
-                        val photos = photosRaw.split(";").filter { p -> p.isNotBlank() }
-
-                        devices.add(
-                            Device(
-                                id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
-                                type = cursor.getString(cursor.getColumnIndexOrThrow("type")) ?: "",
-                                name = cursor.getString(cursor.getColumnIndexOrThrow("name")),
-                                manufacturer = cursor.getString(cursor.getColumnIndexOrThrow("manufacturer")),
-                                inventoryNumber = cursor.getString(cursor.getColumnIndexOrThrow("inventory_number")) ?: "",
-                                year = cursor.getInt(cursor.getColumnIndexOrThrow("year")).takeIf { _ ->
-                                    !cursor.isNull(cursor.getColumnIndexOrThrow("year"))
-                                },
-                                measurementLimit = cursor.getString(cursor.getColumnIndexOrThrow("measurement_limit")),
-                                accuracyClass = cursor.getDouble(cursor.getColumnIndexOrThrow("accuracy_class")).takeIf { _ ->
-                                    !cursor.isNull(cursor.getColumnIndexOrThrow("accuracy_class"))
-                                },
-                                location = cursor.getString(cursor.getColumnIndexOrThrow("location")) ?: "",
-                                valveNumber = cursor.getString(cursor.getColumnIndexOrThrow("valve_number")),
-                                status = cursor.getString(cursor.getColumnIndexOrThrow("status")) ?: "В работе",
-                                additionalInfo = cursor.getString(cursor.getColumnIndexOrThrow("additional_info")),
-                                photos = photos,
-                                updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"))
-                            )
-                        )
-                    } catch (e: Exception) {
-                        Timber.w(e, "SyncManager: пропущена запись devices")
-                    }
+            it.rawQuery("SELECT * FROM devices", null).use { c ->
+                while (c.moveToNext()) {
+                    devices.add(Device(
+                        id = c.getInt(c.getColumnIndexOrThrow("id")),
+                        type = c.getString(c.getColumnIndexOrThrow("type")) ?: "",
+                        name = c.getString(c.getColumnIndexOrThrow("name")),
+                        manufacturer = c.getString(c.getColumnIndexOrThrow("manufacturer")),
+                        inventoryNumber = c.getString(c.getColumnIndexOrThrow("inventory_number")) ?: "",
+                        year = if (c.isNull(c.getColumnIndexOrThrow("year"))) null else c.getInt(c.getColumnIndexOrThrow("year")),
+                        measurementLimit = c.getString(c.getColumnIndexOrThrow("measurement_limit")),
+                        accuracyClass = if (c.isNull(c.getColumnIndexOrThrow("accuracy_class"))) null else c.getDouble(c.getColumnIndexOrThrow("accuracy_class")),
+                        location = c.getString(c.getColumnIndexOrThrow("location")) ?: "",
+                        valveNumber = c.getString(c.getColumnIndexOrThrow("valve_number")),
+                        status = c.getString(c.getColumnIndexOrThrow("status")) ?: "В работе",
+                        additionalInfo = c.getString(c.getColumnIndexOrThrow("additional_info")),
+                        photos = (c.getString(c.getColumnIndexOrThrow("photos")) ?: "").split(";").filter { it.isNotBlank() },
+                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+                    ))
                 }
             }
-
-            // Читаем schemes
-            it.rawQuery("SELECT * FROM schemes", null).use { cursor ->
-                while (cursor.moveToNext()) {
-                    try {
-                        schemes.add(
-                            Scheme(
-                                id = cursor.getInt(cursor.getColumnIndexOrThrow("id")),
-                                name = cursor.getString(cursor.getColumnIndexOrThrow("name")) ?: "",
-                                description = cursor.getString(cursor.getColumnIndexOrThrow("description")),
-                                data = cursor.getString(cursor.getColumnIndexOrThrow("data")) ?: "{}",
-                                updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"))
-                            )
-                        )
-                    } catch (e: Exception) {
-                        Timber.w(e, "SyncManager: пропущена запись schemes")
-                    }
+            it.rawQuery("SELECT * FROM schemes", null).use { c ->
+                while (c.moveToNext()) {
+                    schemes.add(Scheme(
+                        id = c.getInt(c.getColumnIndexOrThrow("id")),
+                        name = c.getString(c.getColumnIndexOrThrow("name")) ?: "",
+                        description = c.getString(c.getColumnIndexOrThrow("description")),
+                        data = c.getString(c.getColumnIndexOrThrow("data")) ?: "{}",
+                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+                    ))
                 }
             }
-
-            // Читаем device_locations
-            it.rawQuery("SELECT * FROM device_locations", null).use { cursor ->
-                while (cursor.moveToNext()) {
-                    try {
-                        locations.add(
-                            DeviceLocation(
-                                deviceId = cursor.getInt(cursor.getColumnIndexOrThrow("device_id")),
-                                schemeId = cursor.getInt(cursor.getColumnIndexOrThrow("scheme_id")),
-                                x = cursor.getFloat(cursor.getColumnIndexOrThrow("x")),
-                                y = cursor.getFloat(cursor.getColumnIndexOrThrow("y")),
-                                rotation = cursor.getFloat(cursor.getColumnIndexOrThrow("rotation"))
-                            )
-                        )
-                    } catch (e: Exception) {
-                        Timber.w(e, "SyncManager: пропущена запись device_locations")
-                    }
+            it.rawQuery("SELECT * FROM device_locations", null).use { c ->
+                while (c.moveToNext()) {
+                    locations.add(DeviceLocation(
+                        deviceId = c.getInt(c.getColumnIndexOrThrow("device_id")),
+                        schemeId = c.getInt(c.getColumnIndexOrThrow("scheme_id")),
+                        x = c.getDouble(c.getColumnIndexOrThrow("x")),
+                        y = c.getDouble(c.getColumnIndexOrThrow("y")),
+                        rotation = c.getDouble(c.getColumnIndexOrThrow("rotation")),
+                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+                    ))
                 }
             }
         }
-
-        Timber.d("SyncManager: прочитано из импортируемой БД — ${devices.size} устройств, ${schemes.size} схем, ${locations.size} локаций")
         return ImportedData(devices, schemes, locations)
     }
 
-    // ─────────────────────────────────────────────
-    // MERGE ФОТО
-    // ─────────────────────────────────────────────
-
-    /**
-     * Копирует фото из импортируемого архива в локальное хранилище.
-     *
-     * Логика намеренно только аддитивная (не удаляет существующие файлы):
-     * удаление устаревших файлов выполняется ранее в [syncRemovedPhotos],
-     * до того как запись устройства обновляется в БД.
-     *
-     * Файл пропускается если уже существует локально — это предотвращает
-     * перезапись более свежей локальной версии устаревшей из архива.
-     */
-    private fun mergePhotos(importedPhotosDir: File) {
-        if (!importedPhotosDir.exists()) return
-
-        val targetBase = photoManager.getBasePhotosDir()
-
-        importedPhotosDir.walkTopDown().forEach { srcFile ->
-            if (srcFile.isFile) {
-                val relative = srcFile.relativeTo(importedPhotosDir)
-                val destFile = File(targetBase, relative.path)
-
-                if (!destFile.exists()) {
-                    destFile.parentFile?.mkdirs()
-                    srcFile.copyTo(destFile)
-                    Timber.d("SyncManager: скопировано фото ${relative.path}")
+    private fun mergePhotos(dir: File): Int {
+        if (!dir.exists()) return 0
+        var count = 0
+        val target = photoManager.getBasePhotosDir()
+        dir.walkTopDown().forEach { file ->
+            if (file.isFile) {
+                val dest = File(target, file.relativeTo(dir).path)
+                if (!dest.exists()) {
+                    dest.parentFile?.mkdirs()
+                    file.copyTo(dest)
+                    count++
                 }
             }
         }
+        return count
     }
 
-    // ─────────────────────────────────────────────
-    // DATA CLASSES
-    // ─────────────────────────────────────────────
-
-    private data class ImportedData(
-        val devices: List<Device>,
-        val schemes: List<Scheme>,
-        val locations: List<DeviceLocation>
-    )
+    private data class ImportedData(val devices: List<Device>, val schemes: List<Scheme>, val locations: List<DeviceLocation>)
 
     data class SyncStats(
-        val devicesAdded: Int = 0,
-        val devicesUpdated: Int = 0,
-        val schemesAdded: Int = 0,
-        val schemesUpdated: Int = 0,
-        val locationsAdded: Int = 0
+        var devicesAdded: Int = 0, var devicesUpdated: Int = 0,
+        var schemesAdded: Int = 0, var schemesUpdated: Int = 0,
+        var locationsAdded: Int = 0, var locationsUpdated: Int = 0,
+        var photosAdded: Int = 0,
+        val changedDevices: MutableList<Device> = mutableListOf(),
+        val changedSchemes: MutableList<Scheme> = mutableListOf(),
+        val changedLocations: MutableList<DeviceLocation> = mutableListOf(),
+        val conflicts: MutableList<ConflictInfo> = mutableListOf()
     ) {
-        fun isEmpty() = devicesAdded == 0 && devicesUpdated == 0 &&
-                schemesAdded == 0 && schemesUpdated == 0 && locationsAdded == 0
+        fun isEmpty() = devicesAdded == 0 && devicesUpdated == 0 && schemesAdded == 0 &&
+                schemesUpdated == 0 && locationsAdded == 0 && locationsUpdated == 0 && photosAdded == 0 && conflicts.isEmpty()
 
         fun toSummary(): String = buildString {
-            if (devicesAdded > 0) appendLine("• Устройств добавлено: $devicesAdded")
-            if (devicesUpdated > 0) appendLine("• Устройств обновлено: $devicesUpdated")
-            if (schemesAdded > 0) appendLine("• Схем добавлено: $schemesAdded")
-            if (schemesUpdated > 0) appendLine("• Схем обновлено: $schemesUpdated")
-            if (locationsAdded > 0) appendLine("• Размещений добавлено: $locationsAdded")
-            if (isEmpty()) append("Новых данных не найдено")
+            if (devicesAdded > 0) appendLine("• Добавлено приборов: $devicesAdded")
+            if (devicesUpdated > 0) appendLine("• Обновлено приборов: $devicesUpdated")
+            if (schemesAdded > 0) appendLine("• Добавлено схем: $schemesAdded")
+            if (schemesUpdated > 0) appendLine("• Обновлено схем: $schemesUpdated")
+            if (locationsAdded > 0) appendLine("• Добавлено позиций: $locationsAdded")
+            if (locationsUpdated > 0) appendLine("• Обновлено позиций: $locationsUpdated")
+            if (photosAdded > 0) appendLine("• Добавлено фото: $photosAdded")
+            if (isEmpty()) append("Изменений нет")
         }.trimEnd()
     }
 }

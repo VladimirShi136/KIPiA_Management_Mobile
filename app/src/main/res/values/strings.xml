@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Учет приборов КИПиА</string>
+    <string name="app_name">Учет приборов</string>
 
     <!-- Навигация -->
     <string name="title_devices">Приборы</string>

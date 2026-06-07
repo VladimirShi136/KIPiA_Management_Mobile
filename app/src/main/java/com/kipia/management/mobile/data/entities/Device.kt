@@ -3,15 +3,20 @@ package com.kipia.management.mobile.data.entities
 import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 
 
 /**
- * Модель устройства
+ * Модель устройства.
+ * inventory_number является уникальным ключом для синхронизации.
  */
 @Immutable
-@Entity(tableName = "devices")
+@Entity(
+    tableName = "devices",
+    indices = [Index(value = ["inventory_number"], unique = true)]
+)
 data class Device(
     // идентификатор
     @PrimaryKey(autoGenerate = true)
@@ -65,10 +70,15 @@ data class Device(
     val photos: List<String> = emptyList(),
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis()  // timestamp в миллисекундах
+    val updatedAt: Long = System.currentTimeMillis(),  // timestamp в миллисекундах
+
+    @ColumnInfo(name = "last_synced_at")
+    val lastSyncedAt: Long = 0, // время последней успешной синхронизации
+
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long = 0 // 0 если активен, >0 если удален
 ) {
     companion object {
-        // Статусы из единого источника
         val STATUSES = DeviceStatus.ALL_STATUSES
 
         fun createEmpty(): Device = Device(
@@ -87,20 +97,26 @@ data class Device(
         )
     }
 
+    fun isDeleted(): Boolean = deletedAt > 0
+
     fun getDisplayName(): String {
         return name ?: "$type №$inventoryNumber"
     }
 
     fun addPhoto(fileName: String): Device {
-        return this.copy(photos = photos + fileName)
+        return this.copy(photos = photos + fileName).withUpdatedNow()
     }
 
     fun removePhoto(fileName: String): Device {
-        return this.copy(photos = photos - fileName)
+        return this.copy(photos = photos - fileName).withUpdatedNow()
     }
 
-    // метод для обновления времени
     fun withUpdatedNow(): Device {
         return this.copy(updatedAt = System.currentTimeMillis())
+    }
+
+    fun asDeleted(): Device {
+        val now = System.currentTimeMillis()
+        return this.copy(updatedAt = now, deletedAt = now)
     }
 }

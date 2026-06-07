@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.RotateLeft
 import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
@@ -29,17 +31,21 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun FullScreenPhotoScreen(
-    photoPath: String,
+    initialPhotoPath: String,
+    photos: List<String>,
+    initialIndex: Int,
     device: Device,
     onNavigateBack: () -> Unit,
     viewModel: PhotoDetailViewModel,
     topAppBarController: TopAppBarController
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val currentPhotoPath = uiState.currentPhotoPath ?: photoPath
+    var currentIndex by remember { mutableIntStateOf(initialIndex) }
+    
+    val currentPhotoPath = uiState.currentPhotoPath ?: photos[currentIndex]
     val coroutineScope = rememberCoroutineScope()
 
-    val fileName = remember(photoPath) { File(photoPath).name }
+    val fileName = remember(currentPhotoPath) { File(currentPhotoPath).name }
 
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
@@ -52,7 +58,14 @@ fun FullScreenPhotoScreen(
         viewModel.setCurrentDevice(device)
     }
 
-    // Передаём onDeletePhotoClick как открытие диалога — сам диалог живёт здесь
+    // Сбрасываем трансформации и состояние во ViewModel при смене фото
+    LaunchedEffect(currentIndex) {
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
+        viewModel.resetPhotoState(photos[currentIndex])
+    }
+
     LaunchedEffect(device, fileName, currentPhotoPath, uiState.rotationDegrees) {
         topAppBarController.setForScreen(
             "fullscreen_photo",
@@ -62,12 +75,11 @@ fun FullScreenPhotoScreen(
                 "photoFileName" to fileName,
                 "photoFilePath" to currentPhotoPath,
                 "onBackClick" to onNavigateBack,
-                "onDeletePhotoClick" to { showDeleteDialog = true }  // ← только открываем диалог
+                "onDeletePhotoClick" to { showDeleteDialog = true }
             )
         )
     }
 
-    // Диалог удаления фото — общий стиль
     if (showDeleteDialog) {
         DeleteConfirmDialog(
             title = "Удалить фото?",
@@ -77,7 +89,11 @@ fun FullScreenPhotoScreen(
                 showDeleteDialog = false
                 coroutineScope.launch {
                     val success = viewModel.deletePhoto(fileName)
-                    if (success) onNavigateBack()
+                    if (success) {
+                        // После удаления возвращаемся назад, так как список photos в этом компоненте неизменяемый
+                        // и требует обновления через DeviceDetailViewModel
+                        onNavigateBack()
+                    }
                 }
             },
             onDismiss = { showDeleteDialog = false }
@@ -89,6 +105,7 @@ fun FullScreenPhotoScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // Основное изображение
         Image(
             painter = rememberAsyncImagePainter(model = currentPhotoPath),
             contentDescription = "Фото прибора",
@@ -102,7 +119,7 @@ fun FullScreenPhotoScreen(
                     translationX = offsetX
                     translationY = offsetY
                 }
-                .pointerInput(Unit) {
+                .pointerInput(currentIndex) {
                     detectTransformGestures { _, pan, gestureZoom, _ ->
                         scale = (scale * gestureZoom).coerceIn(0.5f, 5f)
                         offsetX += pan.x
@@ -122,6 +139,58 @@ fun FullScreenPhotoScreen(
             )
         }
 
+        // Кнопки навигации (плавающие по бокам, в стиле FAB)
+        if (photos.size > 1) {
+            // Кнопка ВЛЕВО
+            if (currentIndex > 0) {
+                FloatingActionButton(
+                    onClick = { currentIndex-- },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp)
+                        .size(48.dp),
+                    elevation = FloatingActionButtonDefaults.loweredElevation()
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Предыдущее фото")
+                }
+            }
+
+            // Кнопка ВПРАВО
+            if (currentIndex < photos.size - 1) {
+                FloatingActionButton(
+                    onClick = { currentIndex++ },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                        .size(48.dp),
+                    elevation = FloatingActionButtonDefaults.loweredElevation()
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Следующее фото")
+                }
+            }
+            
+            // Индикатор текущей позиции (сверху по центру)
+            Surface(
+                color = Color.Black.copy(alpha = 0.4f),
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+            ) {
+                Text(
+                    text = "${currentIndex + 1} / ${photos.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        // Нижняя панель управления (поворот и сброс)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -137,15 +206,21 @@ fun FullScreenPhotoScreen(
                 Icon(Icons.AutoMirrored.Filled.RotateLeft, contentDescription = "Повернуть влево")
             }
 
+            // Кнопка сброса масштаба (появляется только при изменениях)
             if (isTransformed) {
                 FloatingActionButton(
-                    onClick = { scale = 1f; offsetX = 0f; offsetY = 0f },
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    onClick = { 
+                        scale = 1f
+                        offsetX = 0f
+                        offsetY = 0f
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(Dimens.fabSizeLarge)
                 ) {
-                    Icon(Icons.Default.RestartAlt, contentDescription = "Сбросить")
+                    Icon(Icons.Default.RestartAlt, contentDescription = "Сбросить масштаб")
                 }
             } else {
+                // Пустое место для сохранения симметрии
                 Spacer(modifier = Modifier.size(Dimens.fabSizeLarge))
             }
 

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,10 +50,8 @@ fun SchemesScreen(
     val schemesWithStatus by viewModel.getSchemesWithStatus()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
-    val context = LocalContext.current
 
     var showDeleteDialog by remember { mutableStateOf<Scheme?>(null) }
     var showError by remember { mutableStateOf<String?>(null) }
@@ -66,7 +65,6 @@ fun SchemesScreen(
     }
 
     LaunchedEffect(shouldShowBottomNav) {
-        Timber.d("SchemesScreen: BottomNav видимость = $shouldShowBottomNav")
         updateBottomNavVisibility(shouldShowBottomNav)
     }
 
@@ -83,27 +81,7 @@ fun SchemesScreen(
         })
     }
 
-    LaunchedEffect(Unit) {
-        notificationManager.notification.collect { notification ->
-            if (notification is NotificationManager.Notification.None) return@collect
-
-            val message = when (notification) {
-                is NotificationManager.Notification.SchemeSaved ->
-                    "Схема '${notification.schemeName}' сохранена"
-                is NotificationManager.Notification.Error ->
-                    "Ошибка: ${notification.message}"
-                else -> null
-            }
-
-            if (message != null) {
-                scope.launch {
-                    snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
-                    delay(100)
-                    notificationManager.clearLastNotification()
-                }
-            }
-        }
-    }
+    // Уведомления теперь обрабатываются глобально в MainActivity
 
     val scrollToTop: () -> Unit = {
         scope.launch { scrollState.animateScrollToItem(0) }
@@ -130,7 +108,7 @@ fun SchemesScreen(
 
             when {
                 uiState.isLoading -> LoadingState()
-                schemesWithStatus.isEmpty() -> EmptySchemesState(modifier = Modifier.fillMaxSize())
+                schemesWithStatus.isEmpty() -> EmptySchemesState(modifier = Modifier.weight(1f))
                 else -> SchemesList(
                     schemesWithStatus = schemesWithStatus,
                     scrollState = scrollState,
@@ -176,14 +154,6 @@ fun SchemesScreen(
                 }
             }
         }
-
-        // Snackbar
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = Dimens.spacingLarge)
-        )
 
         // Диалог удаления
         showDeleteDialog?.let { scheme ->
@@ -361,14 +331,15 @@ fun SchemeCard(
                 color = subtitleColor
             )
 
-            schemeData.backgroundImage?.let { backgroundImage ->
+            val bgImage = schemeData.backgroundImage
+            if (bgImage != null) {
                 Spacer(modifier = Modifier.height(Dimens.cardPadding))
                 Card(
                     modifier = Modifier.fillMaxWidth().height(100.dp),
                     shape = RoundedCornerShape(Dimens.chipRadius)
                 ) {
                     AsyncImage(
-                        model = backgroundImage,
+                        model = bgImage,
                         contentDescription = "Фон схемы",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -397,34 +368,40 @@ fun LoadingState() {
 fun EmptySchemesState(
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(Dimens.spacingXXLarge),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            Icons.Default.GridOn,
-            contentDescription = "Нет схем",
-            modifier = Modifier.size(Dimens.iconSizeXXLarge + Dimens.iconSizeXLarge),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.GridOn,
+                contentDescription = null,
+                modifier = Modifier.size(Dimens.iconSizeXXLarge),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
 
-        Spacer(modifier = Modifier.height(Dimens.spacingXLarge))
+            Spacer(modifier = Modifier.height(Dimens.spacingLarge))
 
-        Text(
-            text = "Нет схем",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            Text(
+                text = "Нет схем",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-        Spacer(modifier = Modifier.height(Dimens.spacingMedium))
+            Spacer(modifier = Modifier.height(Dimens.spacingMedium))
 
-        Text(
-            text = "Схемы создаются автоматически на основе мест установки приборов.\nДобавьте прибор с новой локацией, чтобы создать схему.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
+            Text(
+                text = "Схемы создаются автоматически на основе мест установки приборов.\nДобавьте прибор с новой локацией, чтобы создать схему.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
