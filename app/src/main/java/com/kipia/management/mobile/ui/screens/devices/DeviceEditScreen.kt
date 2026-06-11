@@ -220,7 +220,8 @@ fun DeviceEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            viewModel = viewModel
         )
 
         SavingOverlay(
@@ -353,7 +354,7 @@ fun DeviceEditForm(
     ) {
         DeviceEditSectionTitle("Основная информация")
         DeviceTextField(value = typeText, onValueChange = { typeText = it; onTypeChanged(it) }, label = "Тип прибора *", placeholder = "Например: Манометр", isError = uiState.typeError != null, errorText = uiState.typeError)
-        DeviceTextField(value = nameText, onValueChange = { nameText = it; onNameChanged(it) }, label = "Наименование")
+        DeviceTextField(value = nameText, onValueChange = { nameText = it; onNameChanged(it) }, label = "Модель *", isError = uiState.nameError != null, errorText = uiState.nameError)
         DeviceTextField(value = manufacturerText, onValueChange = { manufacturerText = it; onManufacturerChanged(it) }, label = "Производитель")
         DeviceTextField(value = inventoryNumberText, onValueChange = { inventoryNumberText = it; onInventoryNumberChanged(it) }, label = "Инвентарный номер *", isError = uiState.inventoryNumberError != null, errorText = uiState.inventoryNumberError)
         DeviceTextField(value = yearText, onValueChange = { yearText = it; onYearChanged(it) }, label = "Год выпуска", keyboardType = KeyboardType.Number)
@@ -436,6 +437,7 @@ private fun ValidationErrorsCard(errors: List<String>) {
                 text = "Заполните обязательные поля: " + errors.joinToString(", ") { field ->
                     when (field) {
                         "type" -> "Тип прибора"
+                        "name" -> "Модель"
                         "inventoryNumber" -> "Инвентарный номер"
                         "location" -> "Место установки"
                         "status" -> "Статус"

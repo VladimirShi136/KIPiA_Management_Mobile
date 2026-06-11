@@ -43,6 +43,7 @@ import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.components.stats.StatCard
 import com.kipia.management.mobile.ui.components.stats.StatGroup
 import com.kipia.management.mobile.ui.components.stats.StatItemData
+import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
 import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.viewmodel.LocationPhotoGroup
@@ -87,10 +88,13 @@ fun PhotosScreen(
         isGroupedMode,
         isListViewMode,
         photos,
-        groupedByLocation
+        groupedByLocation,
+        uiState.isLoading
     ) {
         derivedStateOf {
-            // Если контента нет — навигация всегда видна
+            // Если идет загрузка или контента нет — навигация всегда видна
+            if (uiState.isLoading) return@derivedStateOf true
+            
             val isEmpty = if (isGroupedMode) groupedByLocation.isEmpty() else photos.isEmpty()
             if (isEmpty) return@derivedStateOf true
 
@@ -115,8 +119,16 @@ fun PhotosScreen(
         }
     }
 
+    // Запускаем индикацию при каждом входе
     LaunchedEffect(Unit) {
-        viewModel.forceLoadData()
+        viewModel.refreshData()
+    }
+
+    // При уходе с экрана взводим загрузку для следующего входа
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetLoadingState()
+        }
     }
 
     LaunchedEffect(shouldShowBottomNav) {
@@ -124,9 +136,9 @@ fun PhotosScreen(
     }
 
     // Кнопка появляется только если есть контент И мы проскроллили вниз
-    val showScrollToTopButton by remember(shouldShowBottomNav, photos, groupedByLocation) {
+    val showScrollToTopButton by remember(shouldShowBottomNav, photos, groupedByLocation, uiState.isLoading) {
         derivedStateOf { 
-            !shouldShowBottomNav && (photos.isNotEmpty() || groupedByLocation.isNotEmpty())
+            !uiState.isLoading && !shouldShowBottomNav && (photos.isNotEmpty() || groupedByLocation.isNotEmpty())
         }
     }
 
@@ -185,11 +197,12 @@ fun PhotosScreen(
                     .padding(bottom = Dimens.spacingMedium)
             )
 
-            // ГАЛЕРЕЯ (используем Box с weight(1f) чтобы контент не пропадал)
+            // ГАЛЕРЕЯ
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     uiState.isLoading -> {
-                        PhotosLoadingState(modifier = Modifier.fillMaxSize())
+                        // Скрываем контент во время загрузки (аналогично отчетам)
+                        Spacer(modifier = Modifier.fillMaxSize())
                     }
 
                     uiState.error != null -> {
@@ -286,6 +299,12 @@ fun PhotosScreen(
                 }
             }
         }
+
+        // Глобальный индикатор загрузки
+        LoadingOverlay(
+            isLoading = uiState.isLoading,
+            text = "Загрузка фотографий..."
+        )
     }
 }
 
@@ -524,11 +543,6 @@ fun PhotoStatistics(totalStats: PhotoStats, filteredStats: PhotoStats, modifier:
         )
     )
     StatCard(groups = if (hasFilter) listOf(totalGroup, filteredGroup) else listOf(totalGroup), modifier = modifier)
-}
-
-@Composable
-fun PhotosLoadingState(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
 
 @Composable

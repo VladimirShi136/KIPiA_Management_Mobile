@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.ErrorDialog
+import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
 import com.kipia.management.mobile.ui.components.scheme.SchemesActiveFiltersBadge
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.Dimens
@@ -50,6 +51,7 @@ fun SchemesScreen(
     val schemesWithStatus by viewModel.getSchemesWithStatus()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
 
@@ -61,6 +63,16 @@ fun SchemesScreen(
             with(scrollState) {
                 firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshData()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetLoadingState()
         }
     }
 
@@ -80,8 +92,6 @@ fun SchemesScreen(
             put("onResetAllFilters", { viewModel.resetAllFilters() })
         })
     }
-
-    // Уведомления теперь обрабатываются глобально в MainActivity
 
     val scrollToTop: () -> Unit = {
         scope.launch { scrollState.animateScrollToItem(0) }
@@ -106,10 +116,13 @@ fun SchemesScreen(
                     .padding(horizontal = Dimens.screenPadding, vertical = Dimens.screenPadding)
             )
 
-            when {
-                uiState.isLoading -> LoadingState()
-                schemesWithStatus.isEmpty() -> EmptySchemesState(modifier = Modifier.weight(1f))
-                else -> SchemesList(
+            // Логика отображения: если загрузка - скрываем список
+            if (isLoading) {
+                Spacer(modifier = Modifier.weight(1f))
+            } else if (schemesWithStatus.isEmpty()) {
+                EmptySchemesState(modifier = Modifier.weight(1f))
+            } else {
+                SchemesList(
                     schemesWithStatus = schemesWithStatus,
                     scrollState = scrollState,
                     onSchemeClick = { scheme -> onNavigateToSchemeEditor(scheme.id) },
@@ -126,7 +139,7 @@ fun SchemesScreen(
             }
         }
 
-        // ── FAB-кнопки (наверх + добавить) ───────────────────────────────────
+        // ── FAB-кнопки (наверх) ───────────────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -183,6 +196,12 @@ fun SchemesScreen(
                 onDismiss = { showError = null }
             )
         }
+
+        // Глобальный индикатор загрузки
+        LoadingOverlay(
+            isLoading = isLoading,
+            text = "Загрузка схем..."
+        )
     }
 }
 
@@ -346,20 +365,6 @@ fun SchemeCard(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun LoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(Dimens.spacingLarge))
-            Text("Загрузка схем...")
         }
     }
 }

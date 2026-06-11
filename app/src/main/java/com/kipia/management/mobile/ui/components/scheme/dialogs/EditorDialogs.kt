@@ -114,7 +114,7 @@ fun AddDeviceToSchemeDialog(
             } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.fillMaxWidth().padding(bottom = Dimens.spacingSmall)) {
-                        Text("Наименование", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+                        Text("Модель", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
                         Text("Инв. №", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(100.dp), color = MaterialTheme.colorScheme.primary)
                     }
                     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {

@@ -15,8 +15,9 @@ if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
 
-val vCode = localProperties.getProperty("app.version.code")?.toInt() ?: 1
-val vName = localProperties.getProperty("app.version.name") ?: "1.0"
+// Устанавливаем версию 1.0.2 по умолчанию
+val vCode = localProperties.getProperty("app.version.code")?.toInt() ?: 3
+val vName = localProperties.getProperty("app.version.name") ?: "1.0.2"
 
 android {
     namespace = "com.kipia.management.mobile"

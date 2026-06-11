@@ -34,6 +34,7 @@ import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.DeviceDeleteWithSchemeDialog
 import com.kipia.management.mobile.ui.components.dialogs.DeviceDeleteConfirmDialog
+import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.ui.theme.Dimens
@@ -65,6 +66,18 @@ fun DevicesScreen(
     val scope = rememberCoroutineScope()
     val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
     val verticalScrollState = rememberLazyListState()
+
+    // Запускаем индикацию при каждом входе на экран
+    LaunchedEffect(Unit) {
+        viewModel.refreshData()
+    }
+
+    // При уходе с экрана взводим загрузку для следующего входа
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetLoadingState()
+        }
+    }
 
     // ── Видимость BottomNav ───────────────────────────────────────────────────
 
@@ -126,10 +139,13 @@ fun DevicesScreen(
                 )
             }
 
-            when {
-                uiState.isLoading -> LoadingState()
-                devices.isEmpty() -> EmptyDevicesState()
-                else -> DeviceTableWithScroll(
+            // Логика как в отчетах: если грузимся - показываем пустоту
+            if (uiState.isLoading) {
+                Spacer(modifier = Modifier.weight(1f))
+            } else if (devices.isEmpty()) {
+                EmptyDevicesState()
+            } else {
+                DeviceTableWithScroll(
                     devices = devices,
                     searchQuery = uiState.searchQuery,
                     sortColumn = uiState.sortColumn,
@@ -213,6 +229,12 @@ fun DevicesScreen(
                 }
             )
         }
+
+        // Глобальный индикатор загрузки
+        LoadingOverlay(
+            isLoading = uiState.isLoading,
+            text = "Загрузка приборов..."
+        )
     }
 }
 
@@ -473,17 +495,6 @@ private fun buildActiveFiltersText(searchQuery: String, locationFilter: String?,
         if (statusFilter != null) add("Статус: $statusFilter")
     }
     return if (filters.isEmpty()) "Нет активных фильтров" else "Фильтры: ${filters.joinToString(", ")}"
-}
-
-@Composable
-fun LoadingState() {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 3.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Загрузка приборов...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
 }
 
 @Composable

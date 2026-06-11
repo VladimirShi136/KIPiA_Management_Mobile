@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.screens.reports.models.*
 import com.kipia.management.mobile.ui.theme.Dimens
@@ -86,40 +87,42 @@ private fun ReportsListContent(
     onClearFilter: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (summaryReport == null && !isLoading) {
+                EmptyReportsPlaceholder(
+                    onRefresh = onRefresh,
+                    hasFilter = !filter.isEmpty,
+                    onClearFilter = onClearFilter
+                )
+            } else if (summaryReport != null) {
+                // Активные фильтры (как в SchemesScreen)
+                ActiveFiltersBadge(
+                    filter = filter,
+                    onClearFilters = onClearFilter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Dimens.screenPadding, vertical = Dimens.screenPadding)
+                )
 
-            summaryReport == null -> EmptyReportsPlaceholder(
-                onRefresh = onRefresh,
-                hasFilter = !filter.isEmpty,
-                onClearFilter = onClearFilter
-            )
-
-            else -> {
-                Column(
-                    modifier = Modifier.fillMaxSize()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.screenPadding),
+                    contentPadding = PaddingValues(Dimens.screenPadding)
                 ) {
-                    // Активные фильтры (как в SchemesScreen)
-                    ActiveFiltersBadge(
-                        filter = filter,
-                        onClearFilters = onClearFilter,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Dimens.screenPadding, vertical = Dimens.screenPadding)
-                    )
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(Dimens.screenPadding),
-                        contentPadding = PaddingValues(Dimens.screenPadding)
-                    ) {
-                        item {
-                            SummaryReportCard(report = summaryReport)
-                        }
+                    item {
+                        SummaryReportCard(report = summaryReport)
                     }
                 }
             }
         }
+
+        // Глобальный индикатор загрузки
+        LoadingOverlay(
+            isLoading = isLoading,
+            text = "Загрузка отчетов..."
+        )
     }
 }
 

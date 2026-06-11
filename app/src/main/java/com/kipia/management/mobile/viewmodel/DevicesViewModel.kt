@@ -11,6 +11,7 @@ import com.kipia.management.mobile.ui.screens.devices.SortColumn
 import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +30,8 @@ class DevicesViewModel @Inject constructor(
     private val photoManager: PhotoManager,
 ) : ViewModel() {
 
-    // ── Фильтры и сортировка ──────────────────────────────────────────────────
+    private val _isLoading = MutableStateFlow(true)
+    private val _error     = MutableStateFlow<String?>(null)
 
     private val _searchQuery    = MutableStateFlow("")
     private val _locationFilter = MutableStateFlow<String?>(null)
@@ -39,8 +41,6 @@ class DevicesViewModel @Inject constructor(
 
     val searchQuery: StateFlow<String> = _searchQuery
 
-    // ── Источник данных ───────────────────────────────────────────────────────
-
     private val _rawDevices = repository.getAllDevices()
         .stateIn(
             scope = viewModelScope,
@@ -48,10 +48,24 @@ class DevicesViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // ── Фильтрация + сортировка ───────────────────────────────────────────────
-    // combine поддерживает максимум 5 аргументов — вкладываем два combine
+    init {
+        refreshData()
+    }
 
-    // Шаг 1: фильтрация
+    fun refreshData() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val startTime = System.currentTimeMillis()
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed < 600) delay(600 - elapsed)
+            _isLoading.value = false
+        }
+    }
+
+    fun resetLoadingState() {
+        _isLoading.value = true
+    }
+
     private val _filteredDevices = combine(
         _rawDevices,
         _searchQuery,
@@ -76,7 +90,6 @@ class DevicesViewModel @Inject constructor(
         }
     }
 
-    // Шаг 2: сортировка
     val devices: StateFlow<List<Device>> = combine(
         _filteredDevices,
         _sortColumn,
@@ -93,17 +106,12 @@ class DevicesViewModel @Inject constructor(
                 SortColumn.STATUS            -> device.status
             }
         }.let { if (!sortAscending) it.reversed() else it }
-
-        Timber.d("devices: sorted ${filtered.size} items by $sortColumn asc=$sortAscending")
         filtered.sortedWith(comparator)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
-
-    // ── Статистика — считается из raw (не из отфильтрованного) ───────────────
-    // Показывает общую картину по всем приборам, независимо от фильтра
 
     val stats: StateFlow<DeviceStats> = _rawDevices
         .map { list ->
@@ -121,12 +129,6 @@ class DevicesViewModel @Inject constructor(
             initialValue = DeviceStats()
         )
 
-    // ── UI-состояние ─────────────────────────────────────────────────────────
-
-    private val _isLoading = MutableStateFlow(false)
-    private val _error     = MutableStateFlow<String?>(null)
-
-    // uiState: два combine (max 5 потоков каждый)
     private val _baseUiState = combine(
         _isLoading,
         _error,
@@ -152,10 +154,8 @@ class DevicesViewModel @Inject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DevicesUiState()
+        initialValue = DevicesUiState(isLoading = true)
     )
-
-    // ── Локации ───────────────────────────────────────────────────────────────
 
     val allLocations: StateFlow<List<String>> = repository.getAllLocations()
         .stateIn(
@@ -164,64 +164,34 @@ class DevicesViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // ── Действия — фильтры ────────────────────────────────────────────────────
-
-    fun setSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun setLocationFilter(filter: String?) {
-        _locationFilter.value = filter
-    }
-
-    fun setStatusFilter(filter: String?) {
-        _statusFilter.value = filter
-    }
-
-    // ── Действия — сортировка ─────────────────────────────────────────────────
-
+    fun setSearchQuery(query: String) { _searchQuery.value = query }
+    fun setLocationFilter(filter: String?) { _locationFilter.value = filter }
+    fun setStatusFilter(filter: String?) { _statusFilter.value = filter }
     fun setSortColumn(column: SortColumn) {
-        if (_sortColumn.value == column) {
-            // Повторный тап по той же колонке — меняем направление
-            _sortAscending.value = !_sortAscending.value
-        } else {
-            _sortColumn.value    = column
-            _sortAscending.value = true
-        }
+        if (_sortColumn.value == column) _sortAscending.value = !_sortAscending.value
+        else { _sortColumn.value = column; _sortAscending.value = true }
     }
-
-    // ── Удаление ──────────────────────────────────────────────────────────────
 
     fun deleteDevice(device: Device, deletePhotos: Boolean, deleteScheme: Boolean = false) {
         viewModelScope.launch {
             try {
-                if (deletePhotos) {
-                    val deletedPhotos = photoManager.deleteAllDevicePhotos(device)
-                    Timber.d("deleteDevice: удалено $deletedPhotos фото для ${device.getDisplayName()}")
-                } else {
-                    Timber.d("deleteDevice: фотографии сохранены для ${device.getDisplayName()}")
-                }
-
+                _isLoading.value = true
+                val startTime = System.currentTimeMillis()
+                if (deletePhotos) photoManager.deleteAllDevicePhotos(device)
                 repository.deleteDevice(device)
-
-                val schemeWasDeleted = if (deleteScheme) {
-                    schemeSyncUseCase.deleteSchemeIfEmpty(device.location)
-                } else {
-                    false
-                }
-
-                notificationManager.notifyDeviceDeleted(
-                    deviceName = device.getDisplayName(),
-                    withScheme = schemeWasDeleted
-                )
+                if (deleteScheme) schemeSyncUseCase.deleteSchemeIfEmpty(device.location)
+                
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < 600) delay(600 - elapsed)
+                notificationManager.notifyDeviceDeleted(device.getDisplayName(), false)
             } catch (e: Exception) {
                 notificationManager.notifyError(e.message ?: "Ошибка удаления")
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 }
-
-// ── Data-классы состояния ─────────────────────────────────────────────────────
 
 @Stable
 data class DevicesUiState(

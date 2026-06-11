@@ -231,6 +231,7 @@ class DeviceEditViewModel @Inject constructor(
     private fun validateForm(device: Device) {
         val errors = mutableListOf<String>()
         val typeErr = if (device.type.isBlank()) { errors.add("type"); "Укажите тип" } else null
+        val nameErr = if (device.name.isNullOrBlank()) { errors.add("name"); "Укажите модель" } else null
         val invErr = if (device.inventoryNumber.isBlank()) { errors.add("inventoryNumber"); "Укажите номер" } else null
         val locErr = if (device.location.isBlank()) { errors.add("location"); "Укажите место" } else null
         val statusErr = if (device.status.isBlank()) { errors.add("status"); "Укажите статус" } else null
@@ -242,6 +243,7 @@ class DeviceEditViewModel @Inject constructor(
                 isFormValid = isValid, 
                 validationErrors = errors, 
                 typeError = typeErr, 
+                nameError = nameErr,
                 inventoryNumberError = invErr, 
                 locationError = locErr,
                 statusError = statusErr,
@@ -266,6 +268,7 @@ data class DeviceEditUiState(
     val isFormValid: Boolean = false,
     val validationErrors: List<String> = emptyList(),
     val typeError: String? = null,
+    val nameError: String? = null,
     val inventoryNumberError: String? = null,
     val locationError: String? = null,
     val statusError: String? = null,

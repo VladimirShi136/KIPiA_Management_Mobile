@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -29,15 +29,14 @@ import com.kipia.management.mobile.R
 import com.kipia.management.mobile.ui.theme.getBottomNavButtonColor
 import com.kipia.management.mobile.ui.theme.getBottomNavColors
 import com.kipia.management.mobile.ui.theme.getBottomNavTextColor
-import timber.log.Timber
 
 // Модель для элементов навигации
 sealed class BottomNavItem(
     val route: String,
-    val titleResId: Int,
+    val titleResId: Int, // Тип изменен на Int
 ) {
     object Devices : BottomNavItem("devices", R.string.title_devices)
-    object Photos : BottomNavItem("photos", R.string.photo_gallery)
+    object Photos : BottomNavItem("photos", R.string.title_photos) // Используем ресурс вместо прямой строки
     object Schemes : BottomNavItem("schemes", R.string.title_schemes)
     object Reports : BottomNavItem("reports", R.string.title_reports)
 }
@@ -49,7 +48,7 @@ val bottomNavItems = listOf(
     BottomNavItem.Reports
 )
 
-private val BUTTON_COLORS = bottomNavItems.mapIndexed { index, _ ->
+private val BUTTON_COLORS = List(bottomNavItems.size) { index ->
     getBottomNavButtonColor(index)
 }
 private val TEXT_COLORS = BUTTON_COLORS.map { getBottomNavTextColor(it) }
@@ -125,7 +124,7 @@ fun BottomNavigationBar(
                     contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
-                        text = stringResource(id = item.titleResId),
+                        text = stringResource(id = item.titleResId), // Теперь типы совпадают
                         color = if (isSelected) TEXT_COLORS[index]
                         else TEXT_COLORS_INACTIVE[index],
                         fontSize = 12.sp,

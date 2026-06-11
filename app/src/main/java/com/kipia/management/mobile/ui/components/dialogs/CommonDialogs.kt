@@ -357,14 +357,46 @@ fun ErrorDialog(title: String, message: String, onDismiss: () -> Unit) {
     )
 }
 
+/**
+ * Универсальный индикатор загрузки/сохранения, перекрывающий экран
+ */
 @Composable
-fun SavingOverlay(isSaving: Boolean, text: String = "Сохранение...") {
-    AnimatedVisibility(visible = isSaving, enter = fadeIn(), exit = fadeOut()) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) {}, contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
-                Text(text = text, style = MaterialTheme.typography.titleMedium, color = Color.White)
+fun LoadingOverlay(
+    isLoading: Boolean,
+    text: String = "Загрузка...",
+    backgroundColor: Color = Color.Black.copy(alpha = 0.45f)
+) {
+    AnimatedVisibility(
+        visible = isLoading,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor)
+                .pointerInput(Unit) {},
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
+            ) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 4.dp
+                )
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White
+                )
             }
         }
     }
+}
+
+@Composable
+fun SavingOverlay(isSaving: Boolean, text: String = "Сохранение...") {
+    LoadingOverlay(isLoading = isSaving, text = text)
 }

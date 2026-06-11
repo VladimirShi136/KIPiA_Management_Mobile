@@ -8,6 +8,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
+import com.kipia.management.mobile.R
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.ui.components.scheme.utils.drawDevice
@@ -24,6 +26,9 @@ fun DeviceLayer(
     key: Any? = null
 ) {
     remember(key) { key }
+
+    // Загружаем иконку манометра
+    val manometerPainter = painterResource(id = R.drawable.ic_manometer)
 
     var canvasWidth  by remember { mutableIntStateOf(0) }
     var canvasHeight by remember { mutableIntStateOf(0) }
@@ -75,6 +80,7 @@ fun DeviceLayer(
 
                 withTransform({ translate(screenX, screenY) }) {
                     drawDevice(
+                        painter     = manometerPainter,
                         isSelected  = schemeDevice.deviceId == selectedDeviceId,
                         scale       = canvasState.scale,
                         // SchemeDevice.rotation хранит угол в градусах (0 / 90 / 180 / 270)

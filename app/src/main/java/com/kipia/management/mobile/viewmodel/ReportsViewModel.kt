@@ -6,6 +6,7 @@ import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.repository.SchemeRepository
 import com.kipia.management.mobile.ui.screens.reports.models.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,6 +32,8 @@ class ReportsViewModel @Inject constructor(
     private val _filterOptions = MutableStateFlow(ReportFilterOptions())
     val filterOptions: StateFlow<ReportFilterOptions> = _filterOptions.asStateFlow()
 
+    private val MIN_LOADING_TIME = 600L
+
     init {
         loadReports()
     }
@@ -38,6 +41,7 @@ class ReportsViewModel @Inject constructor(
     fun loadReports() {
         viewModelScope.launch {
             _isLoading.value = true
+            val startTime = System.currentTimeMillis()
             try {
                 val devices = deviceRepository.getAllDevicesSync()
                 val schemes = schemeRepository.getAllSchemes().first()
@@ -60,6 +64,8 @@ class ReportsViewModel @Inject constructor(
             } catch (_: Exception) {
                 _reports.value = emptyList()
             } finally {
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < MIN_LOADING_TIME) delay(MIN_LOADING_TIME - elapsed)
                 _isLoading.value = false
             }
         }
@@ -68,11 +74,11 @@ class ReportsViewModel @Inject constructor(
     fun loadFilteredReports(filter: ReportFilter) {
         viewModelScope.launch {
             _isLoading.value = true
+            val startTime = System.currentTimeMillis()
             try {
                 val devices = deviceRepository.getAllDevicesSync()
                 val schemes = schemeRepository.getAllSchemes().first()
 
-                // Применяем фильтр к устройствам
                 val filteredDevices = devices.filter { device ->
                     (filter.status == null || device.status == filter.status) &&
                             (filter.deviceType == null || device.type == filter.deviceType) &&
@@ -94,27 +100,12 @@ class ReportsViewModel @Inject constructor(
                     )
                 }
 
-                // Строим отчеты на основе отфильтрованных устройств
                 _reports.value = buildReportsFromDevices(deviceInfoList, schemes.size)
-
-                // Обновляем доступные опции фильтра на основе ВСЕХ устройств (не отфильтрованных)
-                val allDeviceInfoList = devices.map { device ->
-                    DeviceInfo(
-                        id = device.id,
-                        displayName = device.getDisplayName(),
-                        inventoryNumber = device.inventoryNumber,
-                        location = device.location,
-                        status = device.status,
-                        type = device.type,
-                        manufacturer = device.manufacturer ?: "",
-                        releaseYear = device.year
-                    )
-                }
-                _filterOptions.value = buildFilterOptions(allDeviceInfoList)
-
             } catch (_: Exception) {
                 _reports.value = emptyList()
             } finally {
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < MIN_LOADING_TIME) delay(MIN_LOADING_TIME - elapsed)
                 _isLoading.value = false
             }
         }
@@ -188,32 +179,8 @@ class ReportsViewModel @Inject constructor(
     fun clearFilter() {
         setFilter(ReportFilter.Empty)
     }
-
-    //  Метод применения фильтра (оставлен для совместимости)
-    private fun applyFilter() {
-        val f = _filter.value
-        val base = _currentReport.value ?: return
-        val filtered = when (base) {
-            is NeedsAttentionReport -> base.copy(
-                lostDevices = base.lostDevices.applyDeviceFilter(f),
-                brokenDevices = base.brokenDevices.applyDeviceFilter(f)
-            )
-            else -> base
-        }
-        _currentReport.value = filtered
-    }
-
-    private fun List<DeviceInfo>.applyDeviceFilter(f: ReportFilter): List<DeviceInfo> =
-        filter { device ->
-            (f.status == null || device.status == f.status) &&
-                    (f.deviceType == null || device.type == f.deviceType) &&
-                    (f.manufacturer == null || device.manufacturer == f.manufacturer) &&
-                    (f.location == null || device.location == f.location) &&
-                    (f.releaseYear == null || device.releaseYear == f.releaseYear)
-        }
 }
 
-// Новый data class для доступных значений фильтра (можно вынести в отдельный файл)
 data class ReportFilterOptions(
     val statuses: List<String> = emptyList(),
     val types: List<String> = emptyList(),

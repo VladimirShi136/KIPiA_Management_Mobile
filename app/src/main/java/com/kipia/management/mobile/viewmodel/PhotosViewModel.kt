@@ -11,6 +11,7 @@ import com.kipia.management.mobile.ui.screens.photos.ViewMode
 import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.ui.components.photos.PhotosSortBy
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -30,10 +31,11 @@ class PhotosViewModel @Inject constructor(
     private val _sortBy = MutableStateFlow(PhotosSortBy.NAME_ASC)
     private val _displayMode = MutableStateFlow(DisplayMode.FLAT)
     private val _expandedGroups = MutableStateFlow<Set<String>>(emptySet())
-    private val _isLoading = MutableStateFlow(false)
+    
+    // Устанавливаем true по умолчанию
+    private val _isLoading = MutableStateFlow(true)
     private val _error = MutableStateFlow<String?>(null)
 
-    // Все устройства
     val devices = combine(
         repository.getAllDevices(),
         _forceRefresh
@@ -45,7 +47,6 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    // Состояние UI
     val uiState: StateFlow<PhotosUiState> = combine(
         _selectedDeviceId,
         _selectedLocation,
@@ -70,10 +71,9 @@ class PhotosViewModel @Inject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = PhotosUiState()
+        initialValue = PhotosUiState(isLoading = true)
     )
 
-    // Основной список отфильтрованных фотографий
     val photos = combine(
         devices,
         _selectedLocation,
@@ -117,7 +117,6 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    // Сгруппированные фотографии
     val groupedByLocation = combine(
         photos,
         _expandedGroups
@@ -137,7 +136,6 @@ class PhotosViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    // Статистика (всегда в синхроне)
     val totalStats: StateFlow<PhotoStats> = devices.map { list ->
         val locations = list.filter { it.photos.isNotEmpty() }.map { it.location }.distinct().size
         val photoCount = list.sumOf { d -> 
@@ -163,7 +161,7 @@ class PhotosViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
-        // Раскрываем все группы при первом получении данных
+        refreshData()
         viewModelScope.launch {
             allLocations.collect { locations ->
                 if (locations.isNotEmpty() && _expandedGroups.value.isEmpty()) {
@@ -171,6 +169,18 @@ class PhotosViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun refreshData() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            delay(600)
+            _isLoading.value = false
+        }
+    }
+
+    fun resetLoadingState() {
+        _isLoading.value = true
     }
 
     fun resetAllFilters() {
@@ -185,6 +195,7 @@ class PhotosViewModel @Inject constructor(
     }
 
     fun loadPhotos() {
+        refreshData()
         forceLoadData()
     }
 
@@ -222,8 +233,6 @@ class PhotosViewModel @Inject constructor(
         _sortBy.value = sortBy
     }
 }
-
-// ── Data-классы ───────────────────────────────────────────────────────────────
 
 data class LocationPhotoGroup(
     val location: String,

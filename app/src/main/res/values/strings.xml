@@ -1,111 +1,30 @@
 <resources>
-    <string name="app_name">Учет приборов</string>
-
-    <!-- Навигация -->
+    <string name="app_name">КИПиА</string>
     <string name="title_devices">Приборы</string>
     <string name="title_schemes">Схемы</string>
+    <string name="title_photos">Галерея</string>
     <string name="title_reports">Отчеты</string>
-    <string name="title_edit_device">Редактирование прибора</string>
-    <string name="title_device_details">Детали прибора</string>
-
-    <!-- Кнопки -->
-    <string name="save">Сохранить</string>
-    <string name="cancel">Отмена</string>
-    <string name="delete">Удалить</string>
-    <string name="add_device">Добавить прибор</string>
-    <string name="edit_device">Редактировать прибор</string>
-
-    <!-- Поля прибора -->
-    <string name="inventory_number">Инвентарный номер</string>
+    <string name="action_settings">Настройки</string>
+    <string name="action_theme">Тема</string>
+    <string name="action_filter">Фильтр</string>
+    <string name="action_add">Добавить</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_edit">Изменить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="confirm_delete_title">Удаление</string>
+    <string name="confirm_delete_message">Вы уверены, что хотите удалить этот элемент?</string>
+    <string name="error_loading">Ошибка загрузки данных</string>
+    <string name="empty_list">Список пуст</string>
+    <string name="search_placeholder">Поиск...</string>
     <string name="device_type">Тип прибора</string>
-    <string name="device_name">Наименование</string>
-    <string name="manufacturer">Производитель</string>
-    <string name="year">Год выпуска</string>
-    <string name="location">Место установки</string>
-    <string name="status">Статус</string>
-    <string name="accuracy_class">Класс точности</string>
-    <string name="measurement_limit">Предел измерений</string>
-    <string name="valve_number">Номер крана/узла</string>
-    <string name="additional_info">Дополнительная информация</string>
-
-    <!-- Сообщения -->
-    <string name="validation_inventory_number_required">Инвентарный номер обязателен</string>
-    <string name="validation_inventory_number_unique">Инвентарный номер должен быть уникальным</string>
-    <string name="validation_location_required">Место установки обязательно</string>
-    <string name="validation_type_required">Тип прибора обязателен</string>
-
-    <!-- Статусы -->
-    <string name="status_in_work">В работе</string>
-    <string name="status_storage">Хранение</string>
-    <string name="status_lost">Утерян</string>
-    <string name="status_spoiled">Испорчен</string>
-
-    <!-- Диалоги -->
-    <string name="dialog_delete_title">Удаление прибора</string>
-    <string name="dialog_delete_message">Вы уверены, что хотите удалить прибор %s?</string>
-    <string name="dialog_delete_confirm">Удалить</string>
-
-    <!-- Пустые состояния -->
-    <string name="empty_devices">Нет приборов для отображения</string>
-    <string name="empty_schemes">Нет схем для отображения</string>
-
-    <!-- new -->
-    <string name="no_photo_available">Нет фотографии</string>
-    <string name="add_photo">Нажмите чтобы добавить</string>
-    <string name="device_photo">Фотография прибора</string>
-    <string name="photo_gallery">Галерея</string>
-    <string name="take_photo">Сделать фото</string>
-    <string name="choose_from_gallery">Выбрать из галереи</string>
-    <string name="camera_permission_required">Для съемки фото требуется разрешение камеры</string>
-    <string name="gallery_permission_required">Для выбора фото требуется разрешение галереи</string>
-    <string name="photo_added_successfully">Фото успешно добавлено</string>
-    <string name="error_adding_photo">Ошибка при добавлении фото</string>
-    <string name="view_all_photos">Просмотреть все фото</string>
-
-    <string name="fullscreen_photo">Полноэкранный просмотр фото</string>
-    <string name="close">Закрыть</string>
-    <string name="delete_photo">Удаление фото</string>
-    <string name="delete_photo_confirmation">Удалить это фото?</string>
-    <string name="photo_deleted">Фото удалено</string>
-    <string name="rotate_left">Повернуть влево</string>
-    <string name="rotate_right">Повернуть вправо</string>
-
-    <!-- Для редактора схем -->
-    <string name="scheme_editor">Редактор схем</string>
-    <string name="new_scheme">Новая схема</string>
-    <string name="devices">Приборы</string>
-    <string name="drag_device_hint">Перетащите прибор на схему</string>
-    <string name="device_added">Прибор добавлен на схему</string>
-    <string name="position_saved">Позиция прибора сохранена</string>
-    <string name="save_scheme">Сохранение схемы</string>
-    <string name="enter_scheme_name">Введите название для новой схемы:</string>
-    <string name="scheme_name">Название схемы</string>
-    <string name="scheme_description">Описание (необязательно)</string>
-    <string name="confirm_cancel">Подтверждение</string>
-    <string name="cancel_changes_message">Отменить изменения? Все несохраненные данные будут потеряны.</string>
-    <string name="continue_editing">Продолжить редактирование</string>
-    <string name="scheme_saved">Схема \'%s\' сохранена</string>
-    <string name="changes_saved">Изменения сохранены</string>
-
-    <!-- Для SchemesFragment -->
-    <string name="no_schemes">Нет схем</string>
-    <string name="create_first_scheme">Создайте первую схему</string>
-    <string name="edit">Редактировать</string>
-    <string name="duplicate">Дублировать</string>
-    <string name="delete_scheme">Удаление схемы</string>
-    <string name="delete_scheme_confirmation">Удалить схему \"%s\"?</string>
-    <string name="scheme_created">Схема создана</string>
-    <string name="scheme_deleted">Схема удалена</string>
-
-    <!-- Настройки -->
-    <string name="settings">Настройки</string>
-    <string name="theme">Тема</string>
-    <string name="system_theme">Системная</string>
-    <string name="light_theme">Светлая</string>
-    <string name="dark_theme">Темная</string>
-    <string name="dynamic_colors">Динамические цвета</string>
-    <string name="dynamic_colors_desc">Использовать цвета обоев системы</string>
-    <string name="about">О приложении</string>
-    <string name="version">Версия</string>
-    <string name="developer">Разработчик</string>
+    <string name="device_name">Модель</string>
+    <string name="device_inventory_number">Инвентарный номер</string>
+    <string name="device_location">Место установки</string>
+    <string name="device_status">Статус</string>
+    <string name="device_manufacturer">Производитель</string>
+    <string name="device_year">Год выпуска</string>
+    <string name="device_measurement_limit">Предел измерений</string>
+    <string name="device_accuracy_class">Класс точности</string>
+    <string name="device_valve_number">Номер крана</string>
+    <string name="device_additional_info">Заметки</string>
 </resources>
