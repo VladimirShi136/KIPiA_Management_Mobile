@@ -19,3 +19,22 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+########## KIPiA Management Specific Rules ##########
+
+# Keep Room entities and other data classes
+-keep class com.kipia.management.mobile.data.entities.** { *; }
+
+# Gson specific rules
+-keepattributes Signature, *Annotation*, EnclosingMethod
+-keep class com.google.gson.annotations.** { *; }
+-keep class com.google.gson.reflect.TypeToken
+-keep class * extends com.google.gson.reflect.TypeToken
+-keep public class * implements com.google.gson.TypeAdapterFactory
+-keep public class * implements com.google.gson.JsonSerializer
+-keep public class * implements com.google.gson.JsonDeserializer
+
+# Prevent R8 from removing empty constructors if they are used by Gson/Room
+-keepclassmembers class com.kipia.management.mobile.data.entities.** {
+    <init>(...);
+}

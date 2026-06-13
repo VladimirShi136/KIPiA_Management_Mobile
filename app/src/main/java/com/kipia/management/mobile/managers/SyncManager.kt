@@ -21,6 +21,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.room.withTransaction
 
 @Singleton
 class SyncManager @Inject constructor(
@@ -80,6 +81,7 @@ class SyncManager @Inject constructor(
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.e(e, "Ошибка экспорта")
             Result.failure(e)
         }
     }
@@ -124,36 +126,121 @@ class SyncManager @Inject constructor(
 
             if (!importedDb.exists()) throw Exception("БД не найдена в архиве")
 
-            validateImportedSchema(importedDb)
-            val stats = performMerge(importedDb, importedPhotos)
+            // Открываем базу один раз для валидации и чтения
+            val importedData = readAndValidateImportedDatabase(importedDb)
+            
+            // Выполняем мерж в транзакции
+            val stats = database.withTransaction {
+                performMerge(importedData, importedPhotos)
+            }
 
-            // Обновляем метки синхронизации для всех успешно перенесенных данных, 
-            // даже если по другим элементам возникли конфликты.
             updateLastSyncedTimestamps(stats)
 
             Result.success(stats)
         } catch (e: Exception) {
+            Timber.e(e, "Ошибка импорта")
             Result.failure(e)
         } finally {
+            // Удаляем временную папку только в самом конце
             tempDir.deleteRecursively()
         }
     }
+
+    private fun readAndValidateImportedDatabase(dbFile: File): ImportedData {
+        val devices = mutableListOf<Device>()
+        val schemes = mutableListOf<Scheme>()
+        val locations = mutableListOf<DeviceLocation>()
+
+        // Используем OPEN_READWRITE, так как для восстановления WAL логов (если они были) SQLite нужны права на запись,
+        // даже если мы только читаем данные.
+        android.database.sqlite.SQLiteDatabase.openDatabase(
+            dbFile.absolutePath, 
+            null, 
+            android.database.sqlite.SQLiteDatabase.OPEN_READWRITE
+        ).use { db ->
+            // Валидация структуры
+            val requiredTables = listOf("devices", "schemes", "device_locations")
+            requiredTables.forEach { table ->
+                db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)).use { cursor ->
+                    if (!cursor.moveToFirst()) {
+                        throw Exception("Файл импорта поврежден (таблица $table не найдена)")
+                    }
+                }
+            }
+
+            // Чтение данных
+            db.rawQuery("SELECT * FROM devices", null).use { c ->
+                while (c.moveToNext()) {
+                    devices.add(parseDevice(c))
+                }
+            }
+            db.rawQuery("SELECT * FROM schemes", null).use { c ->
+                while (c.moveToNext()) {
+                    schemes.add(parseScheme(c))
+                }
+            }
+            db.rawQuery("SELECT * FROM device_locations", null).use { c ->
+                while (c.moveToNext()) {
+                    locations.add(parseLocation(c))
+                }
+            }
+        }
+        return ImportedData(devices, schemes, locations)
+    }
+
+    private fun parseDevice(c: android.database.Cursor) = Device(
+        id = c.getInt(c.getColumnIndexOrThrow("id")),
+        type = c.getString(c.getColumnIndexOrThrow("type")) ?: "",
+        name = c.getString(c.getColumnIndexOrThrow("name")),
+        manufacturer = c.getString(c.getColumnIndexOrThrow("manufacturer")),
+        inventoryNumber = c.getString(c.getColumnIndexOrThrow("inventory_number")) ?: "",
+        year = if (c.isNull(c.getColumnIndexOrThrow("year"))) null else c.getInt(c.getColumnIndexOrThrow("year")),
+        measurementLimit = c.getString(c.getColumnIndexOrThrow("measurement_limit")),
+        accuracyClass = if (c.isNull(c.getColumnIndexOrThrow("accuracy_class"))) null else c.getDouble(c.getColumnIndexOrThrow("accuracy_class")),
+        location = c.getString(c.getColumnIndexOrThrow("location")) ?: "",
+        valveNumber = c.getString(c.getColumnIndexOrThrow("valve_number")),
+        status = c.getString(c.getColumnIndexOrThrow("status")) ?: "В работе",
+        additionalInfo = c.getString(c.getColumnIndexOrThrow("additional_info")),
+        photos = (c.getString(c.getColumnIndexOrThrow("photos")) ?: "").split(";").filter { it.isNotBlank() },
+        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+    )
+
+    private fun parseScheme(c: android.database.Cursor) = Scheme(
+        id = c.getInt(c.getColumnIndexOrThrow("id")),
+        name = c.getString(c.getColumnIndexOrThrow("name")) ?: "",
+        description = c.getString(c.getColumnIndexOrThrow("description")),
+        data = c.getString(c.getColumnIndexOrThrow("data")) ?: "{}",
+        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+    )
+
+    private fun parseLocation(c: android.database.Cursor) = DeviceLocation(
+        deviceId = c.getInt(c.getColumnIndexOrThrow("device_id")),
+        schemeId = c.getInt(c.getColumnIndexOrThrow("scheme_id")),
+        x = c.getDouble(c.getColumnIndexOrThrow("x")),
+        y = c.getDouble(c.getColumnIndexOrThrow("y")),
+        rotation = c.getDouble(c.getColumnIndexOrThrow("rotation")),
+        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
+        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
+    )
 
     private fun sanitizePath(destDir: File, entryName: String): File? {
         val target = File(destDir, entryName).canonicalFile
         return if (target.path.startsWith(destDir.canonicalPath)) target else null
     }
 
-    private suspend fun performMerge(importedDbFile: File, importedPhotosDir: File): SyncStats {
-        val importedData = readImportedDatabase(importedDbFile)
+    private suspend fun performMerge(importedData: ImportedData, importedPhotosDir: File): SyncStats {
         val stats = SyncStats()
-
         val deviceIdMap = mutableMapOf<Int, Int>()
         val schemeIdMap = mutableMapOf<Int, Int>()
 
         val localDevices = deviceDao.getAllDevicesForExport().associateBy { it.inventoryNumber }
         
-        // 1. Сначала приборы
+        // 1. Приборы
         importedData.devices.forEach { imported ->
             val existing = localDevices[imported.inventoryNumber]
             if (existing == null) {
@@ -165,16 +252,8 @@ class SyncManager @Inject constructor(
                 }
             } else {
                 deviceIdMap[imported.id] = existing.id
-                val localChanged = existing.updatedAt > existing.lastSyncedAt
                 val remoteChanged = imported.updatedAt > imported.lastSyncedAt
-
-                if (localChanged && remoteChanged) {
-                    if (!devicesEqual(existing, imported)) {
-                        stats.conflicts.add(ConflictInfo("device", imported.inventoryNumber, existing, imported))
-                    } else {
-                        stats.changedDevices.add(existing)
-                    }
-                } else if (remoteChanged) {
+                if (remoteChanged) {
                     syncRemovedPhotos(existing, imported)
                     val toUpdate = imported.copy(id = existing.id)
                     deviceDao.updateDevice(toUpdate)
@@ -186,7 +265,7 @@ class SyncManager @Inject constructor(
             }
         }
 
-        // 2. Затем схемы
+        // 2. Схемы
         val localSchemes = schemeDao.getAllSchemesForExport().associateBy { it.name }
 
         importedData.schemes.forEach { imported ->
@@ -201,16 +280,8 @@ class SyncManager @Inject constructor(
                 }
             } else {
                 schemeIdMap[imported.id] = existing.id
-                val localChanged = existing.updatedAt > existing.lastSyncedAt
                 val remoteChanged = imported.updatedAt > imported.lastSyncedAt
-
-                if (localChanged && remoteChanged) {
-                    if (!schemesEqual(existing, imported)) {
-                        stats.conflicts.add(ConflictInfo("scheme", imported.name, existing, imported))
-                    } else {
-                        stats.changedSchemes.add(existing)
-                    }
-                } else if (remoteChanged) {
+                if (remoteChanged) {
                     val fixed = fixSchemeDataIds(imported, deviceIdMap)
                     val toUpdate = fixed.copy(id = existing.id)
                     schemeDao.updateScheme(toUpdate)
@@ -223,9 +294,6 @@ class SyncManager @Inject constructor(
         }
 
         // 3. Локации
-        val remoteInvNumMap = importedData.devices.associate { it.id to it.inventoryNumber }
-        val remoteSchNameMap = importedData.schemes.associate { it.id to it.name }
-
         importedData.locations.forEach { imported ->
             val localDeviceId = deviceIdMap[imported.deviceId] ?: return@forEach
             val localSchemeId = schemeIdMap[imported.schemeId] ?: return@forEach
@@ -239,18 +307,8 @@ class SyncManager @Inject constructor(
                     stats.changedLocations.add(toInsert)
                 }
             } else {
-                val localChanged = existing.updatedAt > existing.lastSyncedAt
                 val remoteChanged = imported.updatedAt > imported.lastSyncedAt
-
-                if (localChanged && remoteChanged) {
-                    if (!locationsEqual(existing, imported)) {
-                        val invNum = remoteInvNumMap[imported.deviceId] ?: "unknown"
-                        val schName = remoteSchNameMap[imported.schemeId] ?: "unknown"
-                        stats.conflicts.add(ConflictInfo("location", "$invNum|$schName", existing, imported))
-                    } else {
-                        stats.changedLocations.add(existing)
-                    }
-                } else if (remoteChanged) {
+                if (remoteChanged) {
                     val toUpdate = imported.copy(deviceId = localDeviceId, schemeId = localSchemeId)
                     deviceLocationDao.insertOrUpdateLocation(toUpdate)
                     stats.locationsUpdated++
@@ -265,19 +323,16 @@ class SyncManager @Inject constructor(
         stats.photosAdded = mergePhotos(importedPhotosDir)
         updateDevicePhotosAfterImport(stats.changedDevices)
         
-        // 5. Авто-создание схем для новых приборов
-        stats.changedDevices.filter { !it.isDeleted() }.forEach { device ->
-            schemeSyncUseCase.syncSchemeOnDeviceSave(device)
-        }
-        
         return stats
     }
 
     private fun fixSchemeDataIds(scheme: Scheme, deviceIdMap: Map<Int, Int>): Scheme {
         val schemeData = scheme.getSchemeData()
-        val devices = schemeData.devices
-        if (devices.isEmpty()) return scheme
-        val updatedDevices = devices.map { sd ->
+        val devicesInJson = schemeData.devices
+        
+        if (devicesInJson.isEmpty()) return scheme
+        
+        val updatedDevices = devicesInJson.map { sd ->
             val localId = deviceIdMap[sd.deviceId]
             if (localId != null) sd.copy(deviceId = localId) else sd
         }
@@ -287,7 +342,7 @@ class SyncManager @Inject constructor(
     private suspend fun updateDevicePhotosAfterImport(devices: List<Device>) {
         devices.forEach { device ->
             val actualPhotos = device.photos.filter { photoName ->
-                File(photoManager.getLocationDir(device.location), photoName).exists()
+                File(photoManager.getBasePhotosDir(), photoName).exists()
             }
             if (actualPhotos.size != device.photos.size) {
                 deviceDao.updateDevice(device.copy(photos = actualPhotos))
@@ -300,46 +355,38 @@ class SyncManager @Inject constructor(
         resolutions: List<ConflictResolution>
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val stats = SyncStats()
-            conflicts.forEachIndexed { index, conflict ->
-                val resolution = resolutions.getOrNull(index) ?: ConflictResolution.SKIP
-                if (resolution == ConflictResolution.SKIP) return@forEachIndexed
+            database.withTransaction {
+                val stats = SyncStats()
+                conflicts.forEachIndexed { index, conflict ->
+                    val resolution = resolutions.getOrNull(index) ?: ConflictResolution.SKIP
+                    if (resolution == ConflictResolution.SKIP) return@forEachIndexed
 
-                when (conflict.type) {
-                    "device" -> {
-                        val local = conflict.local as Device
-                        val remote = conflict.remote as Device
-                        if (resolution == ConflictResolution.REMOTE) {
-                            syncRemovedPhotos(local, remote)
-                            val resolved = remote.copy(id = local.id)
-                            deviceDao.updateDevice(resolved)
-                            stats.changedDevices.add(resolved)
-                            schemeSyncUseCase.syncSchemeOnDeviceSave(resolved)
-                        } else stats.changedDevices.add(local)
-                    }
-                    "scheme" -> {
-                        val local = conflict.local as Scheme
-                        val remote = conflict.remote as Scheme
-                        if (resolution == ConflictResolution.REMOTE) {
-                            val resolved = remote.copy(id = local.id)
-                            schemeDao.updateScheme(resolved)
-                            stats.changedSchemes.add(resolved)
-                        } else stats.changedSchemes.add(local)
-                    }
-                    "location" -> {
-                        val local = conflict.local as DeviceLocation
-                        val remote = conflict.remote as DeviceLocation
-                        if (resolution == ConflictResolution.REMOTE) {
-                            val resolved = remote.copy(deviceId = local.deviceId, schemeId = local.schemeId)
-                            deviceLocationDao.insertOrUpdateLocation(resolved)
-                            stats.changedLocations.add(resolved)
-                        } else stats.changedLocations.add(local)
+                    when (conflict.type) {
+                        "device" -> {
+                            val local = conflict.local as Device
+                            val remote = conflict.remote as Device
+                            if (resolution == ConflictResolution.REMOTE) {
+                                val resolved = remote.copy(id = local.id)
+                                deviceDao.updateDevice(resolved)
+                                stats.changedDevices.add(resolved)
+                            } else stats.changedDevices.add(local)
+                        }
+                        "scheme" -> {
+                            val local = conflict.local as Scheme
+                            val remote = conflict.remote as Scheme
+                            if (resolution == ConflictResolution.REMOTE) {
+                                val resolved = remote.copy(id = local.id)
+                                schemeDao.updateScheme(resolved)
+                                stats.changedSchemes.add(resolved)
+                            } else stats.changedSchemes.add(local)
+                        }
                     }
                 }
+                updateLastSyncedTimestamps(stats)
             }
-            updateLastSyncedTimestamps(stats)
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.e(e, "Ошибка разрешения конфликтов")
             Result.failure(e)
         }
     }
@@ -351,96 +398,10 @@ class SyncManager @Inject constructor(
         stats.changedLocations.forEach { deviceLocationDao.insertOrUpdateLocation(it.copy(lastSyncedAt = now)) }
     }
 
-    private fun devicesEqual(a: Device, b: Device) =
-        a.type == b.type && a.name == b.name && a.inventoryNumber == b.inventoryNumber &&
-        a.location == b.location && a.status == b.status && a.photos == b.photos &&
-        a.deletedAt == b.deletedAt
-
-    private fun schemesEqual(a: Scheme, b: Scheme) =
-        a.name == b.name && a.data == b.data && a.deletedAt == b.deletedAt
-
-    private fun locationsEqual(a: DeviceLocation, b: DeviceLocation) =
-        a.x == b.x && a.y == b.y && a.rotation == b.rotation && a.deletedAt == b.deletedAt
-
-    private fun validateImportedSchema(dbFile: File) {
-        android.database.sqlite.SQLiteDatabase.openDatabase(
-            dbFile.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-        ).use { db ->
-            listOf("devices", "schemes", "device_locations").forEach { table ->
-                db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
-                    val cols = mutableSetOf<String>()
-                    while (cursor.moveToNext()) cols.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
-                    if (!cols.contains("last_synced_at") || !cols.contains("updated_at") || !cols.contains("deleted_at")) {
-                        throw Exception("БД несовместима: $table")
-                    }
-                }
-            }
-        }
-    }
-
     private fun syncRemovedPhotos(local: Device, imported: Device) {
         val removed = local.photos.toSet() - imported.photos.toSet()
-        val dir = photoManager.getLocationDir(local.location)
+        val dir = photoManager.getBasePhotosDir()
         removed.forEach { File(dir, it).delete() }
-    }
-
-    private fun readImportedDatabase(dbFile: File): ImportedData {
-        val devices = mutableListOf<Device>()
-        val schemes = mutableListOf<Scheme>()
-        val locations = mutableListOf<DeviceLocation>()
-        val db = android.database.sqlite.SQLiteDatabase.openDatabase(dbFile.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
-        db.use {
-            it.rawQuery("SELECT * FROM devices", null).use { c ->
-                while (c.moveToNext()) {
-                    devices.add(Device(
-                        id = c.getInt(c.getColumnIndexOrThrow("id")),
-                        type = c.getString(c.getColumnIndexOrThrow("type")) ?: "",
-                        name = c.getString(c.getColumnIndexOrThrow("name")),
-                        manufacturer = c.getString(c.getColumnIndexOrThrow("manufacturer")),
-                        inventoryNumber = c.getString(c.getColumnIndexOrThrow("inventory_number")) ?: "",
-                        year = if (c.isNull(c.getColumnIndexOrThrow("year"))) null else c.getInt(c.getColumnIndexOrThrow("year")),
-                        measurementLimit = c.getString(c.getColumnIndexOrThrow("measurement_limit")),
-                        accuracyClass = if (c.isNull(c.getColumnIndexOrThrow("accuracy_class"))) null else c.getDouble(c.getColumnIndexOrThrow("accuracy_class")),
-                        location = c.getString(c.getColumnIndexOrThrow("location")) ?: "",
-                        valveNumber = c.getString(c.getColumnIndexOrThrow("valve_number")),
-                        status = c.getString(c.getColumnIndexOrThrow("status")) ?: "В работе",
-                        additionalInfo = c.getString(c.getColumnIndexOrThrow("additional_info")),
-                        photos = (c.getString(c.getColumnIndexOrThrow("photos")) ?: "").split(";").filter { it.isNotBlank() },
-                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
-                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
-                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
-                    ))
-                }
-            }
-            it.rawQuery("SELECT * FROM schemes", null).use { c ->
-                while (c.moveToNext()) {
-                    schemes.add(Scheme(
-                        id = c.getInt(c.getColumnIndexOrThrow("id")),
-                        name = c.getString(c.getColumnIndexOrThrow("name")) ?: "",
-                        description = c.getString(c.getColumnIndexOrThrow("description")),
-                        data = c.getString(c.getColumnIndexOrThrow("data")) ?: "{}",
-                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
-                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
-                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
-                    ))
-                }
-            }
-            it.rawQuery("SELECT * FROM device_locations", null).use { c ->
-                while (c.moveToNext()) {
-                    locations.add(DeviceLocation(
-                        deviceId = c.getInt(c.getColumnIndexOrThrow("device_id")),
-                        schemeId = c.getInt(c.getColumnIndexOrThrow("scheme_id")),
-                        x = c.getDouble(c.getColumnIndexOrThrow("x")),
-                        y = c.getDouble(c.getColumnIndexOrThrow("y")),
-                        rotation = c.getDouble(c.getColumnIndexOrThrow("rotation")),
-                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
-                        lastSyncedAt = c.getLong(c.getColumnIndexOrThrow("last_synced_at")),
-                        deletedAt = c.getLong(c.getColumnIndexOrThrow("deleted_at"))
-                    ))
-                }
-            }
-        }
-        return ImportedData(devices, schemes, locations)
     }
 
     private fun mergePhotos(dir: File): Int {
@@ -475,15 +436,18 @@ class SyncManager @Inject constructor(
         fun isEmpty() = devicesAdded == 0 && devicesUpdated == 0 && schemesAdded == 0 &&
                 schemesUpdated == 0 && locationsAdded == 0 && locationsUpdated == 0 && photosAdded == 0 && conflicts.isEmpty()
 
-        fun toSummary(): String = buildString {
-            if (devicesAdded > 0) appendLine("• Добавлено приборов: $devicesAdded")
-            if (devicesUpdated > 0) appendLine("• Обновлено приборов: $devicesUpdated")
-            if (schemesAdded > 0) appendLine("• Добавлено схем: $schemesAdded")
-            if (schemesUpdated > 0) appendLine("• Обновлено схем: $schemesUpdated")
-            if (locationsAdded > 0) appendLine("• Добавлено позиций: $locationsAdded")
-            if (locationsUpdated > 0) appendLine("• Обновлено позиций: $locationsUpdated")
-            if (photosAdded > 0) appendLine("• Добавлено фото: $photosAdded")
-            if (isEmpty()) append("Изменений нет")
-        }.trimEnd()
+        fun toSummary(): String {
+            val sb = StringBuilder()
+            if (devicesAdded > 0) sb.append("Приборов добавлено: $devicesAdded\n")
+            if (devicesUpdated > 0) sb.append("Приборов обновлено: $devicesUpdated\n")
+            if (schemesAdded > 0) sb.append("Схем добавлено: $schemesAdded\n")
+            if (schemesUpdated > 0) sb.append("Схем обновлено: $schemesUpdated\n")
+            if (locationsAdded > 0) sb.append("Локаций добавлено: $locationsAdded\n")
+            if (locationsUpdated > 0) sb.append("Локаций обновлено: $locationsUpdated\n")
+            if (photosAdded > 0) sb.append("Фотографий добавлено: $photosAdded\n")
+            if (conflicts.isNotEmpty()) sb.append("Обнаружено конфликтов: ${conflicts.size}\n")
+            
+            return if (sb.isEmpty()) "Изменений не обнаружено." else sb.toString().trim()
+        }
     }
 }

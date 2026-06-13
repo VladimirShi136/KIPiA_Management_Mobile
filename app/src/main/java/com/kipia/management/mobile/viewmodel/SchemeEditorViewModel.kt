@@ -81,6 +81,7 @@ class SchemeEditorViewModel @Inject constructor(
 
                 val schemeData = scheme.getSchemeData()
 
+                // 1. Загружаем фигуры
                 shapeManager.clear()
                 schemeData.shapes.forEach { shapeData ->
                     try {
@@ -90,20 +91,38 @@ class SchemeEditorViewModel @Inject constructor(
                     }
                 }
 
+                // 2. Загружаем приборы (с поддержкой миграции из JSON)
                 deviceManager.clear()
                 val locations = deviceLocationRepository.getLocationsForScheme(scheme.id)
-                locations.forEach { loc ->
-                    deviceManager.addDevice(loc.deviceId, Offset(loc.x.toFloat(), loc.y.toFloat()))
-                    deviceManager.rotateDevice(loc.deviceId, loc.rotation.toFloat())
+                
+                if (locations.isNotEmpty()) {
+                    locations.forEach { loc ->
+                        deviceManager.addDevice(loc.deviceId, Offset(loc.x.toFloat(), loc.y.toFloat()))
+                        deviceManager.rotateDevice(loc.deviceId, loc.rotation.toFloat())
+                    }
+                } else if (schemeData.devices.isNotEmpty()) {
+                    // Если в таблице пусто, берем из JSON (формат JavaFX или старый кэш)
+                    schemeData.devices.forEach { sd ->
+                        deviceManager.addDevice(sd.deviceId, Offset(sd.x, sd.y))
+                        deviceManager.rotateDevice(sd.deviceId, sd.rotation)
+                        
+                        // Сохраняем в новую таблицу для ускорения доступа
+                        deviceLocationRepository.saveLocation(
+                            DeviceLocation(
+                                deviceId = sd.deviceId, schemeId = scheme.id,
+                                x = sd.x.toDouble(), y = sd.y.toDouble(), rotation = sd.rotation.toDouble()
+                            )
+                        )
+                    }
                 }
 
                 _editorState.update {
                     it.copy(
                         scheme = scheme,
                         canvasState = CanvasState(
-                            width = schemeData.width,
-                            height = schemeData.height,
-                            backgroundColor = parseColor(schemeData.backgroundColor),
+                            width = schemeData.width.toInt().coerceAtLeast(100),
+                            height = schemeData.height.toInt().coerceAtLeast(100),
+                            backgroundColor = ShapeUtils.parseHexColor(schemeData.backgroundColor, Color.White),
                             backgroundImage = schemeData.backgroundImage,
                             showGrid = schemeData.gridEnabled,
                             gridSize = schemeData.gridSize
@@ -347,7 +366,6 @@ class SchemeEditorViewModel @Inject constructor(
 
         _editorState.update { it.copy(uiState = it.uiState.copy(isSaving = true)) }
         
-        // Искусственная задержка для визуализации процесса сохранения
         delay(1500)
 
         return try {
@@ -355,9 +373,9 @@ class SchemeEditorViewModel @Inject constructor(
             val currentDevices = devices.value
 
             val schemeData = SchemeData(
-                width = currentState.canvasState.width,
-                height = currentState.canvasState.height,
-                backgroundColor = currentState.canvasState.backgroundColor.toHex(),
+                width = currentState.canvasState.width.toDouble(),
+                height = currentState.canvasState.height.toDouble(),
+                backgroundColor = with(ShapeUtils) { currentState.canvasState.backgroundColor.toHex() },
                 backgroundImage = currentState.canvasState.backgroundImage,
                 gridEnabled = currentState.canvasState.showGrid,
                 gridSize = currentState.canvasState.gridSize,
@@ -404,22 +422,6 @@ class SchemeEditorViewModel @Inject constructor(
 
     fun undo() { commandManager.undo(); markAsDirty() }
     fun redo() { commandManager.redo(); markAsDirty() }
-
-    private fun Color.toHex(): String {
-        val a = (alpha * 255).toInt().coerceIn(0, 255)
-        val r = (red * 255).toInt().coerceIn(0, 255)
-        val g = (green * 255).toInt().coerceIn(0, 255)
-        val b = (blue * 255).toInt().coerceIn(0, 255)
-        return String.format("#%02X%02X%02X%02X", a, r, g, b)
-    }
-
-    private fun parseColor(colorHex: String): Color {
-        return try {
-            val cleanHex = colorHex.removePrefix("#")
-            val longColor = cleanHex.toLong(16)
-            Color(if (cleanHex.length == 6) 0xFF000000 or longColor else longColor)
-        } catch (_: Exception) { Color.White }
-    }
 }
 
 enum class EditorMode { NONE, SELECT, RECTANGLE, LINE, ELLIPSE, TEXT, RHOMBUS, DEVICE, PAN_ZOOM }

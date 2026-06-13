@@ -3,7 +3,6 @@ package com.kipia.management.mobile.ui.components.scheme.utils
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import com.kipia.management.mobile.data.entities.ShapeData
 import com.kipia.management.mobile.ui.components.scheme.shapes.*
 import timber.log.Timber
@@ -14,6 +13,22 @@ object ShapeUtils {
     const val DEVICE_ICON_SIZE = 45f
 
     // ====== ПРОВЕРКА ПОПАДАНИЯ ======
+
+    fun transformPointToShapeSpace(point: Offset, x: Float, y: Float, width: Float, height: Float, rotation: Float): Offset {
+        if (rotation == 0f) return Offset(point.x - x, point.y - y)
+        
+        val centerX = x + width / 2
+        val centerY = y + height / 2
+        val radians = Math.toRadians(-rotation.toDouble()).toFloat()
+        
+        val relX = point.x - centerX
+        val relY = point.y - centerY
+        
+        val rotatedX = relX * cos(radians) - relY * sin(radians)
+        val rotatedY = relX * sin(radians) + relY * cos(radians)
+        
+        return Offset(rotatedX + width / 2, rotatedY + height / 2)
+    }
 
     fun isPointInRectangle(point: Offset, width: Float, height: Float): Boolean {
         return point.x in 0f..width && point.y in 0f..height
@@ -109,11 +124,6 @@ object ShapeUtils {
                     max(shape.startX, shape.endX) + shape.strokeWidth, max(shape.startY, shape.endY) + shape.strokeWidth)
     }
 
-    fun isShapeWithinBounds(shape: ComposeShape, canvasWidth: Float, canvasHeight: Float): Boolean {
-        val bounds = getShapeBounds(shape)
-        return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= canvasWidth && bounds.bottom <= canvasHeight
-    }
-
     fun clampShape(shape: ComposeShape, canvasWidth: Float, canvasHeight: Float): ComposeShape {
         var s = shape
         if (s is ComposeLine) {
@@ -156,77 +166,89 @@ object ShapeUtils {
                       y.coerceIn(0f, (canvasHeight - DEVICE_ICON_SIZE).coerceAtLeast(0f)))
     }
 
-    fun transformPointToShapeSpace(point: Offset, shapeX: Float, shapeY: Float, shapeWidth: Float, shapeHeight: Float, rotation: Float): Offset {
-        val centerX = shapeX + shapeWidth / 2; val centerY = shapeY + shapeHeight / 2
-        val localX = point.x - centerX; val localY = point.y - centerY
-        val radians = rotation * PI.toFloat() / 180f
-        val rotatedX = localX * cos(-radians) - localY * sin(-radians)
-        val rotatedY = localX * sin(-radians) + localY * cos(-radians)
-        return Offset(rotatedX + shapeWidth / 2, rotatedY + shapeHeight / 2)
-    }
-
-    // ====== ЦВЕТА (RGBA для JavaFX) ======
+    // ====== ЦВЕТА (Совместимость с JavaFX и Android) ======
 
     fun parseHexColor(hex: String?, default: Color = Color.Transparent): Color {
         if (hex.isNullOrBlank()) return default
+        
+        // JavaFX Color.toString() обычно возвращает 0xRRGGBBAA
+        // Android/Compose обычно использует #AARRGGBB
+        val isJavaFXPrefix = hex.startsWith("0x")
+        
         return try {
-            val clean = hex.removePrefix("#")
-            if (clean.length == 8) { // RGBA
-                val r = clean.substring(0,2).toInt(16); val g = clean.substring(2,4).toInt(16)
-                val b = clean.substring(4,6).toInt(16); val a = clean.substring(6,8).toInt(16)
-                Color(r/255f, g/255f, b/255f, a/255f)
-            } else Color(0xFF000000 or clean.toLong(16))
+            val clean = hex.removePrefix("#").removePrefix("0x")
+            when (clean.length) {
+                6 -> Color(0xFF000000 or clean.toLong(16)) // RGB -> Непрозрачный ARGB
+                8 -> {
+                    // Пытаемся определить формат RGBA (JavaFX) или ARGB (Android)
+                    // Heuristic: если строка из JavaFX или если она заканчивается на FF (непрозрачный), 
+                    // но при этом в начале не FF, то это скорее всего RGBA.
+                    val isLikelyRGBA = isJavaFXPrefix || (hex.startsWith("#") && hex.endsWith("FF") && !hex.startsWith("#FF"))
+                    
+                    if (isLikelyRGBA) {
+                        // RGBA (JavaFX)
+                        val r = clean.substring(0, 2).toInt(16)
+                        val g = clean.substring(2, 4).toInt(16)
+                        val b = clean.substring(4, 6).toInt(16)
+                        val a = clean.substring(6, 8).toInt(16)
+                        Color(r / 255f, g / 255f, b / 255f, a / 255f)
+                    } else {
+                        // ARGB (Android)
+                        val a = clean.substring(0, 2).toInt(16)
+                        val r = clean.substring(2, 4).toInt(16)
+                        val g = clean.substring(4, 6).toInt(16)
+                        val b = clean.substring(6, 8).toInt(16)
+                        Color(r / 255f, g / 255f, b / 255f, a / 255f)
+                    }
+                }
+                else -> Color(clean.toLong(16))
+            }
         } catch (e: Exception) { default }
     }
 
     fun Color.toHex(): String {
-        val r = (red * 255).toInt().coerceIn(0, 255); val g = (green * 255).toInt().coerceIn(0, 255)
-        val b = (blue * 255).toInt().coerceIn(0, 255); val a = (alpha * 255).toInt().coerceIn(0, 255)
-        return String.format("#%02X%02X%02X%02X", r, g, b, a)
+        val a = (alpha * 255).toInt().coerceIn(0, 255)
+        val r = (red * 255).toInt().coerceIn(0, 255)
+        val g = (green * 255).toInt().coerceIn(0, 255)
+        val b = (blue * 255).toInt().coerceIn(0, 255)
+        return String.format("#%02X%02X%02X%02X", a, r, g, b)
     }
 }
 
-// ====== МАППЕРЫ ======
+// ====== МАППЕРЫ (JavaFX -> Android Compose) ======
 
 fun ShapeData.toComposeShape(): ComposeShape {
     val f = ShapeUtils.parseHexColor(fillColor, Color.Transparent)
     val s = ShapeUtils.parseHexColor(strokeColor, Color.Black)
     
-    // Генерируем по-настоящему уникальный ID, если он пуст в базе (как в JavaFX)
+    // Генерируем уникальный ID для JavaFX фигур
     val shapeId = id ?: "${type.lowercase()}_${UUID.randomUUID()}"
     
-    // Пытаемся взять значения из properties для совместимости
-    val pText = (properties?.get("text") as? String) ?: text
-    val pFontSize = (properties?.get("fontSize") as? Number)?.toFloat() ?: fontSize
-    val pFontStyle = (properties?.get("fontStyle") as? String) ?: fontStyle
-    val pFontFamily = (properties?.get("fontFamily") as? String) ?: fontFamily
+    // Приводим все координаты к Float для Compose
+    val xF = x.toFloat(); val yF = y.toFloat()
+    val wF = width.toFloat(); val hF = height.toFloat()
+    val rF = rotation.toFloat()
+    val swF = strokeWidth.toFloat()
 
-    return when (type) {
-        "RECTANGLE" -> ComposeRectangle(shapeId, x, y, width, height, rotation, f, s, strokeWidth)
-        "LINE" -> ComposeLine(shapeId, x, y, width, height, rotation, f, s, strokeWidth, startX, startY, endX, endY)
-        "ELLIPSE" -> ComposeEllipse(shapeId, x, y, width, height, rotation, f, s, strokeWidth)
+    return when (type.uppercase()) {
+        "RECTANGLE" -> ComposeRectangle(shapeId, xF, yF, wF, hF, rF, f, s, swF)
+        "LINE" -> ComposeLine(shapeId, xF, yF, wF, hF, rF, f, s, swF, startX.toFloat(), startY.toFloat(), endX.toFloat(), endY.toFloat())
+        "ELLIPSE" -> ComposeEllipse(shapeId, xF, yF, wF, hF, rF, f, s, swF)
         "TEXT" -> {
-            val style = pFontStyle?.lowercase() ?: ""
+            val style = fontStyle?.lowercase() ?: ""
             ComposeText(
-                id = shapeId,
-                x = x,
-                y = y,
-                width = width,
-                height = height,
-                rotation = rotation,
-                fillColor = f,
-                strokeColor = s,
-                strokeWidth = strokeWidth,
-                text = pText ?: "",
-                fontSize = if (pFontSize > 0) pFontSize else 16f,
+                id = shapeId, x = xF, y = yF, width = wF, height = hF, rotation = rF,
+                fillColor = f, strokeColor = s, strokeWidth = swF,
+                text = text ?: "",
+                fontSize = if (fontSize > 0) fontSize.toFloat() else 16f,
                 textColor = if (fillColor != null) f else Color.Black,
                 isBold = style.contains("bold"),
                 isItalic = style.contains("italic"),
-                fontFamily = pFontFamily ?: "Arial"
+                fontFamily = fontFamily ?: "Arial"
             )
         }
-        "RHOMBUS", "VALVE" -> ComposeRhombus(shapeId, x, y, width, height, rotation, f, s, strokeWidth)
-        else -> ComposeRectangle(shapeId, x, y, width, height)
+        "RHOMBUS", "VALVE" -> ComposeRhombus(shapeId, xF, yF, wF, hF, rF, f, s, swF)
+        else -> ComposeRectangle(shapeId, xF, yF, wF.coerceAtLeast(10f), hF.coerceAtLeast(10f))
     }
 }
 
@@ -245,34 +267,21 @@ fun ComposeShape.toShapeData(): ShapeData {
         }
     } else "Regular"
 
-    // Создаем карту свойств для JavaFX
-    val props = if (this is ComposeText) {
-        mapOf(
-            "text" to text,
-            "fontSize" to fontSize.toDouble(),
-            "fontStyle" to style,
-            "fontFamily" to fontFamily
-        )
-    } else null
-    
     return ShapeData(
         type = t,
         id = id,
-        x = x,
-        y = y,
-        width = width,
-        height = height,
-        rotation = rotation,
+        x = x.toDouble(), y = y.toDouble(),
+        width = width.toDouble(), height = height.toDouble(),
+        rotation = rotation.toDouble(),
         fillColor = if (this is ComposeText) textColor.toHx() else fillColor.toHx(),
         strokeColor = strokeColor.toHx(),
-        strokeWidth = strokeWidth,
-        properties = props,
-        startX = if (this is ComposeLine) startX else 0f,
-        startY = if (this is ComposeLine) startY else 0f,
-        endX = if (this is ComposeLine) endX else 0f,
-        endY = if (this is ComposeLine) endY else 0f,
+        strokeWidth = strokeWidth.toDouble(),
+        startX = if (this is ComposeLine) startX.toDouble() else 0.0,
+        startY = if (this is ComposeLine) startY.toDouble() else 0.0,
+        endX = if (this is ComposeLine) endX.toDouble() else 0.0,
+        endY = if (this is ComposeLine) endY.toDouble() else 0.0,
         text = if (this is ComposeText) text else null,
-        fontSize = if (this is ComposeText) fontSize else 0f,
+        fontSize = if (this is ComposeText) fontSize.toDouble() else 0.0,
         fontStyle = style,
         fontFamily = if (this is ComposeText) fontFamily else "System"
     )

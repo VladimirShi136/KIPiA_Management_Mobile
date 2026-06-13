@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import timber.log.Timber
 
 @Entity(
@@ -57,38 +58,38 @@ data class Scheme(
 
 /**
  * Структура данных схемы. 
- * Поле 'devices' помечено @Transient, чтобы Gson не сохранял его в JSON (совместимость с JavaFX).
+ * Поле 'devices' теперь НЕ @Transient для совместимости с JavaFX версией при импорте.
  */
 data class SchemeData(
-    val version: Int = 1,
-    val width: Int = 2000,
-    val height: Int = 1200,
-    val backgroundColor: String = "#FFFFFF",
-    val backgroundImage: String? = null,
-    val gridEnabled: Boolean = true,
-    val gridSize: Int = 50,
-    @Transient val devices: List<SchemeDevice> = emptyList(),
-    val shapes: List<ShapeData> = emptyList()
+    @SerializedName("version") val version: Int = 1,
+    @SerializedName("width") val width: Double = 2000.0,
+    @SerializedName("height") val height: Double = 1200.0,
+    @SerializedName("backgroundColor") val backgroundColor: String = "#FFFFFF",
+    @SerializedName("backgroundImage") val backgroundImage: String? = null,
+    @SerializedName("gridEnabled") val gridEnabled: Boolean = true,
+    @SerializedName("gridSize") val gridSize: Int = 50,
+    @SerializedName("devices") val devices: List<SchemeDevice> = emptyList(),
+    @SerializedName("shapes") val shapes: List<ShapeData> = emptyList()
 )
 
 data class ShapeData(
-    val type: String,
-    val id: String? = null,
-    val x: Float = 0f,
-    val y: Float = 0f,
-    val width: Float = 0f,
-    val height: Float = 0f,
-    val rotation: Float = 0f,
-    val fillColor: String? = null,
-    val strokeColor: String? = null,
-    val strokeWidth: Float = 2f,
-    val properties: Map<String, Any>? = null,
-    val startX: Float = 0f,
-    val startY: Float = 0f,
-    val endX: Float = 0f,
-    val endY: Float = 0f,
-    val text: String? = null,
-    val fontSize: Float = 0f,
-    val fontStyle: String? = null,
-    val fontFamily: String? = "System"
+    @SerializedName("type") val type: String,
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("x") val x: Double = 0.0,
+    @SerializedName("y") val y: Double = 0.0,
+    @SerializedName("width") val width: Double = 0.0,
+    @SerializedName("height") val height: Double = 0.0,
+    @SerializedName("rotation") val rotation: Double = 0.0,
+    @SerializedName("fillColor") val fillColor: String? = null,
+    @SerializedName("strokeColor") val strokeColor: String? = null,
+    @SerializedName("strokeWidth") val strokeWidth: Double = 2.0,
+    @SerializedName("properties") val properties: Map<String, Any>? = null,
+    @SerializedName("startX") val startX: Double = 0.0,
+    @SerializedName("startY") val startY: Double = 0.0,
+    @SerializedName("endX") val endX: Double = 0.0,
+    @SerializedName("endY") val endY: Double = 0.0,
+    @SerializedName("text") val text: String? = null,
+    @SerializedName("fontSize") val fontSize: Double = 0.0,
+    @SerializedName("fontStyle") val fontStyle: String? = null,
+    @SerializedName("fontFamily") val fontFamily: String? = "System"
 )
