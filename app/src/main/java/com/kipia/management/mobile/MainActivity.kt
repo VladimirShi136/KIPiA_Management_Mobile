@@ -39,19 +39,15 @@ import com.kipia.management.mobile.ui.components.topappbar.KIPiATopAppBar
 import com.kipia.management.mobile.ui.components.topappbar.rememberTopAppBarController
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
 import com.kipia.management.mobile.ui.navigation.KIPiANavHost
-import com.kipia.management.mobile.ui.screens.reports.models.ReportFilter
-import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.ui.theme.BottomNavColors
 import com.kipia.management.mobile.ui.theme.KIPiATheme
 import com.kipia.management.mobile.ui.theme.SystemColors
-import com.kipia.management.mobile.ui.theme.toHex
 import com.kipia.management.mobile.viewmodel.PhotosViewModel
 import com.kipia.management.mobile.viewmodel.SchemesViewModel
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
-import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -204,7 +200,7 @@ fun KIPiAApp(
             }
 
             LaunchedEffect(navController) {
-                navController.addOnDestinationChangedListener { _, destination, arguments ->
+                navController.addOnDestinationChangedListener { _, destination, _ ->
                     val route = destination.route
                     showBottomNav = when {
                         route?.startsWith("device_edit") == true -> false
@@ -235,7 +231,7 @@ fun KIPiAApp(
                         route == "schemes" -> topAppBarController.setForScreen("schemes", mapOf(
                             "title" to "Учет приборов КИПиА",
                             "searchQuery" to schemesState.searchQuery,
-                            "currentSort" to (schemesState.sortBy ?: SchemesSortBy.NAME_ASC)
+                            "currentSort" to schemesState.sortBy
                         ))
                         
                         route?.startsWith("scheme_editor") == true -> {

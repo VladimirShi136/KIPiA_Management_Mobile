@@ -19,9 +19,15 @@ class DatabaseInitializer @Inject constructor(
     private val database: AppDatabase,
     private val schemeSyncUseCase: SchemeSyncUseCase
 ) {
-    // Добавьте флаг для отключения тестовых данных
+    /* Флаг для отключения тестовых данных
+    * Чтобы отключить, установите значение false
+    * Чтобы инициализировать тестовые устройства, установите значение true.
+    */
     private val shouldCreateTestDevices = false  // Установите false для отключения
 
+    /**
+     * Инициализация базы данных.
+     */
     fun initialize() {
         CoroutineScope(Dispatchers.IO).launch {
             val deviceDao = database.deviceDao()
@@ -41,6 +47,9 @@ class DatabaseInitializer @Inject constructor(
         }
     }
 
+    /**
+     * Создание и сохранение тестовых устройств в базе данных.
+     */
     private suspend fun createAndSaveTestDevices(deviceDao: DeviceDao) {
         Timber.d("DatabaseInitializer: создаем тестовые устройства")
         val testDevices = createTestDevices()
@@ -51,6 +60,9 @@ class DatabaseInitializer @Inject constructor(
         Timber.d("DatabaseInitializer: создано ${testDevices.size} тестовых устройств")
     }
 
+    /**
+     * Создание тестовых устройств.
+     */
     private fun createTestDevices(): List<Device> {
         return listOf(
             // Манометры

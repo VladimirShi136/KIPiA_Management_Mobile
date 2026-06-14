@@ -171,7 +171,7 @@ fun DeviceEditScreen(
             viewModel.loadDevice(deviceId)
         } else {
             viewModel.updateDevice {
-                Device.createEmpty().copy(type = "Манометр", status = "В работе")
+                Device.createEmpty().copy(type = "", status = "")
             }
         }
     }
@@ -295,11 +295,11 @@ fun DeviceEditForm(
 ) {
     val safeDevice = device ?: Device.createEmpty()
     val isNew = safeDevice.id <= 0
-    val isLocationDropdownExpanded by viewModel.isLocationDropdownExpanded.collectAsStateWithLifecycle()
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
 
     var showPhotoOptions by remember { mutableStateOf(false) }
     var isStatusExpanded by remember { mutableStateOf(false) }
+    var isLocationExpanded by remember { mutableStateOf(false) }
 
     val photoPaths = remember(safeDevice, photoManager) {
         safeDevice.photos.mapNotNull { fileName ->
@@ -320,18 +320,19 @@ fun DeviceEditForm(
     var statusText by remember { mutableStateOf(safeDevice.status) }
     var additionalInfoText by remember { mutableStateOf(safeDevice.additionalInfo ?: "") }
 
-    LaunchedEffect(safeDevice) {
-        typeText = safeDevice.type
-        inventoryNumberText = safeDevice.inventoryNumber
-        locationText = safeDevice.location
-        nameText = safeDevice.name ?: ""
-        manufacturerText = safeDevice.manufacturer ?: ""
-        yearText = safeDevice.year?.toString() ?: ""
-        measurementLimitText = safeDevice.measurementLimit ?: ""
-        accuracyClassText = safeDevice.accuracyClass?.toString() ?: ""
-        valveNumberText = safeDevice.valveNumber ?: ""
-        statusText = safeDevice.status
-        additionalInfoText = safeDevice.additionalInfo ?: ""
+    // Синхронизация локальных состояний с данными из ViewModel только при необходимости
+    LaunchedEffect(safeDevice.id, safeDevice.updatedAt) {
+        if (typeText != safeDevice.type) typeText = safeDevice.type
+        if (inventoryNumberText != safeDevice.inventoryNumber) inventoryNumberText = safeDevice.inventoryNumber
+        if (locationText != safeDevice.location) locationText = safeDevice.location
+        if (nameText != (safeDevice.name ?: "")) nameText = safeDevice.name ?: ""
+        if (manufacturerText != (safeDevice.manufacturer ?: "")) manufacturerText = safeDevice.manufacturer ?: ""
+        if (yearText != (safeDevice.year?.toString() ?: "")) yearText = safeDevice.year?.toString() ?: ""
+        if (measurementLimitText != (safeDevice.measurementLimit ?: "")) measurementLimitText = safeDevice.measurementLimit ?: ""
+        if (accuracyClassText != (safeDevice.accuracyClass?.toString() ?: "")) accuracyClassText = safeDevice.accuracyClass?.toString() ?: ""
+        if (valveNumberText != (safeDevice.valveNumber ?: "")) valveNumberText = safeDevice.valveNumber ?: ""
+        if (statusText != safeDevice.status) statusText = safeDevice.status
+        if (additionalInfoText != (safeDevice.additionalInfo ?: "")) additionalInfoText = safeDevice.additionalInfo ?: ""
     }
 
     if (showPhotoOptions) {
@@ -353,34 +354,43 @@ fun DeviceEditForm(
         verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
         DeviceEditSectionTitle("Основная информация")
-        DeviceTextField(value = typeText, onValueChange = { typeText = it; onTypeChanged(it) }, label = "Тип прибора *", placeholder = "Например: Манометр", isError = uiState.typeError != null, errorText = uiState.typeError)
+        DeviceTextField(value = typeText, onValueChange = { typeText = it; onTypeChanged(it) }, label = "Тип прибора *",  isError = uiState.typeError != null, errorText = uiState.typeError)
         DeviceTextField(value = nameText, onValueChange = { nameText = it; onNameChanged(it) }, label = "Модель *", isError = uiState.nameError != null, errorText = uiState.nameError)
         DeviceTextField(value = manufacturerText, onValueChange = { manufacturerText = it; onManufacturerChanged(it) }, label = "Производитель")
         DeviceTextField(value = inventoryNumberText, onValueChange = { inventoryNumberText = it; onInventoryNumberChanged(it) }, label = "Инвентарный номер *", isError = uiState.inventoryNumberError != null, errorText = uiState.inventoryNumberError)
         DeviceTextField(value = yearText, onValueChange = { yearText = it; onYearChanged(it) }, label = "Год выпуска", keyboardType = KeyboardType.Number)
         DeviceTextField(value = measurementLimitText, onValueChange = { measurementLimitText = it; onMeasurementLimitChanged(it) }, label = "Предел измерений")
-        DeviceTextField(value = accuracyClassText, onValueChange = { accuracyClassText = it; onAccuracyClassChanged(it) }, label = "Класс точности", keyboardType = KeyboardType.Number)
+        DeviceTextField(
+            value = accuracyClassText,
+            onValueChange = { 
+                val sanitized = it.replace(',', '.')
+                accuracyClassText = sanitized
+                onAccuracyClassChanged(sanitized) 
+            },
+            label = "Класс точности",
+            keyboardType = KeyboardType.Decimal
+        )
         DeviceTextField(value = valveNumberText, onValueChange = { valveNumberText = it; onValveNumberChanged(it) }, label = "Номер крана")
 
         DeviceEditSectionTitle("Место и статус")
         ExposedDropdownMenuBox(
-            expanded = isLocationDropdownExpanded,
-            onExpandedChange = { expanded ->
-                if (expanded) viewModel.expandLocationDropdown()
-                else viewModel.collapseLocationDropdown()
-            }
+            expanded = isLocationExpanded,
+            onExpandedChange = { isLocationExpanded = it }
         ) {
             OutlinedTextField(
                 value = locationText,
-                onValueChange = { locationText = it; onLocationChanged(it) },
+                onValueChange = { 
+                    locationText = it
+                    onLocationChanged(it)
+                },
                 label = { Text("Место установки *") },
                 modifier = Modifier.fillMaxWidth().menuAnchor().padding(vertical = Dimens.spacingSmall),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLocationDropdownExpanded) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLocationExpanded) },
                 isError = uiState.locationError != null
             )
             ExposedDropdownMenu(
-                expanded = isLocationDropdownExpanded && allLocations.isNotEmpty(),
-                onDismissRequest = { viewModel.collapseLocationDropdown() }
+                expanded = isLocationExpanded && allLocations.isNotEmpty(),
+                onDismissRequest = { isLocationExpanded = false }
             ) {
                 allLocations.forEach { location ->
                     DropdownMenuItem(
@@ -388,7 +398,7 @@ fun DeviceEditForm(
                         onClick = {
                             locationText = location
                             onLocationChanged(location)
-                            viewModel.collapseLocationDropdown()
+                            isLocationExpanded = false
                         }
                     )
                 }

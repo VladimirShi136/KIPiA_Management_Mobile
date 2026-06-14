@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
 
+/**
+ * Команда для обновления цвета обводки фигуры.
+ */
 class UpdateShapeStrokeColorCommand(
     private val shapeManager: ShapeManager,
     private val editorState: MutableStateFlow<EditorState>,
@@ -15,12 +18,19 @@ class UpdateShapeStrokeColorCommand(
     private val newColor: Color,
     private val oldColor: Color
 ) : Command {
+
+    /**
+     * Выполнить команду
+     */
     override fun execute() {
         Timber.d("🎨 Executing stroke color update: $newColor")
         shapeManager.updateStrokeColor(shapeId, newColor)
         editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
     }
 
+    /**
+     * Отменить команду
+     */
     override fun undo() {
         Timber.d("🎨 Undoing stroke color update: $oldColor")
         shapeManager.updateStrokeColor(shapeId, oldColor)

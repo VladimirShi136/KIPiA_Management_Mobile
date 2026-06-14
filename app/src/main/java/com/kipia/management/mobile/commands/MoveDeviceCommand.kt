@@ -4,6 +4,9 @@ import androidx.compose.ui.geometry.Offset
 import com.kipia.management.mobile.managers.Command
 import com.kipia.management.mobile.managers.DeviceManager
 
+/**
+ * Команда для перемещения устройства.
+ */
 class MoveDeviceCommand(
     private val deviceManager: DeviceManager,
     private val onStateChange: () -> Unit,
@@ -12,6 +15,9 @@ class MoveDeviceCommand(
 ) : Command {
     private var previousPosition: Pair<Float, Float>? = null
 
+    /**
+     * Выполняет команду.
+     */
     override fun execute() {
         // Сохраняем позицию ДО перемещения
         previousPosition = deviceManager.devices.value
@@ -22,6 +28,9 @@ class MoveDeviceCommand(
         onStateChange()
     }
 
+    /**
+     * Отменяет команду.
+     */
     override fun undo() {
         previousPosition?.let { (x, y) ->
             // Возвращаем на исходную позицию через moveDevice с обратным смещением

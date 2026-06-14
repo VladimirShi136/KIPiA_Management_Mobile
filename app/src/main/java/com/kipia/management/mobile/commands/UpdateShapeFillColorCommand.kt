@@ -7,6 +7,9 @@ import com.kipia.management.mobile.viewmodel.EditorState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
+/**
+ * Команда для обновления цвета заливки фигуры.
+ */
 class UpdateShapeFillColorCommand(
     private val shapeManager: ShapeManager,
     private val editorState: MutableStateFlow<EditorState>,
@@ -14,11 +17,18 @@ class UpdateShapeFillColorCommand(
     private val newColor: Color,
     private val oldColor: Color
 ) : Command {
+
+    /**
+     * Выполнить команду
+     */
     override fun execute() {
         shapeManager.updateFillColor(shapeId, newColor)
         editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }
     }
 
+    /**
+     * Отменить команду
+     */
     override fun undo() {
         shapeManager.updateFillColor(shapeId, oldColor)
         editorState.update { it.copy(uiState = it.uiState.copy(isDirty = true)) }

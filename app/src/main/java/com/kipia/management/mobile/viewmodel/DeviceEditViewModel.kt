@@ -36,8 +36,6 @@ class DeviceEditViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DeviceEditUiState())
     val uiState: StateFlow<DeviceEditUiState> = _uiState
-    private val _isLocationDropdownExpanded = MutableStateFlow(false)
-    val isLocationDropdownExpanded: StateFlow<Boolean> = _isLocationDropdownExpanded.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -105,7 +103,7 @@ class DeviceEditViewModel @Inject constructor(
 
     fun updateDevice(transform: (Device) -> Device) {
         _device.update { current ->
-            transform(current ?: Device.createEmpty().copy(type = "Манометр", status = "В работе"))
+            transform(current ?: Device.createEmpty().copy(type = "", status = ""))
         }
     }
 
@@ -254,8 +252,6 @@ class DeviceEditViewModel @Inject constructor(
     }
 
     val allLocations = repository.getAllLocations().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    fun expandLocationDropdown() { _isLocationDropdownExpanded.value = true }
-    fun collapseLocationDropdown() { _isLocationDropdownExpanded.value = false }
     fun clearSaveState() { _uiState.update { it.copy(isSaved = false, isDeleted = false) } }
 }
 

@@ -10,16 +10,25 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/**
+ * Абстрактный класс для модуля репозиториев.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
+    /**
+     * Метод для предоставления экземпляра репозитория схем.
+     */
     @Binds
     @Singleton
     abstract fun bindSchemeRepository(
         schemeRepositoryImpl: SchemeRepositoryImpl
     ): SchemeRepository
 
+    /**
+     * Метод для предоставления экземпляра репозитория локаций устройств.
+     */
     @Binds
     @Singleton
     abstract fun bindDeviceLocationRepository(

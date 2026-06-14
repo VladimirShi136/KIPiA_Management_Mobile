@@ -6,6 +6,9 @@ import com.kipia.management.mobile.data.entities.SchemeDevice
 import com.kipia.management.mobile.managers.DeviceManager
 import timber.log.Timber
 
+/**
+ * Команда для добавления устройства на схему.
+ */
 class AddDeviceCommand(
     private val deviceManager: DeviceManager,
     private val onStateChange: () -> Unit,
@@ -14,6 +17,9 @@ class AddDeviceCommand(
 ) : Command {
     private var addedDevice: SchemeDevice? = null
 
+    /**
+     * Выполняет команду.
+     */
     override fun execute() {
         Timber.d("➕ AddDeviceCommand.execute: ID=$deviceId, позиция=$position")
 
@@ -31,6 +37,9 @@ class AddDeviceCommand(
         onStateChange()
     }
 
+    /**
+     * Отменяет команду.
+     */
     override fun undo() {
         Timber.d("➖ AddDeviceCommand.undo: ID=$deviceId")
         addedDevice?.let {

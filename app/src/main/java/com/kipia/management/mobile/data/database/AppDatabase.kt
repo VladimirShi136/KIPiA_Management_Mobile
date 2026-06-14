@@ -6,11 +6,18 @@ import androidx.room.TypeConverters
 import com.kipia.management.mobile.data.dao.*
 import com.kipia.management.mobile.data.entities.*
 
+/**
+ * База данных Room для хранения устройств, схем и локаций устройств.
+ */
 @Database(
     entities = [Device::class, Scheme::class, DeviceLocation::class],
     version = 4,
     exportSchema = false
 )
+
+/**
+ * Класс базы данных Room для хранения устройств, схем и локаций устройств.
+ */
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deviceDao(): DeviceDao
