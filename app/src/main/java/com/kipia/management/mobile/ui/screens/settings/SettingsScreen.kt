@@ -1,8 +1,11 @@
 package com.kipia.management.mobile.ui.screens.settings
 
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.kipia.management.mobile.ui.theme.Dimens
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,6 +25,7 @@ import androidx.navigation.NavController
 import com.kipia.management.mobile.BuildConfig
 import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.ui.components.sync.ConflictResolutionDialog
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.SettingsViewModel
 import com.kipia.management.mobile.viewmodel.SyncState
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
@@ -31,11 +36,23 @@ import java.util.*
 @Composable
 fun SettingsScreen(
     navController: NavController,
+    topAppBarController: TopAppBarController,
     themeViewModel: ThemeViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     updateBottomNavVisibility: (Boolean) -> Unit = {}
 ) {
-    LaunchedEffect(Unit) { updateBottomNavVisibility(false) }
+    LaunchedEffect(Unit) {
+        updateBottomNavVisibility(false)
+        topAppBarController.setForScreen(
+            "settings",
+            mapOf(
+                "title" to "Настройки",
+                "showBackButton" to true,
+                "onBackClick" to { navController.popBackStack() }
+            )
+        )
+    }
+    
     DisposableEffect(Unit) { onDispose { updateBottomNavVisibility(true) } }
 
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
@@ -47,6 +64,10 @@ fun SettingsScreen(
     val lastExport by settingsViewModel.lastExportTimestamp.collectAsStateWithLifecycle()
     val lastImport by settingsViewModel.lastImportTimestamp.collectAsStateWithLifecycle()
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+    val context = LocalContext.current
+
+    // Для скрытого меню
+    var debugClickCount by remember { mutableIntStateOf(0) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
@@ -116,6 +137,27 @@ fun SettingsScreen(
                 onDismiss = { settingsViewModel.resetState() },
                 onResolve = { resolutions ->
                     settingsViewModel.resolveConflicts(resolutions)
+                }
+            )
+        }
+        is SyncState.GhostDevicesDetected -> {
+            AlertDialog(
+                onDismissRequest = { settingsViewModel.resetState() },
+                icon = { Icon(Icons.Filled.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                title = { Text("Найдена корзина") },
+                text = {
+                    Text("В импортируемых данных найдено ${state.ghostDevices.size} удаленных приборов, которых нет в вашей базе. " +
+                            "Хотите восстановить их в корзину или пропустить?")
+                },
+                confirmButton = {
+                    TextButton(onClick = { settingsViewModel.resolveGhostDevices(true) }) {
+                        Text("Восстановить")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { settingsViewModel.resolveGhostDevices(false) }) {
+                        Text("Пропустить")
+                    }
                 }
             )
         }
@@ -282,24 +324,57 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = Dimens.spacingFab)
                 )
 
-                AboutRow(icon = Icons.Filled.Info, label = "Версия", value = BuildConfig.VERSION_NAME)
-                AboutRow(icon = Icons.Filled.Code, label = "Разработчик", value = "KIPiA Management")
+                AboutRow(
+                    icon = Icons.Filled.Info,
+                    label = "Версия",
+                    value = BuildConfig.VERSION_NAME,
+                    onClick = {
+                        debugClickCount++
+                        if (debugClickCount >= 7) {
+                            debugClickCount = 0
+                            navController.navigate("debug_settings")
+                        } else if (debugClickCount > 3) {
+                            Toast.makeText(context, "Еще ${7 - debugClickCount} нажатий до меню разработчика", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+                AboutRow(
+                    icon = Icons.Filled.Code,
+                    label = "Исходный код",
+                    value = "KIPiA_Management_Mobile",
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/VladimirShi136/KIPiA_Management_Mobile"))
+                        context.startActivity(intent)
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AboutRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+private fun AboutRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    onClick: (() -> Unit)? = null
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.spacingMedium),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = Dimens.spacingMedium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.spacingLarge)
     ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Column {
             Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (label == "Исходный код") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

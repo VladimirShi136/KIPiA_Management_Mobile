@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,6 +36,7 @@ import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.kipia.management.mobile.managers.PhotoManager
 import com.kipia.management.mobile.repository.DeviceRepository
 import com.kipia.management.mobile.repository.PreferencesRepository
+import com.kipia.management.mobile.ui.components.dialogs.ErrorDialog
 import com.kipia.management.mobile.ui.components.topappbar.KIPiATopAppBar
 import com.kipia.management.mobile.ui.components.topappbar.rememberTopAppBarController
 import com.kipia.management.mobile.ui.navigation.BottomNavigationBar
@@ -169,14 +171,22 @@ fun KIPiAApp(
 
     // --- ГЛОБАЛЬНЫЕ УВЕДОМЛЕНИЯ ---
     var globalNotification by remember { mutableStateOf<NotificationManager.Notification>(NotificationManager.Notification.None) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     
     LaunchedEffect(Unit) {
         notificationManager.notification.collect { notification ->
-            if (notification != NotificationManager.Notification.None) {
-                globalNotification = notification
-                delay(3000) // Показываем 3 секунды
-                globalNotification = NotificationManager.Notification.None
-                notificationManager.clearLastNotification()
+            when (notification) {
+                is NotificationManager.Notification.Error -> {
+                    errorMessage = notification.message
+                    notificationManager.clearLastNotification()
+                }
+                NotificationManager.Notification.None -> { }
+                else -> {
+                    globalNotification = notification
+                    delay(3000)
+                    globalNotification = NotificationManager.Notification.None
+                    notificationManager.clearLastNotification()
+                }
             }
         }
     }
@@ -206,6 +216,7 @@ fun KIPiAApp(
                         route?.startsWith("device_edit") == true -> false
                         route?.startsWith("device_detail") == true -> false
                         route == "settings" -> false
+                        route == "debug_settings" -> false
                         route?.startsWith("fullscreen_photo") == true -> false
                         route?.startsWith("scheme_editor") == true -> false
                         else -> true
@@ -213,39 +224,34 @@ fun KIPiAApp(
                     
                     when {
                         route == "devices" -> topAppBarController.resetToDefault()
-                        
-                        // Игнорируем эти маршруты в MainActivity, так как экраны сами настраивают TopAppBar.
-                        // Если оставить resetToDefault() в блоке else, кнопки на этих экранах будут "мигать".
-                        route?.startsWith("device_edit") == true -> { /* Экран настроит сам */ }
-                        route?.startsWith("device_detail") == true -> { /* Экран настроит сам */ }
-                        
+                        route?.startsWith("device_edit") == true -> { }
+                        route?.startsWith("device_detail") == true -> { }
                         route == "settings" -> topAppBarController.setForScreen("settings")
-                        
+                        route == "debug_settings" -> {
+                            topAppBarController.setForScreen("debug_settings", mapOf(
+                                "onBackClick" to { navController.popBackStack() }
+                            ))
+                        }
                         route == "photos" -> topAppBarController.setForScreen("photos", mapOf(
                             "locations" to photosLocations, 
                             "devices" to photosDevices,
                             "selectedLocation" to (photosState.selectedLocation ?: ""),
                             "selectedDeviceId" to (photosState.selectedDeviceId ?: 0)
                         ))
-                        
                         route == "schemes" -> topAppBarController.setForScreen("schemes", mapOf(
                             "title" to "Учет приборов КИПиА",
                             "searchQuery" to schemesState.searchQuery,
                             "currentSort" to schemesState.sortBy
                         ))
-                        
                         route?.startsWith("scheme_editor") == true -> {
-                            // Здесь можно оставить базовую настройку, либо тоже вынести полностью в экран
                             topAppBarController.setForScreen("scheme_editor", mapOf("canSave" to true))
                         }
-                        
                         route?.startsWith("fullscreen_photo") == true -> {
                             topAppBarController.setForScreen("fullscreen_photo", mapOf(
                                 "inventoryNumber" to "", "valveNumber" to "",
                                 "onBackClick" to { navController.navigateUp() }
                             ))
                         }
-                        
                         else -> topAppBarController.resetToDefault()
                     }
                 }
@@ -296,21 +302,29 @@ fun KIPiAApp(
                             modifier = Modifier.fillMaxSize().padding(innerPadding).background(MaterialTheme.colorScheme.background).consumeWindowInsets(innerPadding)
                         )
 
-                        // --- ПЛАВАЮЩЕЕ УВЕДОМЛЕНИЕ (ПОВЕРХ ВСЕГО) ---
+                        // --- ОШИБКИ ЧЕРЕЗ ГОТОВЫЙ ErrorDialog (ПО ЦЕНТРУ) ---
+                        errorMessage?.let { msg ->
+                            ErrorDialog(
+                                title = "Ошибка",
+                                message = msg,
+                                onDismiss = { errorMessage = null }
+                            )
+                        }
+
+                        // --- ИНФОРМАЦИОННЫЕ УВЕДОМЛЕНИЯ (УСПЕХ) ---
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).statusBarsPadding(),
-                            contentAlignment = Alignment.TopCenter
+                            modifier = Modifier.fillMaxSize().padding(bottom = 200.dp),
+                            contentAlignment = Alignment.BottomCenter
                         ) {
                             AnimatedVisibility(
                                 visible = globalNotification != NotificationManager.Notification.None,
-                                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
+                                enter = fadeIn() + slideInVertically(initialOffsetY = { 100 }),
+                                exit = fadeOut() + slideOutVertically(targetOffsetY = { 100 })
                             ) {
                                 val (color, icon, text) = when (val n = globalNotification) {
                                     is NotificationManager.Notification.DeviceSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Прибор '${n.deviceName}' сохранен")
                                     is NotificationManager.Notification.SchemeSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Схема '${n.schemeName}' сохранена")
                                     is NotificationManager.Notification.DeviceDeleted -> Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Прибор '${n.deviceName}' удален")
-                                    is NotificationManager.Notification.Error -> Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, n.message)
                                     else -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "")
                                 }
 

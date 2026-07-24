@@ -16,6 +16,8 @@ class DeviceRepository @Inject constructor(
 
     fun getDeviceById(id: Int): Flow<Device?> = deviceDAO.getDeviceById(id)
     suspend fun getDeviceByIdSync(id: Int): Device? = deviceDAO.getDeviceByIdSync(id)
+
+    suspend fun getDeviceByInventory(inventoryNumber: String): Device? = deviceDAO.getDeviceByInventorySync(inventoryNumber)
     
     suspend fun insertDevice(device: Device): Long = deviceDAO.insertDevice(device.withUpdatedNow())
     suspend fun updateDevice(device: Device): Int = deviceDAO.updateDevice(device.withUpdatedNow())

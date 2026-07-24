@@ -25,6 +25,7 @@ import com.kipia.management.mobile.ui.screens.photos.PhotosScreen
 import com.kipia.management.mobile.ui.screens.reports.ReportsScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemeEditorScreen
 import com.kipia.management.mobile.ui.screens.schemes.SchemesScreen
+import com.kipia.management.mobile.ui.screens.settings.DebugSettingsScreen
 import com.kipia.management.mobile.ui.screens.settings.SettingsScreen
 import com.kipia.management.mobile.ui.shared.NotificationManager
 import com.kipia.management.mobile.managers.PhotoManager
@@ -108,8 +109,17 @@ fun KIPiANavHost(
             DeviceEditScreen(
                 deviceId = deviceId,
                 onNavigateBack = {
-                    // Просто возвращаемся назад, чтобы вернуться на вызывающий экран (схему или детализацию)
                     navController.popBackStack()
+                },
+                onDeleteSuccess = {
+                    // Если пришли с экрана деталей — возвращаемся на уровень выше него
+                    val previousRoute = navController.previousBackStackEntry?.destination?.route
+                    if (previousRoute?.startsWith("device_detail") == true) {
+                        navController.popBackStack() // убираем edit
+                        navController.popBackStack() // убираем detail
+                    } else {
+                        navController.popBackStack()
+                    }
                 },
                 topAppBarController = topAppBarController,
                 viewModel = hiltViewModel(),
@@ -224,6 +234,17 @@ fun KIPiANavHost(
         composable("settings") {
             SettingsScreen(
                 navController = navController,
+                topAppBarController = topAppBarController,
+                updateBottomNavVisibility = updateBottomNavVisibility
+            )
+        }
+
+        // Инженерное меню (скрытое)
+        composable("debug_settings") {
+            DebugSettingsScreen(
+                navController = navController,
+                topAppBarController = topAppBarController,
+                updateBottomNavVisibility = updateBottomNavVisibility
             )
         }
     }

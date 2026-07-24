@@ -176,6 +176,23 @@ class DeviceEditViewModel @Inject constructor(
             delay(500)
 
             try {
+                // ПРОВЕРКА НА КОНФЛИКТ ИНВЕНТАРНОГО НОМЕРА
+                val conflictDevice = repository.getDeviceByInventory(currentDevice.inventoryNumber)
+                if (conflictDevice != null && conflictDevice.id != currentDevice.id) {
+                    _uiState.update { it.copy(isSaving = false) }
+                    if (conflictDevice.isDeleted()) {
+                        notificationManager.notifyError(
+                            "Номер ${currentDevice.inventoryNumber} занят удаленным прибором. " +
+                            "Окончательно удалите его или используйте другой номер."
+                        )
+                    } else {
+                        notificationManager.notifyError(
+                            "Прибор с номером ${currentDevice.inventoryNumber} уже существует (Локация: ${conflictDevice.location})"
+                        )
+                    }
+                    return@launch
+                }
+
                 val deviceToSave = if (originalDevice != null) {
                     photoManager.migrateIfLocationChanged(originalDevice!!, currentDevice)
                 } else currentDevice

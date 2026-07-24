@@ -138,7 +138,8 @@ private fun KeyedTopAppBarActions(
 
         currentRoute?.startsWith("device_detail") == true || 
         currentRoute?.startsWith("device_edit") == true ||
-        currentRoute == "settings" -> {
+        currentRoute == "settings" ||
+        currentRoute == "debug_settings" -> {
             BackButtonScreenActions(
                 topAppBarState = topAppBarState,
                 topAppBarContent = topAppBarContent

@@ -97,7 +97,7 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun importFromZip(inputUri: Uri): Result<SyncStats> = withContext(Dispatchers.IO) {
+    suspend fun importFromZip(inputUri: Uri, importDeleted: Boolean = false): Result<SyncStats> = withContext(Dispatchers.IO) {
         val tempDir = File(context.cacheDir, TEMP_DIR)
         try {
             tempDir.deleteRecursively()
@@ -131,7 +131,7 @@ class SyncManager @Inject constructor(
             
             // Выполняем мерж в транзакции
             val stats = database.withTransaction {
-                performMerge(importedData, importedPhotos)
+                performMerge(importedData, importedPhotos, importDeleted)
             }
 
             updateLastSyncedTimestamps(stats)
@@ -233,7 +233,7 @@ class SyncManager @Inject constructor(
         return if (target.path.startsWith(destDir.canonicalPath)) target else null
     }
 
-    private suspend fun performMerge(importedData: ImportedData, importedPhotosDir: File): SyncStats {
+    private suspend fun performMerge(importedData: ImportedData, importedPhotosDir: File, importDeleted: Boolean = false): SyncStats {
         val stats = SyncStats()
         val deviceIdMap = mutableMapOf<Int, Int>()
         val schemeIdMap = mutableMapOf<Int, Int>()
@@ -244,7 +244,17 @@ class SyncManager @Inject constructor(
         importedData.devices.forEach { imported ->
             val existing = localDevices[imported.inventoryNumber]
             if (existing == null) {
-                if (!imported.isDeleted()) {
+                // Если прибора нет локально и он удален в импорте - это "призрак"
+                if (imported.isDeleted()) {
+                    if (importDeleted) {
+                        val newId = deviceDao.insertDevice(imported.copy(id = 0, lastSyncedAt = 0)).toInt()
+                        deviceIdMap[imported.id] = newId
+                        stats.devicesAdded++
+                        stats.changedDevices.add(imported.copy(id = newId))
+                    } else {
+                        stats.ghostDeletedDevices.add(imported)
+                    }
+                } else {
                     val newId = deviceDao.insertDevice(imported.copy(id = 0, lastSyncedAt = 0)).toInt()
                     deviceIdMap[imported.id] = newId
                     stats.devicesAdded++
@@ -431,10 +441,11 @@ class SyncManager @Inject constructor(
         val changedDevices: MutableList<Device> = mutableListOf(),
         val changedSchemes: MutableList<Scheme> = mutableListOf(),
         val changedLocations: MutableList<DeviceLocation> = mutableListOf(),
-        val conflicts: MutableList<ConflictInfo> = mutableListOf()
+        val conflicts: MutableList<ConflictInfo> = mutableListOf(),
+        val ghostDeletedDevices: MutableList<Device> = mutableListOf()
     ) {
         fun isEmpty() = devicesAdded == 0 && devicesUpdated == 0 && schemesAdded == 0 &&
-                schemesUpdated == 0 && locationsAdded == 0 && locationsUpdated == 0 && photosAdded == 0 && conflicts.isEmpty()
+                schemesUpdated == 0 && locationsAdded == 0 && locationsUpdated == 0 && photosAdded == 0 && conflicts.isEmpty() && ghostDeletedDevices.isEmpty()
 
         fun toSummary(): String {
             val sb = StringBuilder()
@@ -445,6 +456,7 @@ class SyncManager @Inject constructor(
             if (locationsAdded > 0) sb.append("Локаций добавлено: $locationsAdded\n")
             if (locationsUpdated > 0) sb.append("Локаций обновлено: $locationsUpdated\n")
             if (photosAdded > 0) sb.append("Фотографий добавлено: $photosAdded\n")
+            if (ghostDeletedDevices.isNotEmpty()) sb.append("Обнаружено удаленных приборов: ${ghostDeletedDevices.size}\n")
             if (conflicts.isNotEmpty()) sb.append("Обнаружено конфликтов: ${conflicts.size}\n")
             
             return if (sb.isEmpty()) "Изменений не обнаружено." else sb.toString().trim()

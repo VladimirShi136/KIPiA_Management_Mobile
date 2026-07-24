@@ -33,6 +33,17 @@ class TopAppBarController {
                 )
             }
 
+            "debug_settings" -> {
+                _state.value = TopAppBarData(
+                    title = "Инженерное меню",
+                    showBackButton = true,
+                    showSettingsIcon = false,
+                    showThemeToggle = false,
+                    showFilterMenu = false,
+                    onBackClick = additionalParams["onBackClick"] as? () -> Unit
+                )
+            }
+
             "device_detail" -> {
                 _state.value = TopAppBarData(
                     title = "Детали прибора",

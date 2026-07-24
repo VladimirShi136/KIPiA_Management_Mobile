@@ -3,6 +3,7 @@ package com.kipia.management.mobile.viewmodel
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.managers.SyncManager
 import com.kipia.management.mobile.repository.PreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -52,23 +54,45 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun importDatabase(inputUri: Uri) {
+    fun importDatabase(inputUri: Uri, importDeleted: Boolean = false) {
         viewModelScope.launch {
             _syncState.value = SyncState.Loading("Импорт...")
-            syncManager.importFromZip(inputUri).fold(
+            syncManager.importFromZip(inputUri, importDeleted).fold(
                 onSuccess = { stats ->
-                    if (stats.conflicts.isNotEmpty()) {
-                        // Если есть конфликты, переходим в состояние ожидания решения
-                        _syncState.value = SyncState.ConflictsDetected(stats.conflicts, stats)
-                    } else {
-                        preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
-                        _syncState.value = SyncState.ImportSuccess(stats)
+                    when {
+                        stats.conflicts.isNotEmpty() -> {
+                            _syncState.value = SyncState.ConflictsDetected(stats.conflicts, stats)
+                        }
+                        stats.ghostDeletedDevices.isNotEmpty() && !importDeleted -> {
+                            // Если найдены удаленные приборы, которых нет у нас, и мы их еще не просили импортировать
+                            _syncState.value = SyncState.GhostDevicesDetected(stats.ghostDeletedDevices, stats, inputUri)
+                        }
+                        else -> {
+                            preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                            _syncState.value = SyncState.ImportSuccess(stats)
+                        }
                     }
                 },
                 onFailure = { e ->
                     _syncState.value = SyncState.Error(e.message ?: "Ошибка импорта")
                 }
             )
+        }
+    }
+
+    fun resolveGhostDevices(importThem: Boolean) {
+        val currentState = _syncState.value
+        if (currentState is SyncState.GhostDevicesDetected) {
+            if (importThem) {
+                // Запускаем импорт повторно, но уже с флагом разрешения импорта удаленных
+                importDatabase(currentState.inputUri, importDeleted = true)
+            } else {
+                // Просто завершаем импорт с текущей статистикой
+                viewModelScope.launch {
+                    preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                    _syncState.value = SyncState.ImportSuccess(currentState.initialStats)
+                }
+            }
         }
     }
 
@@ -83,8 +107,6 @@ class SettingsViewModel @Inject constructor(
                 syncManager.applyConflictResolutions(currentState.conflicts, resolutions).fold(
                     onSuccess = {
                         preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
-                        // После разрешения конфликтов считаем импорт успешным
-                        // Можно передать накопленную статистику
                         _syncState.value = SyncState.ImportSuccess(currentState.initialStats)
                     },
                     onFailure = { e ->
@@ -107,9 +129,14 @@ sealed class SyncState {
     data class ImportSuccess(val stats: SyncManager.SyncStats) : SyncState()
     data class Error(val message: String) : SyncState()
     
-    // Новое состояние для ручного разрешения конфликтов
     data class ConflictsDetected(
         val conflicts: List<SyncManager.ConflictInfo>,
         val initialStats: SyncManager.SyncStats
+    ) : SyncState()
+
+    data class GhostDevicesDetected(
+        val ghostDevices: List<Device>,
+        val initialStats: SyncManager.SyncStats,
+        val inputUri: Uri
     ) : SyncState()
 }

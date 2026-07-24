@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 fun DeviceEditScreen(
     deviceId: Int?,
     onNavigateBack: () -> Unit,
+    onDeleteSuccess: () -> Unit = onNavigateBack,
     topAppBarController: TopAppBarController,
     viewModel: DeviceEditViewModel = hiltViewModel(),
     notificationManager: NotificationManager,
@@ -158,7 +159,7 @@ fun DeviceEditScreen(
 
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
-            onNavigateBack()
+            onDeleteSuccess()
         }
     }
 
