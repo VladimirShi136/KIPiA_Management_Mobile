@@ -32,7 +32,6 @@ class PhotosViewModel @Inject constructor(
     private val _displayMode = MutableStateFlow(DisplayMode.FLAT)
     private val _expandedGroups = MutableStateFlow<Set<String>>(emptySet())
     
-    // Устанавливаем true по умолчанию
     private val _isLoading = MutableStateFlow(true)
     private val _error = MutableStateFlow<String?>(null)
 
@@ -45,6 +44,15 @@ class PhotosViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // Поток для определения наличия фото вообще
+    val hasPhotos: StateFlow<Boolean> = devices.map { list ->
+        list.any { it.photos.isNotEmpty() }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
     )
 
     val uiState: StateFlow<PhotosUiState> = combine(

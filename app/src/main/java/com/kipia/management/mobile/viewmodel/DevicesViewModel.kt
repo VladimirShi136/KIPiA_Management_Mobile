@@ -48,6 +48,15 @@ class DevicesViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    // Поток для определения наличия приборов вообще
+    val hasDevices: StateFlow<Boolean> = _rawDevices
+        .map { it.isNotEmpty() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     init {
         refreshData()
     }

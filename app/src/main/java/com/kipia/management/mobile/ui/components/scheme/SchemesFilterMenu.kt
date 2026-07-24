@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kipia.management.mobile.ui.screens.schemes.SchemesSortBy
@@ -32,12 +33,12 @@ fun SchemesFilterMenu(
     currentSort: SchemesSortBy,
     onSortSelected: (SchemesSortBy) -> Unit,
     onResetAllFilters: () -> Unit,
+    hasData: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
 
-    // focusRequester и keyboardController живут здесь и передаются вниз — как в DeviceFilterMenu
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -77,6 +78,12 @@ fun SchemesFilterMenu(
                         fontSize = 10.sp,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
+                } else {
+                    Text(
+                        text = "",
+                        fontSize = 0.sp,
+                        modifier = Modifier.padding(0.dp)
+                    )
                 }
             }
         }
@@ -84,7 +91,8 @@ fun SchemesFilterMenu(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.width(280.dp)
+            offset = DpOffset(0.dp, 0.dp),
+            modifier = Modifier.width(320.dp)
         ) {
             DropdownMenuItem(
                 text = {
@@ -102,12 +110,12 @@ fun SchemesFilterMenu(
 
             HorizontalDivider()
 
-            // focusRequester и keyboardController передаются как параметры — как в DeviceFilterMenu
             SearchMenuItem(
                 searchQuery = searchQuery,
                 showSearch = showSearch,
                 onSearchQueryChange = onSearchQueryChange,
-                onToggleSearch = { showSearch = !showSearch },
+                onToggleSearch = { if (hasData) showSearch = !showSearch },
+                isEnabled = hasData,
                 focusRequester = focusRequester,
                 keyboardController = keyboardController
             )
@@ -117,7 +125,8 @@ fun SchemesFilterMenu(
                 onSortSelected = { sort ->
                     onSortSelected(sort)
                     expanded = false
-                }
+                },
+                isEnabled = hasData
             )
 
             HorizontalDivider()
@@ -147,15 +156,13 @@ fun SchemesFilterMenu(
     }
 }
 
-// Структура идентична DeviceFilterMenu.SearchMenuItem:
-// TextField рендерится внутри того же DropdownMenuItem (не в отдельном if/else composable),
-// focusRequester приходит снаружи и уже привязан через LaunchedEffect в родителе
 @Composable
 private fun SearchMenuItem(
     searchQuery: String,
     showSearch: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    isEnabled: Boolean,
     focusRequester: FocusRequester,
     keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?
 ) {
@@ -175,7 +182,8 @@ private fun SearchMenuItem(
                         Text(
                             text = "✓",
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 8.dp)
                         )
                     }
                 }
@@ -206,8 +214,14 @@ private fun SearchMenuItem(
             }
         },
         onClick = onToggleSearch,
+        enabled = isEnabled,
         leadingIcon = {
             Icon(Icons.Default.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            if (!isEnabled) {
+                Icon(Icons.Default.Lock, contentDescription = "Нет данных")
+            }
         }
     )
 }
@@ -215,122 +229,112 @@ private fun SearchMenuItem(
 @Composable
 private fun SortMenuItem(
     currentSort: SchemesSortBy,
-    onSortSelected: (SchemesSortBy) -> Unit
+    onSortSelected: (SchemesSortBy) -> Unit,
+    isEnabled: Boolean
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
 
-    DropdownMenuItem(
-        text = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Сортировка схем",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f)
-                )
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenuItem(
+            text = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
+                    Text(
+                        text = "Сортировка схем",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f)
+                    )
                     if (currentSort != SchemesSortBy.NAME_ASC) {
                         Text(
                             text = "✓",
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(end = 4.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         )
                     }
-                    Icon(
-                        Icons.Default.ArrowDropDown,
-                        contentDescription = "Выбрать сортировку",
-                        modifier = Modifier.size(16.dp)
-                    )
                 }
+            },
+            onClick = { if (isEnabled) showSubMenu = true },
+            enabled = isEnabled,
+            leadingIcon = {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
+            },
+            trailingIcon = {
+                if (isEnabled) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                } else {
+                    Icon(Icons.Default.Lock, contentDescription = "Нет данных")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (isEnabled) {
+            DropdownMenu(
+                expanded = showSubMenu,
+                onDismissRequest = { showSubMenu = false },
+                offset = DpOffset(0.dp, 0.dp),
+                modifier = Modifier.width(320.dp)
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "А → Я",
+                                fontWeight = if (currentSort == SchemesSortBy.NAME_ASC) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (currentSort == SchemesSortBy.NAME_ASC) {
+                                Text(
+                                    text = "✓",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSortSelected(SchemesSortBy.NAME_ASC)
+                        showSubMenu = false
+                    }
+                )
+
+                HorizontalDivider()
+
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "Я → А",
+                                fontWeight = if (currentSort == SchemesSortBy.NAME_DESC) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (currentSort == SchemesSortBy.NAME_DESC) {
+                                Text(
+                                    text = "✓",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSortSelected(SchemesSortBy.NAME_DESC)
+                        showSubMenu = false
+                    }
+                )
             }
-        },
-        onClick = { showSubMenu = true },
-        leadingIcon = {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
         }
-    )
-
-    SortSubMenu(
-        showSubMenu = showSubMenu,
-        onDismiss = { showSubMenu = false },
-        currentSort = currentSort,
-        onSortSelected = onSortSelected
-    )
-}
-
-@Composable
-private fun SortSubMenu(
-    showSubMenu: Boolean,
-    onDismiss: () -> Unit,
-    currentSort: SchemesSortBy,
-    onSortSelected: (SchemesSortBy) -> Unit
-) {
-    DropdownMenu(
-        expanded = showSubMenu,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.width(200.dp)
-    ) {
-        DropdownMenuItem(
-            text = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "А → Я",
-                        fontWeight = if (currentSort == SchemesSortBy.NAME_ASC) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (currentSort == SchemesSortBy.NAME_ASC) {
-                        Text(
-                            text = "✓",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                }
-            },
-            onClick = {
-                onSortSelected(SchemesSortBy.NAME_ASC)
-                onDismiss()
-            }
-        )
-
-        HorizontalDivider()
-
-        DropdownMenuItem(
-            text = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "Я → А",
-                        fontWeight = if (currentSort == SchemesSortBy.NAME_DESC) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (currentSort == SchemesSortBy.NAME_DESC) {
-                        Text(
-                            text = "✓",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                }
-            },
-            onClick = {
-                onSortSelected(SchemesSortBy.NAME_DESC)
-                onDismiss()
-            }
-        )
     }
 }
 

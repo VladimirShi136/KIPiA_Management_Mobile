@@ -279,6 +279,7 @@ private fun SchemesScreenActions(
 ) {
     val schemesViewModel: SchemesViewModel = hiltViewModel()
     val uiState by schemesViewModel.uiState.collectAsStateWithLifecycle()
+    val hasSchemes by schemesViewModel.hasSchemes.collectAsStateWithLifecycle()
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (topAppBarState.showSchemesFilterMenu) {
@@ -288,6 +289,7 @@ private fun SchemesScreenActions(
                 currentSort = uiState.sortBy,
                 onSortSelected = { schemesViewModel.setSortBy(it) },
                 onResetAllFilters = { schemesViewModel.resetAllFilters() },
+                hasData = hasSchemes,
                 modifier = Modifier.padding(end = 4.dp)
             )
         }
@@ -309,6 +311,7 @@ private fun PhotosScreenActions(
 ) {
     val photosViewModel: PhotosViewModel = hiltViewModel()
     val uiState by photosViewModel.uiState.collectAsStateWithLifecycle()
+    val hasPhotos by photosViewModel.hasPhotos.collectAsStateWithLifecycle()
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         PhotosFilterMenu(
@@ -317,6 +320,7 @@ private fun PhotosScreenActions(
             currentSort = uiState.sortBy,
             onSortSelected = { photosViewModel.setSortBy(it) },
             onResetAllFilters = { photosViewModel.resetAllFilters() },
+            hasData = hasPhotos,
             modifier = Modifier.padding(end = 4.dp)
         )
         ThemeToggleButton(contentColor = topAppBarContent)
@@ -338,6 +342,7 @@ private fun DevicesScreenActions(
     val searchQuery by devicesViewModel.searchQuery.collectAsStateWithLifecycle()
     val allLocations by devicesViewModel.allLocations.collectAsStateWithLifecycle()
     val uiState by devicesViewModel.uiState.collectAsStateWithLifecycle()
+    val hasDevices by devicesViewModel.hasDevices.collectAsStateWithLifecycle()
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         DeviceFilterMenu(
@@ -348,6 +353,7 @@ private fun DevicesScreenActions(
             onLocationFilterChange = { devicesViewModel.setLocationFilter(it) },
             statusFilter = uiState.statusFilter,
             onStatusFilterChange = { devicesViewModel.setStatusFilter(it) },
+            hasData = hasDevices,
             modifier = Modifier.padding(end = 4.dp)
         )
         ThemeToggleButton(contentColor = topAppBarContent)

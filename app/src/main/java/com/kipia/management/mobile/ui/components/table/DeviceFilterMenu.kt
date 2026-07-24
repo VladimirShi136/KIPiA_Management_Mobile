@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import timber.log.Timber
 
 @Composable
@@ -29,14 +30,14 @@ fun DeviceFilterMenu(
     onLocationFilterChange: (String?) -> Unit,
     statusFilter: String?,
     onStatusFilterChange: (String?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hasData: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // ★★★★ Используем LaunchedEffect для управления фокусом ★★★★
     LaunchedEffect(showSearch) {
         if (showSearch) {
             focusRequester.requestFocus()
@@ -49,7 +50,6 @@ fun DeviceFilterMenu(
             onClick = { expanded = true },
             modifier = Modifier.size(48.dp)
         ) {
-
             Icon(
                 Icons.Default.FilterAlt,
                 contentDescription = "Фильтры и поиск",
@@ -73,6 +73,12 @@ fun DeviceFilterMenu(
                         fontSize = 10.sp,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
+                } else {
+                    Text(
+                        text = "",
+                        fontSize = 0.sp,
+                        modifier = Modifier.padding(0.dp)
+                    )
                 }
             }
         }
@@ -80,9 +86,9 @@ fun DeviceFilterMenu(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.width(280.dp)
+            offset = DpOffset(0.dp, 0.dp),
+            modifier = Modifier.width(320.dp)
         ) {
-            // Заголовок
             DropdownMenuItem(
                 text = {
                     Text(
@@ -99,40 +105,37 @@ fun DeviceFilterMenu(
 
             HorizontalDivider()
 
-            // Поиск
             SearchMenuItem(
                 searchQuery = searchQuery,
                 showSearch = showSearch,
                 onSearchQueryChange = onSearchQueryChange,
-                onToggleSearch = {
-                    showSearch = !showSearch
-                },
+                onToggleSearch = { if (hasData) showSearch = !showSearch },
+                isEnabled = hasData,
                 focusRequester = focusRequester,
                 keyboardController = keyboardController
             )
 
-            // Фильтр по местоположению с вложенным меню
             LocationFilterMenuItem(
                 currentFilter = locationFilter,
                 locations = locations,
                 onItemSelected = { selectedLocation ->
                     onLocationFilterChange(selectedLocation)
                     expanded = false
-                }
+                },
+                isEnabled = hasData
             )
 
-            // Фильтр по статусу с вложенным меню
             StatusFilterMenuItem(
                 currentFilter = statusFilter,
                 onItemSelected = { selectedStatus ->
                     onStatusFilterChange(selectedStatus)
                     expanded = false
-                }
+                },
+                isEnabled = hasData
             )
 
             HorizontalDivider()
 
-            // Кнопка сброса фильтров
             DropdownMenuItem(
                 text = {
                     Text(
@@ -165,6 +168,7 @@ private fun SearchMenuItem(
     showSearch: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    isEnabled: Boolean,
     focusRequester: FocusRequester,
     keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?
 ) {
@@ -184,7 +188,8 @@ private fun SearchMenuItem(
                         Text(
                             text = "✓",
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 8.dp)
                         )
                     }
                 }
@@ -219,8 +224,14 @@ private fun SearchMenuItem(
             }
         },
         onClick = onToggleSearch,
+        enabled = isEnabled,
         leadingIcon = {
             Icon(Icons.Default.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            if (!isEnabled) {
+                Icon(Icons.Default.Lock, contentDescription = "Нет данных")
+            }
         }
     )
 }
@@ -229,106 +240,100 @@ private fun SearchMenuItem(
 private fun LocationFilterMenuItem(
     currentFilter: String?,
     locations: List<String>,
-    onItemSelected: (String?) -> Unit
+    onItemSelected: (String?) -> Unit,
+    isEnabled: Boolean
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
+    val hasSubData = isEnabled && locations.isNotEmpty()
 
-    // Основной пункт меню
-    DropdownMenuItem(
-        text = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Местоположение",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                if (currentFilter != null) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        text = "✓",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        text = "Местоположение",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (currentFilter != null) {
+                        Text(
+                            text = "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                }
+            },
+            onClick = { if (hasSubData) showSubMenu = true },
+            enabled = hasSubData,
+            leadingIcon = {
+                Icon(Icons.Default.LocationOn, contentDescription = null)
+            },
+            trailingIcon = {
+                if (hasSubData) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                } else {
+                    Icon(Icons.Default.Lock, contentDescription = "Нет данных")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (hasSubData) {
+            DropdownMenu(
+                expanded = showSubMenu,
+                onDismissRequest = { showSubMenu = false },
+                offset = DpOffset(0.dp, 0.dp),
+                modifier = Modifier.width(320.dp)
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "Все места",
+                            fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onItemSelected(null)
+                        showSubMenu = false
+                    }
+                )
+
+                HorizontalDivider()
+
+                locations.forEach { location ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    location,
+                                    fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (currentFilter == location) {
+                                    Text(
+                                        text = "✓",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            onItemSelected(location)
+                            showSubMenu = false
+                        }
                     )
                 }
             }
-        },
-        onClick = { showSubMenu = true },
-        leadingIcon = {
-            Icon(Icons.Default.LocationOn, contentDescription = null)
-        },
-        trailingIcon = {
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
-        }
-    )
-
-    // Вложенное меню как отдельный композабл
-    LocationSubMenu(
-        showSubMenu = showSubMenu,
-        onDismiss = { showSubMenu = false },
-        currentFilter = currentFilter,
-        locations = locations,
-        onItemSelected = onItemSelected
-    )
-}
-
-@Composable
-private fun LocationSubMenu(
-    showSubMenu: Boolean,
-    onDismiss: () -> Unit,
-    currentFilter: String?,
-    locations: List<String>,
-    onItemSelected: (String?) -> Unit
-) {
-    DropdownMenu(
-        expanded = showSubMenu,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.width(200.dp)
-    ) {
-        DropdownMenuItem(
-            text = {
-                Text(
-                    "Все места",
-                    fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                )
-            },
-            onClick = {
-                onItemSelected(null)
-                onDismiss()
-            }
-        )
-
-        HorizontalDivider()
-
-        locations.forEach { location ->
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            location,
-                            fontWeight = if (currentFilter == location) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.weight(1f)
-                        )
-                        // ★ Галочка ТОЛЬКО для выбранной локации ★
-                        if (currentFilter == location) {
-                            Text(
-                                text = "✓",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    onItemSelected(location)
-                    onDismiss()
-                }
-            )
         }
     }
 }
@@ -336,106 +341,100 @@ private fun LocationSubMenu(
 @Composable
 private fun StatusFilterMenuItem(
     currentFilter: String?,
-    onItemSelected: (String?) -> Unit
+    onItemSelected: (String?) -> Unit,
+    isEnabled: Boolean
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
     val statuses = listOf("В работе", "Хранение", "Утерян", "Испорчен")
 
-    DropdownMenuItem(
-        text = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Статус",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                if (currentFilter != null) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        text = "✓",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        text = "Статус",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (currentFilter != null) {
+                        Text(
+                            text = "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                }
+            },
+            onClick = { if (isEnabled) showSubMenu = true },
+            enabled = isEnabled,
+            leadingIcon = {
+                Icon(Icons.Default.Flag, contentDescription = null)
+            },
+            trailingIcon = {
+                if (isEnabled) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                } else {
+                    Icon(Icons.Default.Lock, contentDescription = "Нет данных")
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (isEnabled) {
+            DropdownMenu(
+                expanded = showSubMenu,
+                onDismissRequest = { showSubMenu = false },
+                offset = DpOffset(0.dp, 0.dp),
+                modifier = Modifier.width(320.dp)
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "Все статусы",
+                            fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onItemSelected(null)
+                        showSubMenu = false
+                    }
+                )
+
+                HorizontalDivider()
+
+                statuses.forEach { status ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    status,
+                                    fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (currentFilter == status) {
+                                    Text(
+                                        text = "✓",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            onItemSelected(status)
+                            showSubMenu = false
+                        }
                     )
                 }
             }
-        },
-        onClick = { showSubMenu = true },
-        leadingIcon = {
-            Icon(Icons.Default.Flag, contentDescription = null)
-        },
-        trailingIcon = {
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
-        }
-    )
-
-    // Вложенное меню как отдельный композабл
-    StatusSubMenu(
-        showSubMenu = showSubMenu,
-        onDismiss = { showSubMenu = false },
-        currentFilter = currentFilter,
-        statuses = statuses,
-        onItemSelected = onItemSelected
-    )
-}
-
-@Composable
-private fun StatusSubMenu(
-    showSubMenu: Boolean,
-    onDismiss: () -> Unit,
-    currentFilter: String?,
-    statuses: List<String>,
-    onItemSelected: (String?) -> Unit
-) {
-    DropdownMenu(
-        expanded = showSubMenu,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.width(200.dp)
-    ) {
-        DropdownMenuItem(
-            text = {
-                Text(
-                    "Все статусы",
-                    fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
-                )
-            },
-            onClick = {
-                onItemSelected(null)
-                onDismiss()
-            }
-        )
-
-        HorizontalDivider()
-
-        statuses.forEach { status ->
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            status,
-                            fontWeight = if (currentFilter == status) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.weight(1f)
-                        )
-                        // ★ Галочка ТОЛЬКО для выбранного статуса ★
-                        if (currentFilter == status) {
-                            Text(
-                                text = "✓",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    onItemSelected(status)
-                    onDismiss()
-                }
-            )
         }
     }
 }

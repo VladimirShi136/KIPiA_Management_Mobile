@@ -21,7 +21,6 @@ class SchemesViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     private val _sortBy = MutableStateFlow(SchemesSortBy.NAME_ASC)
     
-    // Отдельный поток для загрузки
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -35,7 +34,7 @@ class SchemesViewModel @Inject constructor(
         SchemesUiState(
             searchQuery = searchQuery,
             sortBy = sortBy,
-            isLoading = false, // Не используем это поле для индикатора
+            isLoading = false,
             error = error
         )
     }.stateIn(
@@ -44,7 +43,15 @@ class SchemesViewModel @Inject constructor(
         initialValue = SchemesUiState()
     )
 
-    // Чистый поток данных
+    // Поток для определения наличия данных вообще
+    val hasSchemes = repository.getAllSchemes()
+        .map { it.isNotEmpty() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val schemes = repository.getAllSchemes()
         .combine(_searchQuery) { schemes, query ->
             if (query.isBlank()) {
@@ -83,7 +90,6 @@ class SchemesViewModel @Inject constructor(
         }
     }
 
-    // Подготовка к следующему входу на экран
     fun resetLoadingState() {
         _isLoading.value = true
     }

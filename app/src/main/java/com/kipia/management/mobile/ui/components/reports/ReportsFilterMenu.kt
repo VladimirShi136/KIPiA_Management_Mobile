@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kipia.management.mobile.ui.screens.reports.models.ReportFilter
@@ -22,8 +23,8 @@ fun ReportsFilterMenu(
     availableLocations: List<String>,
     availableYears: List<Int>,
     onFilterChange: (ReportFilter) -> Unit,
-    contentColor: Color = Color.White,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentColor: Color = Color.White
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -38,10 +39,9 @@ fun ReportsFilterMenu(
                 tint = contentColor
             )
 
-            // Исправленный бейдж - как в PhotosFilterMenu
             Badge(
                 containerColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.offset(x = 8.dp, y = (-8).dp)  // Убираем .align(Alignment.TopEnd)
+                modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
             ) {
                 if (filter.activeCount > 0) {
                     Text(
@@ -51,7 +51,6 @@ fun ReportsFilterMenu(
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 } else {
-                    // Пустой бейдж с нулевым размером (как в PhotosFilterMenu)
                     Text(
                         text = "",
                         fontSize = 0.sp,
@@ -64,9 +63,9 @@ fun ReportsFilterMenu(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            offset = DpOffset(0.dp, 0.dp),
             modifier = Modifier.width(320.dp)
         ) {
-            // Заголовок
             DropdownMenuItem(
                 text = {
                     Row(
@@ -100,7 +99,6 @@ fun ReportsFilterMenu(
 
             HorizontalDivider()
 
-            // ── Статус ───────────────────────────────────────────────────────
             SimpleSubFilterMenuItem(
                 label = "Статус",
                 icon = Icons.Default.Flag,
@@ -111,7 +109,6 @@ fun ReportsFilterMenu(
                 onCloseParent = { expanded = false }
             )
 
-            // ── Тип прибора ──────────────────────────────────────────────────
             SimpleSubFilterMenuItem(
                 label = "Тип прибора",
                 icon = Icons.Default.Category,
@@ -122,7 +119,6 @@ fun ReportsFilterMenu(
                 onCloseParent = { expanded = false }
             )
 
-            // ── Производитель ────────────────────────────────────────────────
             SimpleSubFilterMenuItem(
                 label = "Производитель",
                 icon = Icons.Default.Business,
@@ -133,7 +129,6 @@ fun ReportsFilterMenu(
                 onCloseParent = { expanded = false }
             )
 
-            // ── Местоположение ───────────────────────────────────────────────
             SimpleSubFilterMenuItem(
                 label = "Местоположение",
                 icon = Icons.Default.LocationOn,
@@ -144,7 +139,6 @@ fun ReportsFilterMenu(
                 onCloseParent = { expanded = false }
             )
 
-            // ── Год выпуска ──────────────────────────────────────────────────
             SimpleSubFilterMenuItem(
                 label = "Год выпуска",
                 icon = Icons.Default.CalendarMonth,
@@ -159,7 +153,6 @@ fun ReportsFilterMenu(
 
             HorizontalDivider()
 
-            // Сброс всех фильтров
             DropdownMenuItem(
                 text = {
                     Text(
@@ -176,8 +169,7 @@ fun ReportsFilterMenu(
                     Icon(
                         Icons.Default.Close,
                         contentDescription = null,
-                        tint = if (!filter.isEmpty) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.error
                     )
                 }
             )
@@ -197,7 +189,7 @@ private fun SimpleSubFilterMenuItem(
 ) {
     var showSubMenu by remember { mutableStateOf(false) }
 
-    Box {
+    Box(modifier = Modifier.fillMaxWidth()) {
         DropdownMenuItem(
             text = {
                 Row(
@@ -233,14 +225,16 @@ private fun SimpleSubFilterMenuItem(
                     Icon(Icons.Default.Lock, contentDescription = "Нет данных")
                 }
             },
-            enabled = options.isNotEmpty()
+            enabled = options.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
         )
 
         if (options.isNotEmpty()) {
             DropdownMenu(
                 expanded = showSubMenu,
                 onDismissRequest = { showSubMenu = false },
-                modifier = Modifier.width(260.dp)
+                offset = DpOffset(0.dp, 0.dp),
+                modifier = Modifier.width(320.dp)
             ) {
                 DropdownMenuItem(
                     text = {

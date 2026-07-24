@@ -1,7 +1,9 @@
 package com.kipia.management.mobile.ui.screens.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,10 +12,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.navigation.NavController
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.theme.Dimens
 
+/**
+ * Экран для разработчиков.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugSettingsScreen(
@@ -34,10 +40,7 @@ fun DebugSettingsScreen(
     }
     
     DisposableEffect(Unit) {
-        onDispose {
-            // Возвращаем видимость нижнего меню при выходе, если нужно, 
-            // но обычно это управляется в LaunchedEffect целевого экрана.
-        }
+        onDispose { }
     }
 
     val scrollState = rememberScrollState()
@@ -65,7 +68,10 @@ fun DebugSettingsScreen(
                     supportingContent = { Text("Будет добавлено позже") },
                     leadingContent = { Icon(Icons.Default.DeleteSweep, null) },
                     trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Dimens.cardRadius))
+                        .clickable { /* Будет добавлено позже */ }
                 )
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.spacingSmall))
@@ -75,7 +81,10 @@ fun DebugSettingsScreen(
                     supportingContent = { Text("Будет добавлено позже") },
                     leadingContent = { Icon(Icons.Default.PhotoLibrary, null) },
                     trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Dimens.cardRadius))
+                        .clickable { /* Будет добавлено позже */ }
                 )
             }
         }
@@ -91,7 +100,10 @@ fun DebugSettingsScreen(
                 ListItem(
                     headlineContent = { Text("Проверка целостности") },
                     leadingContent = { Icon(Icons.Default.Storage, null) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Dimens.cardRadius))
+                        .clickable { /* Будет добавлено позже */ }
                 )
             }
         }
