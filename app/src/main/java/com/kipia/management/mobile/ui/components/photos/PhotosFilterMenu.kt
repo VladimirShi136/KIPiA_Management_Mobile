@@ -106,10 +106,7 @@ fun PhotosFilterMenu(
                         fontWeight = FontWeight.Bold
                     )
                 },
-                onClick = {},
-                trailingIcon = {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                }
+                onClick = {}
             )
 
             HorizontalDivider()
@@ -147,13 +144,6 @@ fun PhotosFilterMenu(
                     showSearch = false
                     expanded = false
                     Timber.d("Все фильтры фото сброшены")
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
                 }
             )
         }
@@ -223,9 +213,6 @@ private fun SearchMenuItem(
         },
         onClick = onToggleSearch,
         enabled = isEnabled,
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null)
-        },
         trailingIcon = {
             if (!isEnabled) {
                 Icon(Icons.Default.Lock, contentDescription = "Нет данных")
@@ -240,109 +227,127 @@ private fun SortMenuItem(
     onSortSelected: (PhotosSortBy) -> Unit,
     isEnabled: Boolean
 ) {
-    var showSubMenu by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    DropdownMenuItem(
+        text = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Сортировка локаций",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (currentSort != PhotosSortBy.NAME_ASC) {
+                    Text(
+                        text = "✓",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
+            }
+        },
+        onClick = {
+            if (isEnabled) {
+                expanded = !expanded
+            }
+        },
+        enabled = isEnabled,
+        trailingIcon = {
+            if (isEnabled) {
+                Icon(
+                    if (expanded)
+                        Icons.Default.KeyboardArrowUp
+                    else
+                        Icons.Default.KeyboardArrowDown,
+                    contentDescription = null
+                )
+            } else {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null
+                )
+            }
+        }
+    )
+
+    if (expanded) {
+
         DropdownMenuItem(
             text = {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+
                     Text(
-                        text = "Сортировка локаций",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.weight(1f)
+                        "А → Я",
+                        modifier = Modifier.weight(1f),
+                        fontWeight =
+                            if (currentSort == PhotosSortBy.NAME_ASC)
+                                FontWeight.Bold
+                            else
+                                FontWeight.Normal
                     )
-                    if (currentSort != PhotosSortBy.NAME_ASC) {
-                        Text(
-                            text = "✓",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(end = 8.dp)
+
+                    if (currentSort == PhotosSortBy.NAME_ASC) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             },
-            onClick = { if (isEnabled) showSubMenu = true },
-            enabled = isEnabled,
-            leadingIcon = {
-                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
-            },
-            trailingIcon = {
-                if (isEnabled) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
-                } else {
-                    Icon(Icons.Default.Lock, contentDescription = "Нет данных")
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = {
+                onSortSelected(PhotosSortBy.NAME_ASC)
+                expanded = false
+            }
         )
 
-        if (isEnabled) {
-            DropdownMenu(
-                expanded = showSubMenu,
-                onDismissRequest = { showSubMenu = false },
-                offset = DpOffset(0.dp, 0.dp),
-                modifier = Modifier.width(320.dp)
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                "А → Я",
-                                fontWeight = if (currentSort == PhotosSortBy.NAME_ASC) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (currentSort == PhotosSortBy.NAME_ASC) {
-                                Text(
-                                    text = "✓",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 4.dp)
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        onSortSelected(PhotosSortBy.NAME_ASC)
-                        showSubMenu = false
-                    }
-                )
+        HorizontalDivider()
 
-                HorizontalDivider()
+        DropdownMenuItem(
+            text = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
 
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                "Я → А",
-                                fontWeight = if (currentSort == PhotosSortBy.NAME_DESC) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (currentSort == PhotosSortBy.NAME_DESC) {
-                                Text(
-                                    text = "✓",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 4.dp)
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        onSortSelected(PhotosSortBy.NAME_DESC)
-                        showSubMenu = false
+                    Text(
+                        "Я → А",
+                        modifier = Modifier.weight(1f),
+                        fontWeight =
+                            if (currentSort == PhotosSortBy.NAME_DESC)
+                                FontWeight.Bold
+                            else
+                                FontWeight.Normal
+                    )
+
+                    if (currentSort == PhotosSortBy.NAME_DESC) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                )
+                }
+            },
+            onClick = {
+                onSortSelected(PhotosSortBy.NAME_DESC)
+                expanded = false
             }
-        }
+        )
+
+        HorizontalDivider()
     }
 }
 

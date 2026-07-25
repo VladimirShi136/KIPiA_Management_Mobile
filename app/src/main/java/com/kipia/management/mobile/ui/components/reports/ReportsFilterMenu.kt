@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -93,8 +94,7 @@ fun ReportsFilterMenu(
                         }
                     }
                 },
-                onClick = {},
-                trailingIcon = { Icon(Icons.Default.Tune, contentDescription = null) }
+                onClick = {}
             )
 
             HorizontalDivider()
@@ -164,13 +164,6 @@ fun ReportsFilterMenu(
                 onClick = {
                     onFilterChange(ReportFilter.Empty)
                     expanded = false
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
                 }
             )
         }
@@ -180,109 +173,125 @@ fun ReportsFilterMenu(
 @Composable
 private fun SimpleSubFilterMenuItem(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     currentValue: String?,
     options: List<String>,
     allLabel: String,
     onSelected: (String?) -> Unit,
     onCloseParent: () -> Unit
 ) {
-    var showSubMenu by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
-        DropdownMenuItem(
-            text = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (currentValue != null) {
-                        Text(
-                            text = currentValue.take(20) + if (currentValue.length > 20) "…" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
-                }
-            },
-            onClick = {
-                if (options.isNotEmpty()) {
-                    showSubMenu = true
-                }
-            },
-            leadingIcon = { Icon(icon, contentDescription = null) },
-            trailingIcon = {
-                if (options.isNotEmpty()) {
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
-                } else {
-                    Icon(Icons.Default.Lock, contentDescription = "Нет данных")
-                }
-            },
-            enabled = options.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (options.isNotEmpty()) {
-            DropdownMenu(
-                expanded = showSubMenu,
-                onDismissRequest = { showSubMenu = false },
-                offset = DpOffset(0.dp, 0.dp),
-                modifier = Modifier.width(320.dp)
+    DropdownMenuItem(
+        text = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            allLabel,
-                            fontWeight = if (currentValue == null) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    onClick = {
-                        onSelected(null)
-                        showSubMenu = false
-                        onCloseParent()
-                    }
+
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f)
                 )
 
-                HorizontalDivider()
-
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = option,
-                                    fontWeight = if (currentValue == option) FontWeight.Bold
-                                    else FontWeight.Normal,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (currentValue == option) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        },
-                        onClick = {
-                            onSelected(option)
-                            showSubMenu = false
-                            onCloseParent()
-                        }
+                if (currentValue != null) {
+                    Text(
+                        text = currentValue.take(20) +
+                                if (currentValue.length > 20) "…" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(end = 8.dp)
                     )
                 }
             }
+        },
+        onClick = {
+            if (options.isNotEmpty()) {
+                expanded = !expanded
+            }
+        },
+        enabled = options.isNotEmpty(),
+        trailingIcon = {
+            if (options.isNotEmpty()) {
+                Icon(
+                    if (expanded)
+                        Icons.Default.KeyboardArrowUp
+                    else
+                        Icons.Default.KeyboardArrowDown,
+                    contentDescription = null
+                )
+            } else {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null
+                )
+            }
         }
+    )
+
+    if (expanded) {
+
+        DropdownMenuItem(
+            text = {
+                Text(
+                    text = allLabel,
+                    modifier = Modifier.padding(start = 32.dp),
+                    fontWeight =
+                        if (currentValue == null)
+                            FontWeight.Bold
+                        else
+                            FontWeight.Normal
+                )
+            },
+            onClick = {
+                onSelected(null)
+                expanded = false
+                onCloseParent()
+            }
+        )
+
+        HorizontalDivider()
+
+        options.forEach { option ->
+
+            DropdownMenuItem(
+                text = {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 32.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Text(
+                            text = option,
+                            modifier = Modifier.weight(1f),
+                            fontWeight =
+                                if (currentValue == option)
+                                    FontWeight.Bold
+                                else
+                                    FontWeight.Normal
+                        )
+
+                        if (currentValue == option) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                },
+                onClick = {
+                    onSelected(option)
+                    expanded = false
+                    onCloseParent()
+                }
+            )
+        }
+
+        HorizontalDivider()
     }
 }
