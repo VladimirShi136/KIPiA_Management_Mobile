@@ -10,9 +10,13 @@ import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.DeviceLocation
 import com.kipia.management.mobile.data.entities.Scheme
 import com.kipia.management.mobile.domain.usecase.SchemeSyncUseCase
+import com.kipia.management.mobile.repository.PreferencesRepository
+import com.kipia.management.mobile.ui.shared.NotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -23,6 +27,23 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import androidx.room.withTransaction
 
+sealed class SyncState {
+    object Idle : SyncState()
+    data class Loading(val message: String) : SyncState()
+    object ExportSuccess : SyncState()
+    data class ImportSuccess(val stats: SyncManager.SyncStats) : SyncState()
+    data class Error(val message: String) : SyncState()
+    data class ConflictsDetected(
+        val conflicts: List<SyncManager.ConflictInfo>,
+        val initialStats: SyncManager.SyncStats
+    ) : SyncState()
+    data class GhostDevicesDetected(
+        val ghostDevices: List<Device>,
+        val initialStats: SyncManager.SyncStats,
+        val inputUri: Uri
+    ) : SyncState()
+}
+
 @Singleton
 class SyncManager @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -31,8 +52,14 @@ class SyncManager @Inject constructor(
     private val schemeDao: SchemeDao,
     private val deviceLocationDao: DeviceLocationDao,
     private val photoManager: PhotoManager,
-    private val schemeSyncUseCase: SchemeSyncUseCase
+    private val schemeSyncUseCase: SchemeSyncUseCase,
+    private val preferencesRepository: PreferencesRepository,
+    private val notificationManager: NotificationManager
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
+    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
     companion object {
         private const val DB_NAME = "kipia_management.db"
@@ -52,7 +79,97 @@ class SyncManager @Inject constructor(
         LOCAL, REMOTE, SKIP
     }
 
-    suspend fun exportToZip(outputUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
+    fun resetState() {
+        _syncState.value = SyncState.Idle
+    }
+
+    fun startExport(outputUri: Uri) {
+        // Устанавливаем статус синхронно, чтобы сервис не закрылся сразу
+        _syncState.value = SyncState.Loading("Экспорт...")
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { exportToZip(outputUri) }
+            result.fold(
+                onSuccess = {
+                    preferencesRepository.saveLastExportTimestamp(System.currentTimeMillis())
+                    _syncState.value = SyncState.ExportSuccess
+                    notificationManager.notifySyncSuccess("Экспорт успешно завершен")
+                },
+                onFailure = { e ->
+                    _syncState.value = SyncState.Error(e.message ?: "Ошибка экспорта")
+                    notificationManager.notifySyncError("Ошибка экспорта: ${e.message}")
+                }
+            )
+        }
+    }
+
+    fun startImport(inputUri: Uri, importDeleted: Boolean = false) {
+        // Устанавливаем статус синхронно
+        _syncState.value = SyncState.Loading("Импорт...")
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { importFromZip(inputUri, importDeleted) }
+            result.fold(
+                onSuccess = { stats ->
+                    when {
+                        stats.conflicts.isNotEmpty() -> {
+                            _syncState.value = SyncState.ConflictsDetected(stats.conflicts, stats)
+                        }
+                        stats.ghostDeletedDevices.isNotEmpty() && !importDeleted -> {
+                            _syncState.value = SyncState.GhostDevicesDetected(stats.ghostDeletedDevices, stats, inputUri)
+                        }
+                        else -> {
+                            preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                            _syncState.value = SyncState.ImportSuccess(stats)
+                            notificationManager.notifySyncSuccess("Импорт успешно завершен")
+                        }
+                    }
+                },
+                onFailure = { e ->
+                    _syncState.value = SyncState.Error(e.message ?: "Ошибка импорта")
+                    notificationManager.notifySyncError("Ошибка импорта: ${e.message}")
+                }
+            )
+        }
+    }
+
+    fun resolveGhostDevices(importThem: Boolean) {
+        val currentState = _syncState.value
+        if (currentState is SyncState.GhostDevicesDetected) {
+            if (importThem) {
+                startImport(currentState.inputUri, importDeleted = true)
+            } else {
+                scope.launch {
+                    preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                    _syncState.value = SyncState.ImportSuccess(currentState.initialStats)
+                    notificationManager.notifySyncSuccess("Импорт завершен (удаленные пропущены)")
+                }
+            }
+        }
+    }
+
+    fun resolveConflicts(resolutions: List<ConflictResolution>) {
+        val currentState = _syncState.value
+        if (currentState is SyncState.ConflictsDetected) {
+            _syncState.value = SyncState.Loading("Применение решений...")
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { 
+                    applyConflictResolutionsInternal(currentState.conflicts, resolutions) 
+                }
+                result.fold(
+                    onSuccess = {
+                        preferencesRepository.saveLastImportTimestamp(System.currentTimeMillis())
+                        _syncState.value = SyncState.ImportSuccess(currentState.initialStats)
+                        notificationManager.notifySyncSuccess("Конфликты разрешены, импорт завершен")
+                    },
+                    onFailure = { e ->
+                        _syncState.value = SyncState.Error(e.message ?: "Ошибка разрешения конфликтов")
+                        notificationManager.notifySyncError("Ошибка разрешения конфликтов")
+                    }
+                )
+            }
+        }
+    }
+
+    private suspend fun exportToZip(outputUri: Uri): Result<Unit> {
         try {
             val db = database.openHelper.writableDatabase
             db.query("PRAGMA wal_checkpoint(TRUNCATE)", emptyArray()).use { cursor ->
@@ -65,7 +182,7 @@ class SyncManager @Inject constructor(
             val dbFile = context.getDatabasePath(DB_NAME)
             val photosDir = photoManager.getBasePhotosDir()
 
-            if (!dbFile.exists()) return@withContext Result.failure(Exception("БД не найдена"))
+            if (!dbFile.exists()) return Result.failure(Exception("БД не найдена"))
 
             context.contentResolver.openOutputStream(outputUri)?.use { outStream ->
                 ZipOutputStream(outStream.buffered()).use { zip ->
@@ -77,12 +194,12 @@ class SyncManager @Inject constructor(
                         addDirToZip(zip, photosDir, PHOTOS_DIR)
                     }
                 }
-            } ?: return@withContext Result.failure(Exception("Ошибка открытия файла"))
+            } ?: return Result.failure(Exception("Ошибка открытия файла"))
 
-            Result.success(Unit)
+            return Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Ошибка экспорта")
-            Result.failure(e)
+            return Result.failure(e)
         }
     }
 
@@ -97,7 +214,7 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun importFromZip(inputUri: Uri, importDeleted: Boolean = false): Result<SyncStats> = withContext(Dispatchers.IO) {
+    private suspend fun importFromZip(inputUri: Uri, importDeleted: Boolean = false): Result<SyncStats> {
         val tempDir = File(context.cacheDir, TEMP_DIR)
         try {
             tempDir.deleteRecursively()
@@ -119,29 +236,26 @@ class SyncManager @Inject constructor(
                         entry = zip.nextEntry
                     }
                 }
-            } ?: return@withContext Result.failure(Exception("Ошибка открытия архива"))
+            } ?: return Result.failure(Exception("Ошибка открытия архива"))
 
             val importedDb = File(tempDir, DB_NAME)
             val importedPhotos = File(tempDir, PHOTOS_DIR)
 
             if (!importedDb.exists()) throw Exception("БД не найдена в архиве")
 
-            // Открываем базу один раз для валидации и чтения
             val importedData = readAndValidateImportedDatabase(importedDb)
             
-            // Выполняем мерж в транзакции
             val stats = database.withTransaction {
                 performMerge(importedData, importedPhotos, importDeleted)
             }
 
             updateLastSyncedTimestamps(stats)
 
-            Result.success(stats)
+            return Result.success(stats)
         } catch (e: Exception) {
             Timber.e(e, "Ошибка импорта")
-            Result.failure(e)
+            return Result.failure(e)
         } finally {
-            // Удаляем временную папку только в самом конце
             tempDir.deleteRecursively()
         }
     }
@@ -151,14 +265,11 @@ class SyncManager @Inject constructor(
         val schemes = mutableListOf<Scheme>()
         val locations = mutableListOf<DeviceLocation>()
 
-        // Используем OPEN_READWRITE, так как для восстановления WAL логов (если они были) SQLite нужны права на запись,
-        // даже если мы только читаем данные.
         android.database.sqlite.SQLiteDatabase.openDatabase(
             dbFile.absolutePath, 
             null, 
             android.database.sqlite.SQLiteDatabase.OPEN_READWRITE
         ).use { db ->
-            // Валидация структуры
             val requiredTables = listOf("devices", "schemes", "device_locations")
             requiredTables.forEach { table ->
                 db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table)).use { cursor ->
@@ -168,7 +279,6 @@ class SyncManager @Inject constructor(
                 }
             }
 
-            // Чтение данных
             db.rawQuery("SELECT * FROM devices", null).use { c ->
                 while (c.moveToNext()) {
                     devices.add(parseDevice(c))
@@ -240,11 +350,9 @@ class SyncManager @Inject constructor(
 
         val localDevices = deviceDao.getAllDevicesForExport().associateBy { it.inventoryNumber }
         
-        // 1. Приборы
         importedData.devices.forEach { imported ->
             val existing = localDevices[imported.inventoryNumber]
             if (existing == null) {
-                // Если прибора нет локально и он удален в импорте - это "призрак"
                 if (imported.isDeleted()) {
                     if (importDeleted) {
                         val newId = deviceDao.insertDevice(imported.copy(id = 0, lastSyncedAt = 0)).toInt()
@@ -275,7 +383,6 @@ class SyncManager @Inject constructor(
             }
         }
 
-        // 2. Схемы
         val localSchemes = schemeDao.getAllSchemesForExport().associateBy { it.name }
 
         importedData.schemes.forEach { imported ->
@@ -303,7 +410,6 @@ class SyncManager @Inject constructor(
             }
         }
 
-        // 3. Локации
         importedData.locations.forEach { imported ->
             val localDeviceId = deviceIdMap[imported.deviceId] ?: return@forEach
             val localSchemeId = schemeIdMap[imported.schemeId] ?: return@forEach
@@ -329,7 +435,6 @@ class SyncManager @Inject constructor(
             }
         }
 
-        // 4. Фотографии
         stats.photosAdded = mergePhotos(importedPhotosDir)
         updateDevicePhotosAfterImport(stats.changedDevices)
         
@@ -360,10 +465,10 @@ class SyncManager @Inject constructor(
         }
     }
 
-    suspend fun applyConflictResolutions(
+    private suspend fun applyConflictResolutionsInternal(
         conflicts: List<ConflictInfo>,
         resolutions: List<ConflictResolution>
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<Unit> {
         try {
             database.withTransaction {
                 val stats = SyncStats()
@@ -394,10 +499,10 @@ class SyncManager @Inject constructor(
                 }
                 updateLastSyncedTimestamps(stats)
             }
-            Result.success(Unit)
+            return Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Ошибка разрешения конфликтов")
-            Result.failure(e)
+            return Result.failure(e)
         }
     }
 

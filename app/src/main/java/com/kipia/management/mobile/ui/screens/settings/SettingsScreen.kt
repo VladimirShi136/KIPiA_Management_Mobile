@@ -1,7 +1,10 @@
 package com.kipia.management.mobile.ui.screens.settings
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.kipia.management.mobile.ui.theme.Dimens
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -29,7 +33,8 @@ import com.kipia.management.mobile.repository.PreferencesRepository
 import com.kipia.management.mobile.ui.components.sync.ConflictResolutionDialog
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.SettingsViewModel
-import com.kipia.management.mobile.viewmodel.SyncState
+import com.kipia.management.mobile.managers.SyncState
+import com.kipia.management.mobile.managers.SyncManager
 import com.kipia.management.mobile.viewmodel.ThemeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -74,6 +79,15 @@ fun SettingsScreen(
     // Для скрытого меню
     var debugClickCount by remember { mutableIntStateOf(0) }
 
+    // Лаунчер для разрешения на уведомления (Android 13+)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "Без разрешения уведомления о завершении не будут показаны", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
@@ -84,6 +98,24 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { pendingImportUri = it }
+    }
+
+    fun checkNotificationPermission(onGranted: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED -> {
+                    onGranted()
+                }
+                else -> {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    // Мы не можем дождаться результата здесь синхронно, 
+                    // поэтому просто запускаем операцию. Если пользователь откажет, уведомления просто не будет.
+                    onGranted()
+                }
+            }
+        } else {
+            onGranted()
+        }
     }
 
     // 1. Диалог подтверждения импорта
@@ -97,7 +129,9 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    settingsViewModel.importDatabase(pendingImportUri!!)
+                    checkNotificationPermission {
+                        settingsViewModel.importDatabase(pendingImportUri!!)
+                    }
                     pendingImportUri = null
                 }) { Text("Импортировать") }
             },
@@ -141,7 +175,14 @@ fun SettingsScreen(
                 conflicts = state.conflicts,
                 onDismiss = { settingsViewModel.resetState() },
                 onResolve = { resolutions ->
-                    settingsViewModel.resolveConflicts(resolutions)
+                    val managerResolutions = resolutions.map { res ->
+                        when(res) {
+                            SyncManager.ConflictResolution.LOCAL -> SyncManager.ConflictResolution.LOCAL
+                            SyncManager.ConflictResolution.REMOTE -> SyncManager.ConflictResolution.REMOTE
+                            else -> SyncManager.ConflictResolution.SKIP
+                        }
+                    }
+                    settingsViewModel.resolveConflicts(managerResolutions)
                 }
             )
         }
@@ -215,8 +256,10 @@ fun SettingsScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
-                            exportLauncher.launch("kipia_backup_$timestamp.zip")
+                            checkNotificationPermission {
+                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                                exportLauncher.launch("kipia_backup_$timestamp.zip")
+                            }
                         },
                         enabled = !isLoading,
                         modifier = Modifier.weight(1f)

@@ -1,13 +1,17 @@
 package com.kipia.management.mobile
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -26,8 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -108,6 +112,22 @@ fun KIPiAApp(
     val schemesViewModel: SchemesViewModel = hiltViewModel()
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val systemUiController = rememberSystemUiController()
+    val context = LocalContext.current
+
+    // --- ЗАПРОС РАЗРЕШЕНИЯ НА УВЕДОМЛЕНИЯ ПРИ ЗАПУСКЕ ---
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        // Можно обработать результат, если нужно
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     val isDarkTheme = when (themeMode) {
         PreferencesRepository.THEME_LIGHT -> false
@@ -145,7 +165,6 @@ fun KIPiAApp(
     val statusBarColor = if (isDarkTheme) SystemColors.TopAppBar.DarkBackground else SystemColors.TopAppBar.LightBackground
     val navBarColor = if (isDarkTheme) SystemColors.BottomNav.DarkBackground else SystemColors.BottomNav.LightBackground
     val darkIcons = !isDarkTheme
-    val context = LocalContext.current
 
     DisposableEffect(isDarkTheme, systemUiController) {
         systemUiController.setStatusBarColor(color = statusBarColor, darkIcons = darkIcons)
@@ -180,6 +199,10 @@ fun KIPiAApp(
                     errorMessage = notification.message
                     notificationManager.clearLastNotification()
                 }
+                is NotificationManager.Notification.SyncError -> {
+                    errorMessage = notification.message
+                    notificationManager.clearLastNotification()
+                }
                 NotificationManager.Notification.None -> { }
                 else -> {
                     globalNotification = notification
@@ -200,7 +223,6 @@ fun KIPiAApp(
             var showBottomNav by rememberSaveable { mutableStateOf(true) }
             val topAppBarController = rememberTopAppBarController()
             
-            // Используем Property Delegation для реактивности TopAppBar
             val topAppBarState by topAppBarController.state
 
             LaunchedEffect(Unit) { topAppBarController.resetToDefault() }
@@ -222,37 +244,20 @@ fun KIPiAApp(
                         else -> true
                     }
                     
-                    when {
-                        route == "devices" -> topAppBarController.resetToDefault()
-                        route?.startsWith("device_edit") == true -> { }
-                        route?.startsWith("device_detail") == true -> { }
-                        route == "settings" -> topAppBarController.setForScreen("settings")
-                        route == "debug_settings" -> {
-                            topAppBarController.setForScreen("debug_settings", mapOf(
-                                "onBackClick" to { navController.popBackStack() }
-                            ))
-                        }
-                        route == "photos" -> topAppBarController.setForScreen("photos", mapOf(
+                    when (route) {
+                        "devices" -> topAppBarController.resetToDefault()
+                        "settings" -> topAppBarController.setForScreen("settings")
+                        "photos" -> topAppBarController.setForScreen("photos", mapOf(
                             "locations" to photosLocations, 
                             "devices" to photosDevices,
                             "selectedLocation" to (photosState.selectedLocation ?: ""),
                             "selectedDeviceId" to (photosState.selectedDeviceId ?: 0)
                         ))
-                        route == "schemes" -> topAppBarController.setForScreen("schemes", mapOf(
+                        "schemes" -> topAppBarController.setForScreen("schemes", mapOf(
                             "title" to "Учет приборов КИПиА",
                             "searchQuery" to schemesState.searchQuery,
                             "currentSort" to schemesState.sortBy
                         ))
-                        route?.startsWith("scheme_editor") == true -> {
-                            topAppBarController.setForScreen("scheme_editor", mapOf("canSave" to true))
-                        }
-                        route?.startsWith("fullscreen_photo") == true -> {
-                            topAppBarController.setForScreen("fullscreen_photo", mapOf(
-                                "inventoryNumber" to "", "valveNumber" to "",
-                                "onBackClick" to { navController.navigateUp() }
-                            ))
-                        }
-                        else -> topAppBarController.resetToDefault()
                     }
                 }
             }
@@ -302,7 +307,6 @@ fun KIPiAApp(
                             modifier = Modifier.fillMaxSize().padding(innerPadding).background(MaterialTheme.colorScheme.background).consumeWindowInsets(innerPadding)
                         )
 
-                        // --- ОШИБКИ ЧЕРЕЗ ГОТОВЫЙ ErrorDialog (ПО ЦЕНТРУ) ---
                         errorMessage?.let { msg ->
                             ErrorDialog(
                                 title = "Ошибка",
@@ -311,7 +315,6 @@ fun KIPiAApp(
                             )
                         }
 
-                        // --- ИНФОРМАЦИОННЫЕ УВЕДОМЛЕНИЯ (УСПЕХ) ---
                         Box(
                             modifier = Modifier.fillMaxSize().padding(bottom = 200.dp),
                             contentAlignment = Alignment.BottomCenter
@@ -325,6 +328,7 @@ fun KIPiAApp(
                                     is NotificationManager.Notification.DeviceSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Прибор '${n.deviceName}' сохранен")
                                     is NotificationManager.Notification.SchemeSaved -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Схема '${n.schemeName}' сохранена")
                                     is NotificationManager.Notification.DeviceDeleted -> Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Прибор '${n.deviceName}' удален")
+                                    is NotificationManager.Notification.SyncSuccess -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, n.message)
                                     else -> Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "")
                                 }
 

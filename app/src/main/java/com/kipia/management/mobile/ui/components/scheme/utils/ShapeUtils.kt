@@ -173,27 +173,25 @@ object ShapeUtils {
         
         // JavaFX Color.toString() обычно возвращает 0xRRGGBBAA
         // Android/Compose обычно использует #AARRGGBB
-        val isJavaFXPrefix = hex.startsWith("0x")
+        val isJavaFXFormat = hex.startsWith("0x")
         
         return try {
             val clean = hex.removePrefix("#").removePrefix("0x")
             when (clean.length) {
                 6 -> Color(0xFF000000 or clean.toLong(16)) // RGB -> Непрозрачный ARGB
                 8 -> {
-                    // Пытаемся определить формат RGBA (JavaFX) или ARGB (Android)
-                    // Heuristic: если строка из JavaFX или если она заканчивается на FF (непрозрачный), 
-                    // но при этом в начале не FF, то это скорее всего RGBA.
-                    val isLikelyRGBA = isJavaFXPrefix || (hex.startsWith("#") && hex.endsWith("FF") && !hex.startsWith("#FF"))
-                    
-                    if (isLikelyRGBA) {
-                        // RGBA (JavaFX)
+                    // Heuristic: Если начинается на 0x или если мы сами так сохранили (RGBA)
+                    // В JavaFX формате: RRGGBBAA
+                    // В Android формате: AARRGGBB
+                    if (isJavaFXFormat) {
+                        // RGBA (JavaFX / Наш новый экспорт)
                         val r = clean.substring(0, 2).toInt(16)
                         val g = clean.substring(2, 4).toInt(16)
                         val b = clean.substring(4, 6).toInt(16)
                         val a = clean.substring(6, 8).toInt(16)
                         Color(r / 255f, g / 255f, b / 255f, a / 255f)
                     } else {
-                        // ARGB (Android)
+                        // ARGB (Старый формат Android)
                         val a = clean.substring(0, 2).toInt(16)
                         val r = clean.substring(2, 4).toInt(16)
                         val g = clean.substring(4, 6).toInt(16)
@@ -206,12 +204,17 @@ object ShapeUtils {
         } catch (e: Exception) { default }
     }
 
+    /**
+     * Преобразует цвет в HEX-строку формата 0xRRGGBBAA.
+     * Этот формат является стандартным для JavaFX Color.toString() и 
+     * корректно воспринимается при импорте/экспорте.
+     */
     fun Color.toHex(): String {
         val a = (alpha * 255).toInt().coerceIn(0, 255)
         val r = (red * 255).toInt().coerceIn(0, 255)
         val g = (green * 255).toInt().coerceIn(0, 255)
         val b = (blue * 255).toInt().coerceIn(0, 255)
-        return String.format("#%02X%02X%02X%02X", a, r, g, b)
+        return String.format("0x%02X%02X%02X%02X", r, g, b, a)
     }
 }
 

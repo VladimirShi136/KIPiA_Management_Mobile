@@ -14,40 +14,42 @@ class NotificationManager @Inject constructor() {
         data class DeviceDeleted(val deviceName: String, val withScheme: Boolean = false) : Notification()
         data class SchemeSaved(val schemeName: String) : Notification()
         data class Error(val message: String) : Notification()
-        object None : Notification() // ← Пустое состояние
+        data class SyncSuccess(val message: String) : Notification()
+        data class SyncError(val message: String) : Notification()
+        object None : Notification()
     }
 
-    // ★★★★ Добавляем буфер и replay ★★★★
     private val _notification = MutableSharedFlow<Notification>(
-        replay = 1, // ← Сохраняет последнее значение для новых подписчиков
-        extraBufferCapacity = 10 // ← Дополнительный буфер
+        replay = 1,
+        extraBufferCapacity = 10
     )
     val notification: SharedFlow<Notification> = _notification.asSharedFlow()
 
     suspend fun notifyDeviceSaved(deviceName: String) {
-        println("DEBUG NotificationManager: Отправка уведомления о сохранении '$deviceName'")
         _notification.emit(Notification.DeviceSaved(deviceName))
     }
 
     suspend fun notifyDeviceDeleted(deviceName: String, withScheme: Boolean = false) {
-        println("DEBUG NotificationManager: Отправка уведомления об удалении '$deviceName' withScheme=$withScheme")
         _notification.emit(Notification.DeviceDeleted(deviceName, withScheme))
     }
 
     suspend fun notifySchemeSaved(schemeName: String) {
-        Timber.d("NotificationManager: Отправка уведомления о сохранении схемы '$schemeName'")
         _notification.emit(Notification.SchemeSaved(schemeName))
     }
 
     suspend fun notifyError(message: String) {
-        println("DEBUG NotificationManager: Отправка уведомления об ошибке '$message'")
         _notification.emit(Notification.Error(message))
     }
 
-    // ★★★★ Метод для очистки replay cache ★★★★
+    suspend fun notifySyncSuccess(message: String) {
+        _notification.emit(Notification.SyncSuccess(message))
+    }
+
+    suspend fun notifySyncError(message: String) {
+        _notification.emit(Notification.SyncError(message))
+    }
+
     suspend fun clearLastNotification() {
-        println("DEBUG NotificationManager: Очистка последнего уведомления")
-        // Отправляем пустое уведомление, чтобы перезаписать replay cache
         _notification.emit(Notification.None)
     }
 }

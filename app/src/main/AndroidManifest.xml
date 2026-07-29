@@ -4,6 +4,9 @@
 
     <!-- Обязательные разрешения -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Для Android 13+ (API 33) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -33,6 +36,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.KipiaManagement"
         tools:targetApi="31">
+
+        <!-- Сервис синхронизации -->
+        <service
+            android:name=".services.SyncService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- 🔥 ОТЛАДКА РЕКОМПОЗИЦИЙ (добавлено) -->
         <meta-data
