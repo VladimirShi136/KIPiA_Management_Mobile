@@ -1,5 +1,6 @@
 package com.kipia.management.mobile.ui.components.scheme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -44,6 +45,8 @@ fun SchemeCanvas(
         }
     }
 
+    val isDarkTheme = isSystemInDarkTheme()
+
     var viewportWidth by remember { mutableStateOf(0) }
     var viewportHeight by remember { mutableStateOf(0) }
 
@@ -52,12 +55,12 @@ fun SchemeCanvas(
     var lastDeviceDrawingOffset by remember { mutableStateOf(Offset.Zero) }
 
     // Ключи для каждого слоя
-    val backgroundKey = remember(canvasState.backgroundColor, canvasState.width, canvasState.height, canvasState.backgroundImage, stableScale) {
-        "bg_${canvasState.backgroundColor}_${canvasState.width}x${canvasState.height}_$stableScale"
+    val backgroundKey = remember(canvasState.backgroundColor, canvasState.width, canvasState.height, canvasState.backgroundImage, stableScale, isDarkTheme) {
+        "bg_${canvasState.backgroundColor}_${canvasState.width}x${canvasState.height}_$stableScale}_$isDarkTheme"
     }
 
-    val shapeKey = remember(shapes, editorState.selection.selectedShapeId) {
-        "shapes_${shapes.size}_${editorState.selection.selectedShapeId}"
+    val shapeKey = remember(shapes, editorState.selection.selectedShapeId, isDarkTheme) {
+        "shapes_${shapes.size}_${editorState.selection.selectedShapeId}_$isDarkTheme"
     }
 
     val deviceKey = remember(devices, availableDevices, editorState.selection.selectedDeviceId) {

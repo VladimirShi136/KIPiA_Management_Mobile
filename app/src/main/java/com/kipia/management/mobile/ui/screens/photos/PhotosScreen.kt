@@ -19,7 +19,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.staggeredgrid.*
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -73,7 +73,7 @@ fun PhotosScreen(
 
     // Состояния скролла для каждого режима
     val groupedScrollState = rememberLazyListState()
-    val gridScrollState = rememberLazyStaggeredGridState()
+    val gridScrollState = rememberLazyGridState()
     val listScrollState = rememberLazyListState()
 
     // Определяем, какой режим сейчас активен
@@ -435,26 +435,26 @@ fun PhotoThumbnailCard(photoItem: PhotoItem, onClick: () -> Unit) {
 fun PhotosGallery(
     photos: List<PhotoItem>,
     viewMode: ViewMode,
-    gridScrollState: LazyStaggeredGridState,
+    gridScrollState: LazyGridState,
     listScrollState: LazyListState,
     onPhotoClick: (PhotoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (viewMode) {
-        ViewMode.GRID -> {
-            LazyVerticalStaggeredGrid(
-                state = gridScrollState,
-                columns = StaggeredGridCells.Adaptive(minSize = 120.dp),
-                modifier = modifier,
-                verticalItemSpacing = Dimens.spacingSmall,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall),
-                contentPadding = PaddingValues(bottom = 80.dp)
-            ) {
-                items(photos, key = { it.fullPath }) { photoItem ->
-                    PhotoGridItem(photoItem = photoItem, onClick = { onPhotoClick(photoItem) })
-                }
-            }
-        }
+         ViewMode.GRID -> {
+             LazyVerticalGrid(
+                 state = gridScrollState,
+                 columns = GridCells.Adaptive(minSize = 120.dp),
+                 modifier = modifier,
+                 verticalArrangement = Arrangement.spacedBy(Dimens.spacingSmall),
+                 horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall),
+                 contentPadding = PaddingValues(bottom = 80.dp)
+             ) {
+                 items(photos, key = { it.fullPath }) { photoItem ->
+                     PhotoGridItem(photoItem = photoItem, onClick = { onPhotoClick(photoItem) })
+                 }
+             }
+         }
         ViewMode.LIST -> {
             LazyColumn(
                 state = listScrollState,

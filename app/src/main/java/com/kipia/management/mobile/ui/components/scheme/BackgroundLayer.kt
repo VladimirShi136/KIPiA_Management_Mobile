@@ -3,6 +3,7 @@ package com.kipia.management.mobile.ui.components.scheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -17,6 +18,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 
 @Composable
@@ -25,7 +27,15 @@ fun BackgroundLayer(
     modifier: Modifier = Modifier,
     key: Any? = null,
 ) {
-    remember(key) { key }
+    // Определяем тему через MaterialTheme (правильный способ)
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val isDarkTheme = surfaceColor.luminance() < 0.5f
+
+    remember(key, isDarkTheme) { key }
+
+    // Выбираем цвета в зависимости от темы
+    val backgroundColor = if (isDarkTheme) Color(0xFF1E1E1E) else canvasState.backgroundColor
+    val gridColor = if (isDarkTheme) Color(0xFF404040) else Color.LightGray.copy(alpha = 0.4f)
 
     var viewportWidth by remember { mutableIntStateOf(0) }
     var viewportHeight by remember { mutableIntStateOf(0) }
@@ -38,12 +48,12 @@ fun BackgroundLayer(
                 .background(Color.Black.copy(alpha = 0.3f))
         )
 
-        // Контейнер для холста с белым фоном
+        // Контейнер для холста с адаптированным фоном
         Box(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // Белый фон холста (трансформируется вместе с холстом)
+            // Фон холста (адаптируется в зависимости от темы)
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
@@ -58,9 +68,9 @@ fun BackgroundLayer(
                 val rightBound = canvasState.width * canvasState.scale + canvasState.offset.x
                 val bottomBound = canvasState.height * canvasState.scale + canvasState.offset.y
 
-                // Рисуем БЕЛЫЙ фон ТОЛЬКО внутри границ холста
+                // Рисуем фон холста (белый для светлой темы, темный для темной)
                 drawRect(
-                    color = canvasState.backgroundColor,
+                    color = backgroundColor,
                     topLeft = Offset(leftBound, topBound),
                     size = Size(
                         width = (rightBound - leftBound),
@@ -68,7 +78,7 @@ fun BackgroundLayer(
                     )
                 )
 
-                // Рисуем сетку (только внутри белого холста)
+                // Рисуем сетку (только внутри холста)
                 if (canvasState.showGrid) {
                     drawGridInsideBounds(
                         canvasState = canvasState,
@@ -77,7 +87,8 @@ fun BackgroundLayer(
                         rightBound = rightBound,
                         bottomBound = bottomBound,
                         viewportWidth = viewportWidth,
-                        viewportHeight = viewportHeight
+                        viewportHeight = viewportHeight,
+                        gridColor = gridColor
                     )
                 }
 
@@ -125,9 +136,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGridInsideBound
     rightBound: Float,
     bottomBound: Float,
     viewportWidth: Int,
-    viewportHeight: Int
+    viewportHeight: Int,
+    gridColor: Color
 ) {
-    val gridColor = Color.LightGray.copy(alpha = 0.4f)
     val gridSize = canvasState.gridSize
     val scale = canvasState.scale
 

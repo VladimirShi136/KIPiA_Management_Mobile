@@ -2,6 +2,7 @@ package com.kipia.management.mobile.ui.components.scheme
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
@@ -30,12 +32,16 @@ fun ShapeLayer(
     key: Any? = null,
     debugMode: Boolean = false  // По умолчанию false
 ) {
-    remember(key) { key }
+    // Определяем тему через MaterialTheme (правильный способ)
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val isDarkTheme = surfaceColor.luminance() < 0.5f
+
+    remember(key, isDarkTheme) { key }
 
     var canvasWidth by remember { mutableIntStateOf(0) }
     var canvasHeight by remember { mutableIntStateOf(0) }
 
-    // Видимая область в мировых координатах
+    // ...existing code...
     val visibleArea by remember(canvasState, canvasWidth, canvasHeight) {
         derivedStateOf {
             if (canvasWidth == 0 || canvasHeight == 0) return@derivedStateOf Rect.Zero
@@ -88,8 +94,11 @@ fun ShapeLayer(
                 val scaledEndY = shape.endY * canvasState.scale + canvasState.offset.y
                 val scaledStrokeWidth = shape.strokeWidth * canvasState.scale
 
+                // Адаптируем цвет под тему
+                val displayColor = if (isDarkTheme) shape.strokeColor.adaptForDarkTheme() else shape.strokeColor
+
                 drawLine(
-                    color = shape.strokeColor,
+                    color = displayColor,
                     start = Offset(scaledStartX, scaledStartY),
                     end = Offset(scaledEndX, scaledEndY),
                     strokeWidth = scaledStrokeWidth,
@@ -125,7 +134,8 @@ fun ShapeLayer(
                         scaledWidth,
                         scaledHeight,
                         scaledStrokeWidth,
-                        canvasState.scale
+                        canvasState.scale,
+                        isDarkTheme
                     )
                     if (isSelected) drawSelectionMarker(
                         shape,
@@ -147,16 +157,29 @@ private fun DrawScope.drawShapeWithGlobalTransform(
     scaledWidth: Float,
     scaledHeight: Float,
     scaledStrokeWidth: Float,
-    scaleFactor: Float
+    scaleFactor: Float,
+    isDarkTheme: Boolean
 ) {
     when (shape) {
         is ComposeRectangle -> {
             val scaledCornerRadius = shape.cornerRadius * scaleFactor
+            
+            // Адаптируем цвета под тему
+            val displayFillColor = if (isDarkTheme && !shape.fillColor.isEffectivelyTransparent()) {
+                shape.fillColor.adaptForDarkTheme()
+            } else {
+                shape.fillColor
+            }
+            val displayStrokeColor = if (isDarkTheme && !shape.strokeColor.isEffectivelyTransparent()) {
+                shape.strokeColor.adaptForDarkTheme()
+            } else {
+                shape.strokeColor
+            }
 
             // Заливка
-            if (shape.fillColor != Color.Transparent) {
+            if (displayFillColor != Color.Transparent) {
                 drawRoundRect(
-                    color = shape.fillColor,
+                    color = displayFillColor,
                     topLeft = Offset.Zero,
                     size = Size(scaledWidth, scaledHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(scaledCornerRadius)
@@ -164,9 +187,9 @@ private fun DrawScope.drawShapeWithGlobalTransform(
             }
 
             // Обводка
-            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+            if (displayStrokeColor != Color.Transparent && shape.strokeWidth > 0) {
                 drawRoundRect(
-                    color = shape.strokeColor,
+                    color = displayStrokeColor,
                     topLeft = Offset.Zero,
                     size = Size(scaledWidth, scaledHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(scaledCornerRadius),
@@ -180,9 +203,11 @@ private fun DrawScope.drawShapeWithGlobalTransform(
             val scaledStartY = shape.startY * scaleFactor
             val scaledEndX = shape.endX * scaleFactor
             val scaledEndY = shape.endY * scaleFactor
+            
+            val displayColor = if (isDarkTheme) shape.strokeColor.adaptForDarkTheme() else shape.strokeColor
 
             drawLine(
-                color = shape.strokeColor,
+                color = displayColor,
                 start = Offset(scaledStartX, scaledStartY),
                 end = Offset(scaledEndX, scaledEndY),
                 strokeWidth = scaledStrokeWidth,
@@ -191,19 +216,30 @@ private fun DrawScope.drawShapeWithGlobalTransform(
         }
 
         is ComposeEllipse -> {
+            val displayFillColor = if (isDarkTheme && !shape.fillColor.isEffectivelyTransparent()) {
+                shape.fillColor.adaptForDarkTheme()
+            } else {
+                shape.fillColor
+            }
+            val displayStrokeColor = if (isDarkTheme && !shape.strokeColor.isEffectivelyTransparent()) {
+                shape.strokeColor.adaptForDarkTheme()
+            } else {
+                shape.strokeColor
+            }
+            
             // Заливка
-            if (shape.fillColor != Color.Transparent) {
+            if (displayFillColor != Color.Transparent) {
                 drawOval(
-                    color = shape.fillColor,
+                    color = displayFillColor,
                     topLeft = Offset.Zero,
                     size = Size(scaledWidth, scaledHeight)
                 )
             }
 
             // Обводка
-            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+            if (displayStrokeColor != Color.Transparent && shape.strokeWidth > 0) {
                 drawOval(
-                    color = shape.strokeColor,
+                    color = displayStrokeColor,
                     topLeft = Offset.Zero,
                     size = Size(scaledWidth, scaledHeight),
                     style = Stroke(width = scaledStrokeWidth)
@@ -228,20 +264,31 @@ private fun DrawScope.drawShapeWithGlobalTransform(
                 lineTo(scaledWidth, scaledHeight) // Правый низ (width, height)
                 close()
             }
+            
+            val displayFillColor = if (isDarkTheme && !shape.fillColor.isEffectivelyTransparent()) {
+                shape.fillColor.adaptForDarkTheme()
+            } else {
+                shape.fillColor
+            }
+            val displayStrokeColor = if (isDarkTheme && !shape.strokeColor.isEffectivelyTransparent()) {
+                shape.strokeColor.adaptForDarkTheme()
+            } else {
+                shape.strokeColor
+            }
 
             // Заливка
-            if (shape.fillColor != Color.Transparent) {
+            if (displayFillColor != Color.Transparent) {
                 drawPath(
                     path = path,
-                    color = shape.fillColor
+                    color = displayFillColor
                 )
             }
 
             // Обводка
-            if (shape.strokeColor != Color.Transparent && shape.strokeWidth > 0) {
+            if (displayStrokeColor != Color.Transparent && shape.strokeWidth > 0) {
                 drawPath(
                     path = path,
-                    color = shape.strokeColor,
+                    color = displayStrokeColor,
                     style = Stroke(width = scaledStrokeWidth)
                 )
             }
@@ -250,8 +297,10 @@ private fun DrawScope.drawShapeWithGlobalTransform(
         is ComposeText -> {
             // ТОЛЬКО ТЕКСТ, без фона и рамки
             drawIntoCanvas { canvas ->
+                val displayTextColor = if (isDarkTheme) shape.strokeColor.adaptForDarkTheme() else shape.strokeColor
+                
                 val paint = android.graphics.Paint().apply {
-                    color = shape.strokeColor.toArgb()  // ← Здесь используется strokeColor!
+                    color = displayTextColor.toArgb()
                     textSize = shape.fontSize * scaleFactor
                     isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.CENTER
