@@ -25,9 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import timber.log.Timber
 
-// Сортировка для галереи фото — по названию локации
+// Сортировка для галереи фото — по названию локации или по номеру крана
 enum class PhotosSortBy {
-    NAME_ASC, NAME_DESC
+    NAME_ASC, NAME_DESC, VALVE_NUMBER_ASC
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -348,6 +348,42 @@ private fun SortMenuItem(
         )
 
         HorizontalDivider()
+
+        DropdownMenuItem(
+            text = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Text(
+                        "По номеру крана (Valve)",
+                        modifier = Modifier.weight(1f),
+                        fontWeight =
+                            if (currentSort == PhotosSortBy.VALVE_NUMBER_ASC)
+                                FontWeight.Bold
+                            else
+                                FontWeight.Normal
+                    )
+
+                    if (currentSort == PhotosSortBy.VALVE_NUMBER_ASC) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            onClick = {
+                onSortSelected(PhotosSortBy.VALVE_NUMBER_ASC)
+                expanded = false
+            }
+        )
+
+        HorizontalDivider()
     }
 }
 
@@ -425,6 +461,7 @@ private fun buildActiveFiltersText(
 
     when (currentSort) {
         PhotosSortBy.NAME_DESC -> filters.add("Сортировка: Я → А")
+        PhotosSortBy.VALVE_NUMBER_ASC -> filters.add("Сортировка: По номеру крана")
         else -> {}
     }
 

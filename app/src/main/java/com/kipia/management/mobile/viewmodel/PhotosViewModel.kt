@@ -117,6 +117,7 @@ class PhotosViewModel @Inject constructor(
                 when (sortBy) {
                     PhotosSortBy.NAME_ASC -> list.sortedBy { it.device.getDisplayName() }
                     PhotosSortBy.NAME_DESC -> list.sortedByDescending { it.device.getDisplayName() }
+                    PhotosSortBy.VALVE_NUMBER_ASC -> sortByValveNumber(list)
                 }
             }
     }.stateIn(
@@ -133,7 +134,7 @@ class PhotosViewModel @Inject constructor(
             .map { (location, items) ->
                 LocationPhotoGroup(
                     location = location,
-                    photos = items.sortedByDescending { File(it.fullPath).lastModified() },
+                    photos = items,
                     isExpanded = expandedSet.contains(location)
                 )
             }
@@ -239,6 +240,46 @@ class PhotosViewModel @Inject constructor(
 
     fun setSortBy(sortBy: PhotosSortBy) {
         _sortBy.value = sortBy
+    }
+
+    /**
+     * Сортирует фото по номеру крана (Valve).
+     * Формат: Р1-245, где 245 - вторая часть (после тире).
+     * Если формат нарушен, фото идет в конец списка.
+     */
+    private fun sortByValveNumber(photos: List<PhotoItem>): List<PhotoItem> {
+        return photos.sortedWith(compareBy<PhotoItem> { photoItem ->
+            val valveNumber = photoItem.device.valveNumber
+            if (valveNumber == null || valveNumber.isBlank()) {
+                return@compareBy Int.MAX_VALUE
+            }
+
+            // Парсируем вторую часть (после тире)
+            val parts = valveNumber.split("-")
+            if (parts.size != 2) {
+                return@compareBy Int.MAX_VALUE
+            }
+
+            val secondPart = parts[1].toIntOrNull()
+            if (secondPart == null) {
+                return@compareBy Int.MAX_VALUE
+            }
+
+            secondPart
+        }.thenBy { photoItem ->
+            // Если вторая часть одинакова, сортируем по первой части
+            val valveNumber = photoItem.device.valveNumber
+            if (valveNumber == null || valveNumber.isBlank()) {
+                return@thenBy ""
+            }
+
+            val parts = valveNumber.split("-")
+            if (parts.size != 2) {
+                return@thenBy ""
+            }
+
+            parts[0]
+        })
     }
 }
 

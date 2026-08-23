@@ -507,7 +507,7 @@ fun PhotoListItem(photoItem: PhotoItem, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(120.dp)) {
             Image(
                 painter = rememberAsyncImagePainter(model = photoItem.fullPath),
                 contentDescription = null,
@@ -518,6 +518,9 @@ fun PhotoListItem(photoItem: PhotoItem, onClick: () -> Unit) {
                 Text(text = photoItem.device.getDisplayName(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(text = "Инв. №: ${photoItem.device.inventoryNumber}", style = MaterialTheme.typography.bodySmall)
                 Text(text = "Место: ${photoItem.device.location}", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (!photoItem.device.valveNumber.isNullOrBlank()) {
+                    Text(text = "№ крана: ${photoItem.device.valveNumber}", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
         }
     }
