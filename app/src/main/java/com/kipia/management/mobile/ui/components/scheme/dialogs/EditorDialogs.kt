@@ -1,13 +1,12 @@
 package com.kipia.management.mobile.ui.components.scheme.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -171,48 +169,63 @@ fun ColorPickerDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val presetColors = listOf(
+        Color(0xFFFF0000) to "Красный",
+        Color(0xFF00FF00) to "Зеленый",
+        Color(0xFF0000FF) to "Синий",
+        Color(0xFFFFFF00) to "Желтый",
+        Color(0xFFFFA500) to "Оранжевый",
+        Color(0xFF000000) to "Черный",
+        Color(0xFF800080) to "Пурпурный",
+        Color(0xFF00FFFF) to "Голубой"
+    )
+
     DraggableCard(
-        modifier = modifier.widthIn(min = 300.dp, max = 340.dp), 
+        modifier = modifier.widthIn(min = 280.dp, max = 320.dp),
         onClose = onDismiss
     ) {
-        val scrollState = rememberScrollState()
         var selectedColor by remember { mutableStateOf(initialColor) }
-        var hue by remember { mutableFloatStateOf(0f) }
-        var saturation by remember { mutableFloatStateOf(1f) }
-        var value by remember { mutableFloatStateOf(1f) }
-
-        LaunchedEffect(initialColor) {
-            val hsv = FloatArray(3)
-            android.graphics.Color.colorToHSV(initialColor.toArgb(), hsv)
-            hue = hsv[0]; saturation = hsv[1]; value = hsv[2]
-        }
 
         EditorDialogHeader(title, onClose = onDismiss)
 
-        Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ColorSlider(label = "Оттенок", value = hue, valueRange = 0f..360f, onValueChange = { hue = it; selectedColor = Color.hsv(hue, saturation, value) }, gradientColors = List(360) { Color.hsv(it.toFloat(), 1f, 1f) })
-            ColorSlider(label = "Насыщенность", value = saturation, valueRange = 0f..1f, onValueChange = { saturation = it; selectedColor = Color.hsv(hue, saturation, value) }, gradientColors = List(10) { Color.hsv(hue, it / 10f, value) })
-            ColorSlider(label = "Яркость", value = value, valueRange = 0f..1f, onValueChange = { value = it; selectedColor = Color.hsv(hue, saturation, value) }, gradientColors = List(10) { Color.hsv(hue, saturation, it / 10f) })
-
-            Card(modifier = Modifier.fillMaxWidth().height(50.dp).padding(vertical = 8.dp), shape = RoundedCornerShape(Dimens.chipRadius), colors = CardDefaults.cardColors(containerColor = selectedColor), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Образец", color = if (selectedColor.luminance() > 0.5f) Color.Black else Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                presetColors.chunked(4).forEach { rowColors ->
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        rowColors.forEach { (color, name) ->
+                            val isSelected = selectedColor == color
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        color = color,
+                                        shape = RoundedCornerShape(24.dp)
+                                    )
+                                    .clickable { selectedColor = color }
+                                    .then(
+                                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)) else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Отмена") }
                 Button(onClick = { onColorSelected(selectedColor); onDismiss() }, modifier = Modifier.weight(1f)) { Text("Выбрать") }
             }
         }
-    }
-}
-
-@Composable
-private fun ColorSlider(label: String, value: Float, valueRange: ClosedFloatingPointRange<Float>, onValueChange: (Float) -> Unit, gradientColors: List<Color>) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Box(modifier = Modifier.fillMaxWidth().height(12.dp).background(androidx.compose.ui.graphics.Brush.horizontalGradient(gradientColors), RoundedCornerShape(2.dp)))
-        Slider(value = value, onValueChange = onValueChange, valueRange = valueRange, modifier = Modifier.height(32.dp))
     }
 }
 
