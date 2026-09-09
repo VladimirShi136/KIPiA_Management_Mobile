@@ -2,6 +2,7 @@ package com.kipia.management.mobile.ui.components.scheme
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -27,7 +28,6 @@ fun DeviceLayer(
 ) {
     remember(key) { key }
 
-    // Загружаем иконку манометра
     val manometerPainter = painterResource(id = R.drawable.ic_manometer)
 
     var canvasWidth  by remember { mutableIntStateOf(0) }
@@ -45,7 +45,6 @@ fun DeviceLayer(
         }
     }
 
-    // Базовый размер иконки в схемных единицах (совпадает с ICON_BASE_SIZE в DeviceUtils)
     val deviceSize = 45f
 
     val visibleDevices by remember(devices, visibleArea) {
@@ -63,6 +62,8 @@ fun DeviceLayer(
         derivedStateOf { allDevices.associateBy { it.id } }
     }
 
+    val textColor = LocalContentColor.current
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -74,17 +75,18 @@ fun DeviceLayer(
         onDrawingParams(canvasState.scale, canvasState.offset)
 
         visibleDevices.forEach { schemeDevice ->
-            deviceMap[schemeDevice.deviceId]?.let { _ ->
+            deviceMap[schemeDevice.deviceId]?.let { device ->
                 val screenX = schemeDevice.x * canvasState.scale + canvasState.offset.x
                 val screenY = schemeDevice.y * canvasState.scale + canvasState.offset.y
 
                 withTransform({ translate(screenX, screenY) }) {
                     drawDevice(
-                        painter     = manometerPainter,
-                        isSelected  = schemeDevice.deviceId == selectedDeviceId,
-                        scale       = canvasState.scale,
-                        // SchemeDevice.rotation хранит угол в градусах (0 / 90 / 180 / 270)
-                        rotationDeg = schemeDevice.rotation
+                        painter       = manometerPainter,
+                        isSelected    = schemeDevice.deviceId == selectedDeviceId,
+                        scale         = canvasState.scale,
+                        rotationDeg   = schemeDevice.rotation,
+                        valveText     = device.valveNumber,
+                        valveTextColor = textColor
                     )
                 }
             }

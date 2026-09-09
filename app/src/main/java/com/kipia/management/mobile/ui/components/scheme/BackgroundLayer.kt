@@ -34,8 +34,8 @@ fun BackgroundLayer(
     remember(key, isDarkTheme) { key }
 
     // Выбираем цвета в зависимости от темы
-    val backgroundColor = if (isDarkTheme) Color(0xFF1E1E1E) else canvasState.backgroundColor
-    val gridColor = if (isDarkTheme) Color(0xFF404040) else Color.LightGray.copy(alpha = 0.4f)
+    val backgroundColor = if (isDarkTheme) Color(0xFF323237) else canvasState.backgroundColor
+    val gridColor = if (isDarkTheme) Color(0xFF939395) else Color.LightGray.copy(alpha = 0.4f)
 
     var viewportWidth by remember { mutableIntStateOf(0) }
     var viewportHeight by remember { mutableIntStateOf(0) }
