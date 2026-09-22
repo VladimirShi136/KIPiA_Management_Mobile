@@ -60,10 +60,6 @@
 
 ## 🖼️ Скриншоты интерфейса
 
-### Главный экран
-![Главный экран приложения](docs/screenshots/main_screen.jpg)
-*Главный экран и навигационное меню*
-
 ### Таблица приборов
 ![Таблица с приборами](docs/screenshots/devices_screen.jpg)
 *Список приборов с фильтрацией*
@@ -356,9 +352,6 @@ data class DeviceLocation(
 
 * Автор: [VladimirShi136](https://github.com/VladimirShi136)
 * Issues: [Перейти к вопросам и задачам](https://github.com/VladimirShi136/KIPiA_Management_Mobile/issues)
-* Документация: [Перейти к Wiki](https://github.com/VladimirShi136/KIPiA_Management/wiki)
 * Десктопная версия: [KIPiA_Management](https://github.com/VladimirShi136/KIPiA_Management)
-
-**_Примечание:_** Для полной документации с пошаговыми инструкциями обратитесь к Wiki проекта.
 
 ---
