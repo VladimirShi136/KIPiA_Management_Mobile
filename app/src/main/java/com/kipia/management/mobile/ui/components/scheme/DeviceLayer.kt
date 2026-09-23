@@ -76,10 +76,21 @@ fun DeviceLayer(
 
         visibleDevices.forEach { schemeDevice ->
             deviceMap[schemeDevice.deviceId]?.let { device ->
+                val size = 45f * canvasState.scale
+                val halfSize = size / 2f
+                val radius = size / 2f
+                val radians = Math.toRadians(schemeDevice.rotation.toDouble())
+                val sin = kotlin.math.sin(radians).toFloat()
+                val cos = kotlin.math.cos(radians).toFloat()
+                
                 val screenX = schemeDevice.x * canvasState.scale + canvasState.offset.x
                 val screenY = schemeDevice.y * canvasState.scale + canvasState.offset.y
-
-                withTransform({ translate(screenX, screenY) }) {
+                
+                val adjustedX = screenX - halfSize + radius * sin
+                val textGap = 5f * canvasState.scale
+                val adjustedY = screenY - halfSize - radius * cos - textGap
+                
+                withTransform({ translate(adjustedX, adjustedY) }) {
                     drawDevice(
                         painter       = manometerPainter,
                         isSelected    = schemeDevice.deviceId == selectedDeviceId,

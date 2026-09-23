@@ -216,7 +216,7 @@ private suspend fun PointerInputScope.setupSelectionGestures(
     debugMode: Boolean,
     onTapPoint: (Offset) -> Unit
 ) {
-    val baseDeviceSize = 60f
+    val baseDeviceSize = 45f
 
     Timber.d("👆 setupSelectionGestures: scale=$scale, offset=$offset")
 
@@ -372,20 +372,30 @@ private fun findTargetCorrect(
     baseDeviceSize: Float
 ): Pair<String, DragTargetType>? {
 
-    // 1. Проверяем приборы (уже правильно)
+    // 1. Проверяем приборы (через обратную трансформацию для учёта поворота)
     for (device in devices.reversed()) {
+        val screenSize = baseDeviceSize * scale
+        val halfSize = screenSize / 2f
+        val textGap = 5f * scale
+        val radians = Math.toRadians(device.rotation.toDouble())
+        val sin = kotlin.math.sin(radians).toFloat()
+        val cos = kotlin.math.cos(radians).toFloat()
+
         val screenX = device.x * scale + offset.x
         val screenY = device.y * scale + offset.y
-        val screenSize = baseDeviceSize * scale
 
-        val deviceRect = Rect(
-            left = screenX,
-            top = screenY,
-            right = screenX + screenSize,
-            bottom = screenY + screenSize
-        )
+        val adjustedX = screenX - halfSize + halfSize * sin
+        val adjustedY = screenY - halfSize - halfSize * cos - textGap
 
-        if (deviceRect.contains(screenPoint)) {
+        // Обратная трансформация: экранная точка → локальные координаты прибора
+        val a = screenPoint.x - adjustedX - halfSize
+        val b = screenPoint.y - adjustedY - textGap
+
+        val localX = halfSize + a * cos + b * sin
+        val localY = -a * sin + b * cos
+
+        // Иконка в локальных координатах: [0, screenSize] × [0, screenSize]
+        if (localX in 0f..screenSize && localY in 0f..screenSize) {
             return Pair(device.deviceId.toString(), DragTargetType.DEVICE)
         }
     }
