@@ -113,16 +113,19 @@ object DeviceStatusColors {
     val Total = Color(0xFF1D5A73)
     val Working = Color(0xFF4CAF50)
     val Storage = AppColors.Coral
+    val InRepair = Color(0xFFFFB300)
     val Lost = AppColors.MediumGray
     val Broken = Color(0xFFF44336)
 
     val WorkingContainer = Color(0xFFE8F5E9)
     val StorageContainer = AppColors.PeachLight
+    val InRepairContainer = Color(0xFFFFF8E1)
     val LostContainer = AppColors.IceBlue.copy(alpha = 0.3f)
     val BrokenContainer = Color(0xFFFFEBEE)
 
     val WorkingText = Color(0xFF2E7D32)
     val StorageText = AppColors.CoralDark
+    val InRepairText = Color(0xFF8F6B00)
     val LostText = AppColors.MediumGray
     val BrokenText = Color(0xFFD32F2F)
 }
@@ -135,6 +138,7 @@ enum class DeviceStatus(
 ) {
     WORKING("В работе", DeviceStatusColors.Working, DeviceStatusColors.WorkingContainer, DeviceStatusColors.WorkingText),
     STORAGE("Хранение", DeviceStatusColors.Storage, DeviceStatusColors.StorageContainer, DeviceStatusColors.StorageText),
+    IN_REPAIR("В ремонте", DeviceStatusColors.InRepair, DeviceStatusColors.InRepairContainer, DeviceStatusColors.InRepairText),
     LOST("Утерян", DeviceStatusColors.Lost, DeviceStatusColors.LostContainer, DeviceStatusColors.LostText),
     BROKEN("Испорчен", DeviceStatusColors.Broken, DeviceStatusColors.BrokenContainer, DeviceStatusColors.BrokenText);
 
@@ -142,11 +146,12 @@ enum class DeviceStatus(
         fun fromString(status: String): DeviceStatus = when (status) {
             "В работе" -> WORKING
             "Хранение" -> STORAGE
+            "В ремонте" -> IN_REPAIR
             "Утерян" -> LOST
             "Испорчен" -> BROKEN
             else -> WORKING
         }
-        val ALL_STATUSES = listOf("В работе", "Хранение", "Утерян", "Испорчен")
+        val ALL_STATUSES = listOf("В работе", "Хранение", "В ремонте", "Утерян", "Испорчен")
     }
 }
 

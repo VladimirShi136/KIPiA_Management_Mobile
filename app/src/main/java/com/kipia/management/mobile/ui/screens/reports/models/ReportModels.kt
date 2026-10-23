@@ -24,6 +24,7 @@ data class SummaryReport(
     val totalDevices: Int,
     val inWork: Int,
     val inStorage: Int,
+    val inRepair: Int,
     val lost: Int,
     val broken: Int,
     val totalSchemes: Int,

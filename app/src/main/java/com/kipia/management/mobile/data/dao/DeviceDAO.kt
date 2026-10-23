@@ -72,8 +72,35 @@ interface DeviceDao {
     /**
      * Получение устройств по типу и статусу.
      */
-    @Query("SELECT DISTINCT type FROM devices WHERE deleted_at = 0 ORDER BY type")
+    /**
+     * Получение типов устройств.
+     */
+    @Query("SELECT DISTINCT type FROM devices WHERE deleted_at = 0 AND type != '' ORDER BY type")
     fun getDeviceTypes(): Flow<List<String>>
+
+    /**
+     * Получение производителей устройств.
+     */
+    @Query("SELECT DISTINCT manufacturer FROM devices WHERE deleted_at = 0 AND manufacturer IS NOT NULL AND manufacturer != '' ORDER BY manufacturer")
+    fun getDeviceManufacturers(): Flow<List<String>>
+
+    /**
+     * Получение названий (моделей) устройств.
+     */
+    @Query("SELECT DISTINCT name FROM devices WHERE deleted_at = 0 AND name IS NOT NULL AND name != '' ORDER BY name")
+    fun getDeviceNames(): Flow<List<String>>
+
+    /**
+     * Получение пределов измерений.
+     */
+    @Query("SELECT DISTINCT measurement_limit FROM devices WHERE deleted_at = 0 AND measurement_limit IS NOT NULL AND measurement_limit != '' ORDER BY measurement_limit")
+    fun getDeviceMeasurementLimits(): Flow<List<String>>
+
+    /**
+     * Получение номеров кранов.
+     */
+    @Query("SELECT DISTINCT valve_number FROM devices WHERE deleted_at = 0 AND valve_number IS NOT NULL AND valve_number != '' ORDER BY valve_number")
+    fun getDeviceValveNumbers(): Flow<List<String>>
 
     /**
      * Получение статусов устройств.

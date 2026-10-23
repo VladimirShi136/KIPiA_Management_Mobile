@@ -83,7 +83,8 @@ fun KIPiANavHost(
                 },
                 viewModel = devicesViewModel,
                 deleteViewModel = hiltViewModel(),
-                notificationManager = notificationManager
+                notificationManager = notificationManager,
+                topAppBarController = topAppBarController
             )
         }
 

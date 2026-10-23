@@ -27,6 +27,7 @@ class PhotoManager @Inject constructor(
     companion object {
         private const val BASE_PHOTOS_DIR = "device_photos"
         private const val PHOTO_PREFIX = "device"
+        const val MAX_PHOTOS_PER_DEVICE = 6
     }
 
     // === СТРУКТУРА ПАПОК (КАК В JAVA FX) ===
@@ -76,14 +77,26 @@ class PhotoManager @Inject constructor(
         uri: Uri
     ): Result<PhotoSaveResult> = database.withTransaction {
         try {
+            // Ограничение: не более MAX_PHOTOS_PER_DEVICE фото на прибор.
+            // Если лимит достигнут — удаляем самое старое (первое в списке).
+            var deviceToSave = device
+            if (deviceToSave.photos.size >= MAX_PHOTOS_PER_DEVICE) {
+                val oldestPhoto = deviceToSave.photos.first()
+                val oldestFile = File(getLocationDir(deviceToSave.location), oldestPhoto)
+                if (oldestFile.exists()) {
+                    oldestFile.delete()
+                }
+                deviceToSave = deviceToSave.removePhoto(oldestPhoto)
+            }
+
             // 1. Генерируем имя файла
             val fileName = generateJavaFXFileName(
-                device.id,
+                deviceToSave.id,
                 getFileNameFromUri(uri)
             )
 
             // 2. Создаем папку location
-            val locationDir = getLocationDir(device.location)
+            val locationDir = getLocationDir(deviceToSave.location)
 
             // 3. Копируем файл
             val outputFile = File(locationDir, fileName)
@@ -102,7 +115,7 @@ class PhotoManager @Inject constructor(
             }
 
             // 4. Обновляем Device в БД (добавляем фото в список)
-            val updatedDevice = device.addPhoto(fileName)
+            val updatedDevice = deviceToSave.addPhoto(fileName)
             val rowsUpdated = deviceDao.updateDevice(updatedDevice)
 
             if (rowsUpdated <= 0) {

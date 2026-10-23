@@ -58,25 +58,28 @@ fun StatItem(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 2.dp),
+        modifier = modifier.padding(horizontal = 0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         Text(
             text = count.toString(),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            ),
             color = color,
             maxLines = 1
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.sp,
-                lineHeight = 11.sp
+                fontSize = 8.sp,
+                lineHeight = 10.sp
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            maxLines = 2
+            maxLines = 1
         )
     }
 }
@@ -149,7 +152,7 @@ private fun StatGroupContent(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall)
+            horizontalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             group.items.forEach { item ->
                 StatItem(

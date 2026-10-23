@@ -19,11 +19,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
 import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.ui.screens.reports.models.*
+import com.kipia.management.mobile.ui.theme.DeviceStatusColors
 import com.kipia.management.mobile.ui.theme.Dimens
 import com.kipia.management.mobile.viewmodel.ReportsViewModel
 
@@ -207,10 +209,11 @@ private fun buildActiveFiltersText(filter: ReportFilter): String {
 @Composable
 private fun SummaryReportCard(report: SummaryReport) {
     val slices = listOf(
-        DonutSliceData("В работе", report.inWork.toFloat(), Color(0xFF4CAF50)),
-        DonutSliceData("Хранение", report.inStorage.toFloat(), Color(0xFFF58352)),
-        DonutSliceData("Утерян", report.lost.toFloat(), Color(0xFF9E9E9E)),
-        DonutSliceData("Испорчен", report.broken.toFloat(), Color(0xFFF44336))
+        DonutSliceData("В работе", report.inWork.toFloat(), DeviceStatusColors.Working),
+        DonutSliceData("Хранение", report.inStorage.toFloat(), DeviceStatusColors.Storage),
+        DonutSliceData("В ремонте", report.inRepair.toFloat(), DeviceStatusColors.InRepair),
+        DonutSliceData("Утерян", report.lost.toFloat(), DeviceStatusColors.Lost),
+        DonutSliceData("Испорчен", report.broken.toFloat(), DeviceStatusColors.Broken)
     ).filter { it.value > 0f }
 
     Card(
@@ -283,15 +286,16 @@ private fun SummaryReportCard(report: SummaryReport) {
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                 ) {
-                    LegendChip("В работе", report.inWork, Color(0xFF4CAF50), Modifier.weight(1f))
-                    LegendChip("Хранение", report.inStorage, Color(0xFFF58352), Modifier.weight(1f))
+                    LegendChip("В работе", report.inWork, DeviceStatusColors.Working, Modifier.weight(1f))
+                    LegendChip("Хранение", report.inStorage, DeviceStatusColors.Storage, Modifier.weight(1f))
+                    LegendChip("В ремонте", report.inRepair, DeviceStatusColors.InRepair, Modifier.weight(1f))
                 }
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
                 ) {
-                    LegendChip("Утерян", report.lost, Color(0xFF9E9E9E), Modifier.weight(1f))
-                    LegendChip("Испорчен", report.broken, Color(0xFFF44336), Modifier.weight(1f))
+                    LegendChip("Утерян", report.lost, DeviceStatusColors.Lost, Modifier.weight(1f))
+                    LegendChip("Испорчен", report.broken, DeviceStatusColors.Broken, Modifier.weight(1f))
                 }
             }
         }
@@ -355,17 +359,23 @@ private fun LegendChip(
         shape = MaterialTheme.shapes.small
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Dimens.spacingMedium + 2.dp, vertical = Dimens.spacingSmall + 2.dp),
+            modifier = Modifier.padding(horizontal = Dimens.spacingXSmall + 2.dp, vertical = Dimens.spacingSmall),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.spacingSmall)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Canvas(Modifier.size(Dimens.spacingMedium)) { drawCircle(color) }
-            Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+            Canvas(Modifier.size(8.dp)) { drawCircle(color) }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
             Text(
                 "$count",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color,
+                maxLines = 1
             )
         }
     }

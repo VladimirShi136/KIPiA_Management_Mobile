@@ -116,6 +116,20 @@ class SchemeEditorViewModel @Inject constructor(
                     }
                 }
 
+                // Удаляем приборы, чья текущая локация не совпадает с именем схемы.
+                // Такое может случиться, если прибор переместили в другое место — он не должен
+                // отображаться в старой схеме.
+                val schemeNameNormalized = scheme.name.trim()
+                val staleLocations = deviceLocationRepository.getLocationsForScheme(scheme.id).filter { loc ->
+                    val device = deviceRepository.getDeviceByIdSync(loc.deviceId)
+                    device == null || device.location.trim() != schemeNameNormalized
+                }
+                if (staleLocations.isNotEmpty()) {
+                    Timber.d("🧹 initScheme: удаляю ${staleLocations.size} приборов из схемы '${scheme.name}' (локация изменилась)")
+                    staleLocations.forEach { deviceLocationRepository.deleteLocation(it) }
+                    deviceManager.syncDevicesToScheme(scheme.name)
+                }
+
                 _editorState.update {
                     it.copy(
                         scheme = scheme,
@@ -372,6 +386,10 @@ class SchemeEditorViewModel @Inject constructor(
             val currentShapes = shapes.value
             val currentDevices = devices.value
 
+            // Убираем приборы, чья локация изменилась и не совпадает с именем схемы
+            deviceManager.syncDevicesToScheme(currentState.scheme.name)
+            val syncedDevices = devices.value
+
             val schemeData = SchemeData(
                 width = currentState.canvasState.width.toDouble(),
                 height = currentState.canvasState.height.toDouble(),
@@ -379,7 +397,7 @@ class SchemeEditorViewModel @Inject constructor(
                 backgroundImage = currentState.canvasState.backgroundImage,
                 gridEnabled = currentState.canvasState.showGrid,
                 gridSize = currentState.canvasState.gridSize,
-                devices = currentDevices,
+                devices = syncedDevices,
                 shapes = currentShapes.map { it.toShapeData() }
             )
 
@@ -392,11 +410,11 @@ class SchemeEditorViewModel @Inject constructor(
             }
 
             val oldLocations = deviceLocationRepository.getLocationsForScheme(schemeId)
-            val currentDeviceIds = currentDevices.map { it.deviceId }.toSet()
+            val currentDeviceIds = syncedDevices.map { it.deviceId }.toSet()
 
             oldLocations.forEach { if (it.deviceId !in currentDeviceIds) deviceLocationRepository.deleteLocation(it) }
 
-            currentDevices.forEach { device ->
+            syncedDevices.forEach { device ->
                 deviceLocationRepository.saveLocation(
                     DeviceLocation(
                         deviceId = device.deviceId, schemeId = schemeId,
@@ -417,6 +435,19 @@ class SchemeEditorViewModel @Inject constructor(
             Timber.e(e, "Ошибка сохранения схемы")
             _editorState.update { it.copy(uiState = it.uiState.copy(isSaving = false)) }
             false
+        }
+    }
+
+    fun syncSchemeDevices() {
+        deviceManager.syncDevicesToScheme(_editorState.value.scheme.name)
+    }
+
+    fun refreshAllDevices() {
+        viewModelScope.launch {
+            deviceRepository.getAllDevices().firstOrNull()?.let {
+                deviceManager.setAllDevices(it)
+            }
+            syncSchemeDevices()
         }
     }
 

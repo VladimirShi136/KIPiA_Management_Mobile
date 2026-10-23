@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,12 +19,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -297,10 +305,22 @@ fun DeviceEditForm(
     val safeDevice = device ?: Device.createEmpty()
     val isNew = safeDevice.id <= 0
     val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
+    val allTypes by viewModel.allTypes.collectAsStateWithLifecycle()
+    val allManufacturers by viewModel.allManufacturers.collectAsStateWithLifecycle()
+    val allNames by viewModel.allNames.collectAsStateWithLifecycle()
+    val allMeasurementLimits by viewModel.allMeasurementLimits.collectAsStateWithLifecycle()
+    val allValveNumbers by viewModel.allValveNumbers.collectAsStateWithLifecycle()
+    val allStatuses by viewModel.allStatuses.collectAsStateWithLifecycle()
 
     var showPhotoOptions by remember { mutableStateOf(false) }
     var isStatusExpanded by remember { mutableStateOf(false) }
     var isLocationExpanded by remember { mutableStateOf(false) }
+    var isTypeExpanded by remember { mutableStateOf(false) }
+    var isNameExpanded by remember { mutableStateOf(false) }
+    var isManufacturerExpanded by remember { mutableStateOf(false) }
+    var isMeasurementLimitExpanded by remember { mutableStateOf(false) }
+    var isValveNumberExpanded by remember { mutableStateOf(false) }
+    var isAccuracyClassExpanded by remember { mutableStateOf(false) }
 
     val photoPaths = remember(safeDevice, photoManager) {
         safeDevice.photos.mapNotNull { fileName ->
@@ -355,72 +375,90 @@ fun DeviceEditForm(
         verticalArrangement = Arrangement.spacedBy(Dimens.spacingMedium)
     ) {
         DeviceEditSectionTitle("Основная информация")
-        DeviceTextField(value = typeText, onValueChange = { typeText = it; onTypeChanged(it) }, label = "Тип прибора *",  isError = uiState.typeError != null, errorText = uiState.typeError)
-        DeviceTextField(value = nameText, onValueChange = { nameText = it; onNameChanged(it) }, label = "Модель *", isError = uiState.nameError != null, errorText = uiState.nameError)
-        DeviceTextField(value = manufacturerText, onValueChange = { manufacturerText = it; onManufacturerChanged(it) }, label = "Производитель")
+        AutocompleteDropdownField(
+            value = typeText,
+            onValueChange = { typeText = it; onTypeChanged(it) },
+            options = allTypes,
+            label = "Тип прибора *",
+            isError = uiState.typeError != null,
+            errorText = uiState.typeError,
+            expanded = isTypeExpanded,
+            onExpandedChange = { isTypeExpanded = it }
+        )
+        AutocompleteDropdownField(
+            value = nameText,
+            onValueChange = { nameText = it; onNameChanged(it) },
+            options = allNames,
+            label = "Модель *",
+            isError = uiState.nameError != null,
+            errorText = uiState.nameError,
+            expanded = isNameExpanded,
+            onExpandedChange = { isNameExpanded = it }
+        )
+        AutocompleteDropdownField(
+            value = manufacturerText,
+            onValueChange = { manufacturerText = it; onManufacturerChanged(it) },
+            options = allManufacturers,
+            label = "Производитель",
+            expanded = isManufacturerExpanded,
+            onExpandedChange = { isManufacturerExpanded = it }
+        )
         DeviceTextField(value = inventoryNumberText, onValueChange = { inventoryNumberText = it; onInventoryNumberChanged(it) }, label = "Инвентарный номер *", isError = uiState.inventoryNumberError != null, errorText = uiState.inventoryNumberError)
         DeviceTextField(value = yearText, onValueChange = { yearText = it; onYearChanged(it) }, label = "Год выпуска", keyboardType = KeyboardType.Number)
-        DeviceTextField(value = measurementLimitText, onValueChange = { measurementLimitText = it; onMeasurementLimitChanged(it) }, label = "Предел измерений")
-        DeviceTextField(
+        AutocompleteDropdownField(
+            value = measurementLimitText,
+            onValueChange = { measurementLimitText = it; onMeasurementLimitChanged(it) },
+            options = allMeasurementLimits,
+            label = "Предел измерений",
+            expanded = isMeasurementLimitExpanded,
+            onExpandedChange = { isMeasurementLimitExpanded = it }
+        )
+        AutocompleteDropdownField(
             value = accuracyClassText,
-            onValueChange = { 
+            onValueChange = {
                 val sanitized = it.replace(',', '.')
                 accuracyClassText = sanitized
-                onAccuracyClassChanged(sanitized) 
+                onAccuracyClassChanged(sanitized)
             },
+            options = Device.ACCURACY_CLASSES,
             label = "Класс точности",
-            keyboardType = KeyboardType.Decimal
+            expanded = isAccuracyClassExpanded,
+            onExpandedChange = { isAccuracyClassExpanded = it }
         )
-        DeviceTextField(value = valveNumberText, onValueChange = { valveNumberText = it; onValveNumberChanged(it) }, label = "Номер крана")
+        AutocompleteDropdownField(
+            value = valveNumberText,
+            onValueChange = { valveNumberText = it; onValveNumberChanged(it) },
+            options = allValveNumbers,
+            label = "Номер крана",
+            expanded = isValveNumberExpanded,
+            onExpandedChange = { isValveNumberExpanded = it }
+        )
 
         DeviceEditSectionTitle("Место и статус")
-        ExposedDropdownMenuBox(
+        AutocompleteDropdownField(
+            value = locationText,
+            onValueChange = { locationText = it; onLocationChanged(it) },
+            options = allLocations,
+            label = "Место установки *",
+            isError = uiState.locationError != null,
+            errorText = uiState.locationError,
             expanded = isLocationExpanded,
-            onExpandedChange = { isLocationExpanded = it }
-        ) {
-            OutlinedTextField(
-                value = locationText,
-                onValueChange = { 
-                    locationText = it
-                    onLocationChanged(it)
-                },
-                label = { Text("Место установки *") },
-                modifier = Modifier.fillMaxWidth().menuAnchor().padding(vertical = Dimens.spacingSmall),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isLocationExpanded) },
-                isError = uiState.locationError != null
-            )
-            ExposedDropdownMenu(
-                expanded = isLocationExpanded && allLocations.isNotEmpty(),
-                onDismissRequest = { isLocationExpanded = false }
-            ) {
-                allLocations.forEach { location ->
-                    DropdownMenuItem(
-                        text = { Text(location) },
-                        onClick = {
-                            locationText = location
-                            onLocationChanged(location)
-                            isLocationExpanded = false
-                        }
-                    )
-                }
-            }
-        }
+            onExpandedChange = { isLocationExpanded = it },
+            filterOptions = false
+        )
 
-        ExposedDropdownMenuBox(expanded = isStatusExpanded, onExpandedChange = { isStatusExpanded = it }) {
-            OutlinedTextField(
-                value = statusText,
-                onValueChange = { statusText = it; onStatusChanged(it) },
-                label = { Text("Статус *") },
-                modifier = Modifier.fillMaxWidth().menuAnchor().padding(vertical = Dimens.spacingSmall),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isStatusExpanded) },
-                isError = uiState.statusError != null
-            )
-            ExposedDropdownMenu(expanded = isStatusExpanded, onDismissRequest = { isStatusExpanded = false }) {
-                Device.STATUSES.forEach { status ->
-                    DropdownMenuItem(text = { Text(status) }, onClick = { statusText = status; onStatusChanged(status); isStatusExpanded = false })
-                }
-            }
-        }
+        AutocompleteDropdownField(
+            value = statusText,
+            onValueChange = { statusText = it; onStatusChanged(it) },
+            options = Device.STATUSES,
+            label = "Статус *",
+            isError = uiState.statusError != null,
+            errorText = uiState.statusError,
+            expanded = isStatusExpanded,
+            onExpandedChange = { isStatusExpanded = it },
+            filterOptions = false,
+            readOnly = true
+        )
 
         if (!isNew) {
             DeviceEditSectionTitle("Фотографии")
@@ -473,8 +511,34 @@ fun DeviceEditSectionTitle(text: String) {
 }
 
 @Composable
-fun DeviceEditPhotoGallerySection(photoPaths: List<String>, onAddPhotoClick: () -> Unit, onDeletePhoto: (Int) -> Unit) {
+fun DeviceEditPhotoGallerySection(
+    photoPaths: List<String>,
+    onAddPhotoClick: () -> Unit,
+    onDeletePhoto: (Int) -> Unit
+) {
+    val maxPhotos = PhotoManager.MAX_PHOTOS_PER_DEVICE
+    val currentCount = photoPaths.size
+    val isLimitReached = currentCount >= maxPhotos
     Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "$currentCount из $maxPhotos фото",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isLimitReached) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (isLimitReached) {
+                Text(
+                    text = "Лимит достигнут",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(Dimens.spacingSmall))
         if (photoPaths.isEmpty()) {
             Card(onClick = onAddPhotoClick, modifier = Modifier.fillMaxWidth().height(100.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -523,14 +587,122 @@ fun DeviceEditPhotoGallerySection(photoPaths: List<String>, onAddPhotoClick: () 
                     }
                 }
                 Card(
-                    onClick = onAddPhotoClick,
-                    modifier = Modifier.size(120.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Add, "Добавить", modifier = Modifier.size(Dimens.iconSizeLarge))
+                        onClick = onAddPhotoClick,
+                        modifier = Modifier.size(120.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Add, "Добавить", modifier = Modifier.size(Dimens.iconSizeLarge))
+                        }
                     }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AutocompleteDropdownField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    options: List<String>,
+    label: String,
+    isError: Boolean = false,
+    errorText: String? = null,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    placeholder: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    singleLine: Boolean = true,
+    filterOptions: Boolean = true,
+    readOnly: Boolean = false
+) {
+    val filteredOptions = remember(value, options, filterOptions) {
+        if (!filterOptions || value.isBlank()) {
+            options
+        } else {
+            options.filter { it.contains(value, ignoreCase = true) }
+        }
+    }
+
+    val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val isExpanded = expanded && filteredOptions.isNotEmpty()
+
+    // Реальная ширина текстового поля — меню будет ровно такой же ширины
+    var fieldWidthPx by remember { mutableIntStateOf(0) }
+
+    ExposedDropdownMenuBox(
+        expanded = isExpanded,
+        onExpandedChange = onExpandedChange
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {
+                onValueChange(it)
+                onExpandedChange(it.isNotBlank() && filteredOptions.isNotEmpty())
+            },
+            label = { Text(label) },
+            placeholder = placeholder?.let { { Text(it) } },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Dimens.spacingSmall)
+                .onSizeChanged { fieldWidthPx = it.width }
+                .menuAnchor(), // якорь — ровно границы поля, без вертикального padding
+            trailingIcon = {
+                if (filteredOptions.isNotEmpty()) {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded)
                 }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (isError) colorScheme.error else colorScheme.primary,
+                unfocusedBorderColor = if (isError) colorScheme.error else colorScheme.outline,
+                focusedLabelColor = if (isError) colorScheme.error else colorScheme.primary,
+                unfocusedLabelColor = colorScheme.onSurfaceVariant,
+                cursorColor = colorScheme.primary,
+            ),
+            shape = RoundedCornerShape(Dimens.inputCornerRadius),
+            isError = isError,
+            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = keyboardType),
+            singleLine = singleLine,
+            supportingText = errorText?.let { { Text(it) } },
+            readOnly = readOnly
+        )
+
+        DropdownMenu(
+            expanded = isExpanded,
+            onDismissRequest = { onExpandedChange(false) },
+            modifier = Modifier
+                .then(
+                    if (fieldWidthPx > 0) Modifier.width(with(density) { fieldWidthPx.toDp() })
+                    else Modifier.fillMaxWidth()
+                )
+                .background(colorScheme.surface), // тот же фон, что и у экрана/поля
+            properties = PopupProperties(focusable = false)
+        ) {
+            filteredOptions.forEach { option ->
+                val isSelected = option.equals(value, ignoreCase = true)
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option,
+                            color = if (isSelected) colorScheme.primary else colorScheme.onSurface,
+                            // тот же стиль, что и у текста внутри OutlinedTextField
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        )
+                    },
+                    onClick = {
+                        onValueChange(option)
+                        onExpandedChange(false)
+                    },
+                    // 16.dp по горизонтали — текст встаёт ровно под текст поля
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                    modifier = Modifier
+                        .fillMaxWidth() // снимает внутренний лимит 280dp у строки пункта
+                        .heightIn(min = 48.dp)
+                )
             }
         }
     }

@@ -171,13 +171,6 @@ class PhotosViewModel @Inject constructor(
 
     init {
         refreshData()
-        viewModelScope.launch {
-            allLocations.collect { locations ->
-                if (locations.isNotEmpty() && _expandedGroups.value.isEmpty()) {
-                    _expandedGroups.value = locations.toSet()
-                }
-            }
-        }
     }
 
     fun refreshData() {

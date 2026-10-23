@@ -87,6 +87,9 @@ data class Device(
     companion object {
         val STATUSES = DeviceStatus.ALL_STATUSES
 
+        // Стандартные классы точности (ГОСТ) — используются для автозаполнения
+        val ACCURACY_CLASSES = listOf("0.1", "0.2", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0")
+
         /**
          * Метод для создания пустого устройства.
          */

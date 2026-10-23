@@ -1,6 +1,5 @@
 package com.kipia.management.mobile.ui.screens.devices
 
-import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
@@ -21,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,7 +32,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.Scheme
-import com.kipia.management.mobile.ui.components.dialogs.DeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.DeviceDeleteWithSchemeDialog
 import com.kipia.management.mobile.ui.components.dialogs.DeviceDeleteConfirmDialog
 import com.kipia.management.mobile.ui.components.dialogs.LoadingOverlay
@@ -44,10 +44,9 @@ import com.kipia.management.mobile.viewmodel.DeviceStats
 import com.kipia.management.mobile.ui.components.stats.StatCard
 import com.kipia.management.mobile.ui.components.stats.StatGroup
 import com.kipia.management.mobile.ui.components.stats.StatItemData
+import com.kipia.management.mobile.ui.components.topappbar.TopAppBarController
 import com.kipia.management.mobile.viewmodel.DevicesViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import timber.log.Timber
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTextApi::class)
@@ -58,21 +57,22 @@ fun DevicesScreen(
     onNavigateToDeviceEdit: (Int?) -> Unit,
     viewModel: DevicesViewModel,
     deleteViewModel: DeviceDeleteViewModel = hiltViewModel(),
-    notificationManager: NotificationManager
+    notificationManager: NotificationManager,
+    topAppBarController: TopAppBarController? = null
 ) {
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val allLocations by viewModel.allLocations.collectAsStateWithLifecycle()
+    val hasDevices by viewModel.hasDevices.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val deleteDialogData by deleteViewModel.showDeleteDialog.collectAsStateWithLifecycle()
     val verticalScrollState = rememberLazyListState()
 
-    // Запускаем индикацию при каждом входе на экран
     LaunchedEffect(Unit) {
         viewModel.refreshData()
     }
 
-    // При уходе с экрана взводим загрузку для следующего входа
     DisposableEffect(Unit) {
         onDispose {
             viewModel.resetLoadingState()
@@ -238,7 +238,7 @@ fun DevicesScreen(
     }
 }
 
-enum class SortColumn() {
+enum class SortColumn {
     TYPE, NAME, INVENTORY_NUMBER, MEASUREMENT_LIMIT, LOCATION, VALVE_NUMBER, STATUS
 }
 
@@ -271,62 +271,219 @@ fun DeviceTableWithScroll(
     val evenColor = remember(colorScheme) { colorScheme.surface }
     val oddColor = remember(colorScheme) { colorScheme.surfaceVariant.copy(alpha = 0.1f) }
     val highlightColor = remember(colorScheme) { colorScheme.primary.copy(alpha = 0.3f) }
+    val density = LocalDensity.current
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val actualTableWidth = maxOf(COL_MIN_WIDTH, maxWidth)
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(headerColor).horizontalScroll(horizontalScrollState, enabled = false)) {
-                TableHeader(sortColumn = sortColumn, sortAscending = sortAscending, onSortColumn = onSortColumn, tableWidth = actualTableWidth)
+    var tableWidth by remember { mutableStateOf(COL_MIN_WIDTH) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { coordinates ->
+                val widthDp = with(density) { coordinates.size.width.toDp() }
+                val newWidth = maxOf(COL_MIN_WIDTH, widthDp)
+                if (newWidth != tableWidth) {
+                    tableWidth = newWidth
+                }
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().horizontalScroll(horizontalScrollState)) {
-                LazyColumn(state = verticalScrollState, modifier = Modifier.width(actualTableWidth), contentPadding = PaddingValues(bottom = 1.dp)) {
-                    itemsIndexed(items = devices, key = { _, device -> device.id }) { index, device ->
-                        TableRowWithDivider(device = device, bgColor = if (index % 2 == 0) evenColor else oddColor, highlightColor = highlightColor, searchQuery = searchQuery, onDeviceClick = onDeviceClick, onEditDevice = onEditDevice, onDeleteDevice = onDeleteDevice, showDivider = index < devices.size - 1, tableWidth = actualTableWidth)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .background(headerColor)
+                    .horizontalScroll(horizontalScrollState, enabled = false)
+            ) {
+                TableHeader(
+                    sortColumn = sortColumn,
+                    sortAscending = sortAscending,
+                    onSortColumn = onSortColumn,
+                    tableWidth = tableWidth
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .horizontalScroll(horizontalScrollState)
+            ) {
+                LazyColumn(
+                    state = verticalScrollState,
+                    modifier = Modifier.width(tableWidth),
+                    contentPadding = PaddingValues(bottom = 1.dp)
+                ) {
+                    itemsIndexed(
+                        items = devices,
+                        key = { _, device -> device.id }) { index, device ->
+                        TableRowWithDivider(
+                            device = device,
+                            bgColor = if (index % 2 == 0) evenColor else oddColor,
+                            highlightColor = highlightColor,
+                            searchQuery = searchQuery,
+                            onDeviceClick = onDeviceClick,
+                            onEditDevice = onEditDevice,
+                            onDeleteDevice = onDeleteDevice,
+                            showDivider = index < devices.size - 1,
+                            tableWidth = tableWidth
+                        )
                     }
                 }
             }
+
         }
     }
 }
 
+
 @Composable
-fun TableRowWithDivider(device: Device, bgColor: Color, highlightColor: Color, searchQuery: String, onDeviceClick: (Device) -> Unit, onEditDevice: (Device) -> Unit, onDeleteDevice: (Device) -> Unit, showDivider: Boolean, tableWidth: Dp) {
+fun TableRowWithDivider(
+    device: Device,
+    bgColor: Color,
+    highlightColor: Color,
+    searchQuery: String,
+    onDeviceClick: (Device) -> Unit,
+    onEditDevice: (Device) -> Unit,
+    onDeleteDevice: (Device) -> Unit,
+    showDivider: Boolean,
+    tableWidth: Dp
+) {
     val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
     Column {
-        TableRow(device = device, bgColor = bgColor, highlightColor = highlightColor, searchQuery = searchQuery, onDeviceClick = onDeviceClick, onEditDevice = onEditDevice, onDeleteDevice = onDeleteDevice, tableWidth = tableWidth)
+        TableRow(
+            device = device,
+            bgColor = bgColor,
+            highlightColor = highlightColor,
+            searchQuery = searchQuery,
+            onDeviceClick = onDeviceClick,
+            onEditDevice = onEditDevice,
+            onDeleteDevice = onDeleteDevice,
+            tableWidth = tableWidth
+        )
         if (showDivider) HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
     }
 }
 
 @Composable
-fun TableHeader(sortColumn: SortColumn, sortAscending: Boolean, onSortColumn: (SortColumn) -> Unit, tableWidth: Dp) {
-    Row(modifier = Modifier.width(tableWidth).height(Dimens.tableHeaderHeight).background(MaterialTheme.colorScheme.surfaceVariant), verticalAlignment = Alignment.CenterVertically) {
-        TableHeaderCell("Тип прибора", Modifier.weight(W_TYPE), sortColumn == SortColumn.TYPE, sortAscending) { onSortColumn(SortColumn.TYPE) }
-        TableHeaderCell("Модель", Modifier.weight(W_NAME), sortColumn == SortColumn.NAME, sortAscending) { onSortColumn(SortColumn.NAME) }
-        TableHeaderCell("Инв. №", Modifier.weight(W_INVENTORY), sortColumn == SortColumn.INVENTORY_NUMBER, sortAscending) { onSortColumn(SortColumn.INVENTORY_NUMBER) }
-        TableHeaderCell("Предел измер.", Modifier.weight(W_LIMIT), sortColumn == SortColumn.MEASUREMENT_LIMIT, sortAscending) { onSortColumn(SortColumn.MEASUREMENT_LIMIT) }
-        TableHeaderCell("Место", Modifier.weight(W_LOCATION), sortColumn == SortColumn.LOCATION, sortAscending) { onSortColumn(SortColumn.LOCATION) }
-        TableHeaderCell("Номер крана", Modifier.weight(W_VALVE), sortColumn == SortColumn.VALVE_NUMBER, sortAscending) { onSortColumn(SortColumn.VALVE_NUMBER) }
-        TableHeaderCell("Статус", Modifier.width(COL_STATUS_WIDTH), sortColumn == SortColumn.STATUS, sortAscending) { onSortColumn(SortColumn.STATUS) }
-        Box(modifier = Modifier.width(COL_ACTIONS_WIDTH).padding(vertical = 12.dp)) { Text("Действия", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp)) }
-    }
-}
+fun TableHeader(
+    sortColumn: SortColumn,
+    sortAscending: Boolean,
+    onSortColumn: (SortColumn) -> Unit,
+    tableWidth: Dp
+) {
+    Row(
+        modifier = Modifier
+            .width(tableWidth)
+            .height(Dimens.tableHeaderHeight)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TableHeaderCell(
+            "Тип прибора",
+            Modifier.weight(W_TYPE),
+            sortColumn == SortColumn.TYPE,
+            sortAscending
+        ) { onSortColumn(SortColumn.TYPE) }
+        TableHeaderCell(
+            "Модель",
+            Modifier.weight(W_NAME),
+            sortColumn == SortColumn.NAME,
+            sortAscending
+        ) { onSortColumn(SortColumn.NAME) }
+        TableHeaderCell(
+            "Инв. №",
+            Modifier.weight(W_INVENTORY),
+            sortColumn == SortColumn.INVENTORY_NUMBER,
+            sortAscending
+        ) { onSortColumn(SortColumn.INVENTORY_NUMBER) }
+        TableHeaderCell(
+            "Предел измер.",
+            Modifier.weight(W_LIMIT),
+            sortColumn == SortColumn.MEASUREMENT_LIMIT,
+            sortAscending
+        ) { onSortColumn(SortColumn.MEASUREMENT_LIMIT) }
+        TableHeaderCell(
+            "Место",
+            Modifier.weight(W_LOCATION),
+            sortColumn == SortColumn.LOCATION,
+            sortAscending
+        ) { onSortColumn(SortColumn.LOCATION) }
+        TableHeaderCell(
+            "Номер крана",
+            Modifier.weight(W_VALVE),
+            sortColumn == SortColumn.VALVE_NUMBER,
+            sortAscending
+        ) { onSortColumn(SortColumn.VALVE_NUMBER) }
+        TableHeaderCell(
+            "Статус",
+            Modifier.width(COL_STATUS_WIDTH),
+            sortColumn == SortColumn.STATUS,
+            sortAscending
+        ) { onSortColumn(SortColumn.STATUS) }
+        Box(
+            modifier = Modifier
+                .width(COL_ACTIONS_WIDTH)
+                .padding(vertical = 12.dp)
+        ) {
+            Text(
+                "Действия",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
 
-@Composable
-fun TableHeaderCell(title: String, modifier: Modifier = Modifier, isSorted: Boolean, sortAscending: Boolean, onClick: () -> Unit) {
-    Box(modifier = modifier.height(40.dp), contentAlignment = Alignment.CenterStart) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().height(40.dp).clickable(onClick = onClick).padding(horizontal = 8.dp)) {
-            Text(text = title, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (isSorted) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-            }
         }
     }
 }
 
 @Composable
-fun TableRow(device: Device, bgColor: Color, highlightColor: Color, searchQuery: String, onDeviceClick: (Device) -> Unit, onEditDevice: (Device) -> Unit, onDeleteDevice: (Device) -> Unit, tableWidth: Dp) {
+fun TableHeaderCell(
+    title: String,
+    modifier: Modifier = Modifier,
+    isSorted: Boolean,
+    sortAscending: Boolean,
+    onClick: () -> Unit
+) {
+    Box(modifier = modifier.height(40.dp), contentAlignment = Alignment.CenterStart) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (isSorted) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+        }
+    }
+}
+
+@Composable
+fun TableRow(
+    device: Device,
+    bgColor: Color,
+    highlightColor: Color,
+    searchQuery: String,
+    onDeviceClick: (Device) -> Unit,
+    onEditDevice: (Device) -> Unit,
+    onDeleteDevice: (Device) -> Unit,
+    tableWidth: Dp
+) {
     var showMenu by remember { mutableStateOf(false) }
 
     // Проверяем, были ли добавлены фото сегодня (на основе timestamp в имени файла)
@@ -353,7 +510,13 @@ fun TableRow(device: Device, bgColor: Color, highlightColor: Color, searchQuery:
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
     } else bgColor
 
-    Row(modifier = Modifier.width(tableWidth).height(40.dp).background(effectiveBgColor).clickable { onDeviceClick(device) }, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .width(tableWidth)
+            .height(40.dp)
+            .background(effectiveBgColor)
+            .clickable { onDeviceClick(device) }, verticalAlignment = Alignment.CenterVertically
+    ) {
         // В первую колонку добавим индикатор, если фото новое
         Box(modifier = Modifier.weight(W_TYPE), contentAlignment = Alignment.CenterStart) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -369,17 +532,41 @@ fun TableRow(device: Device, bgColor: Color, highlightColor: Color, searchQuery:
         }
         TableCell(device.name ?: "-", Modifier.weight(W_NAME), searchQuery, highlightColor)
         TableCell(device.inventoryNumber, Modifier.weight(W_INVENTORY), searchQuery, highlightColor)
-        TableCell(device.measurementLimit ?: "-", Modifier.weight(W_LIMIT), searchQuery, highlightColor)
+        TableCell(
+            device.measurementLimit ?: "-",
+            Modifier.weight(W_LIMIT),
+            searchQuery,
+            highlightColor
+        )
         TableCell(device.location, Modifier.weight(W_LOCATION), searchQuery, highlightColor)
         TableCell(device.valveNumber ?: "-", Modifier.weight(W_VALVE), searchQuery, highlightColor)
-        Box(modifier = Modifier.width(COL_STATUS_WIDTH).padding(horizontal = Dimens.tableCellPaddingHorizontal)) { StatusBadgeCompact(status = device.status) }
-        Box(modifier = Modifier.width(COL_ACTIONS_WIDTH).padding(horizontal = 4.dp)) {
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.MoreVert, null, modifier = Modifier.size(18.dp)) }
+        Box(
+            modifier = Modifier
+                .width(COL_STATUS_WIDTH)
+                .padding(horizontal = Dimens.tableCellPaddingHorizontal)
+        ) { StatusBadgeCompact(status = device.status) }
+        Box(modifier = Modifier
+            .width(COL_ACTIONS_WIDTH)
+            .padding(horizontal = 4.dp)) {
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier.size(32.dp)
+            ) { Icon(Icons.Default.MoreVert, null, modifier = Modifier.size(18.dp)) }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(text = { Text("Открыть") }, onClick = { showMenu = false; onDeviceClick(device) }, leadingIcon = { Icon(Icons.Default.Visibility, null) })
-                DropdownMenuItem(text = { Text("Изменить") }, onClick = { showMenu = false; onEditDevice(device) }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-                DropdownMenuItem(text = { Text("Удалить") }, onClick = { showMenu = false; onDeleteDevice(device) }, leadingIcon = { Icon(Icons.Default.Delete, null) })
+                DropdownMenuItem(
+                    text = { Text("Открыть") },
+                    onClick = { showMenu = false; onDeviceClick(device) },
+                    leadingIcon = { Icon(Icons.Default.Visibility, null) })
+                DropdownMenuItem(
+                    text = { Text("Изменить") },
+                    onClick = { showMenu = false; onEditDevice(device) },
+                    leadingIcon = { Icon(Icons.Default.Edit, null) })
+                DropdownMenuItem(
+                    text = { Text("Удалить") },
+                    onClick = { showMenu = false; onDeleteDevice(device) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null) })
             }
+
         }
     }
 }
@@ -387,7 +574,7 @@ fun TableRow(device: Device, bgColor: Color, highlightColor: Color, searchQuery:
 @Composable
 fun PulsatingIndicator(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulsating")
-    
+
     val scale by infiniteTransition.animateFloat(
         initialValue = 0.7f,
         targetValue = 1.3f,
@@ -397,7 +584,7 @@ fun PulsatingIndicator(modifier: Modifier = Modifier) {
         ),
         label = "scale"
     )
-    
+
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.8f,
@@ -433,62 +620,158 @@ fun PulsatingIndicator(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TableCell(text: String, modifier: Modifier = Modifier, searchQuery: String, highlightColor: Color, maxLines: Int = 1) {
-    val textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize)
-    Box(modifier = modifier.height(40.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterStart) {
+fun TableCell(
+    text: String,
+    modifier: Modifier = Modifier,
+    searchQuery: String,
+    highlightColor: Color,
+    maxLines: Int = 1
+) {
+    val textStyle =
+        MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize)
+    Box(
+        modifier = modifier
+            .height(40.dp)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
         val annotatedString = remember(text, searchQuery, highlightColor) {
             if (searchQuery.isNotEmpty() && text.contains(searchQuery, ignoreCase = true)) {
                 buildAnnotatedString {
-                    val lowerText = text.lowercase(); val lowerQuery = searchQuery.lowercase(); var startIndex = 0
+                    val lowerText = text.lowercase();
+                    val lowerQuery = searchQuery.lowercase();
+                    var startIndex = 0
                     while (true) {
                         val index = lowerText.indexOf(lowerQuery, startIndex)
                         if (index == -1) break
                         append(text.substring(startIndex, index))
-                        withStyle(SpanStyle(background = highlightColor, fontWeight = FontWeight.Bold)) { append(text.substring(index, index + searchQuery.length)) }
+                        withStyle(
+                            SpanStyle(
+                                background = highlightColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        ) { append(text.substring(index, index + searchQuery.length)) }
                         startIndex = index + searchQuery.length
                     }
                     if (startIndex < text.length) append(text.substring(startIndex))
                 }
             } else AnnotatedString(text)
         }
-        Text(text = annotatedString, style = textStyle, maxLines = maxLines, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth())
+        Text(
+            text = annotatedString,
+            style = textStyle,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 @Composable
 fun DeviceStatistics(stats: DeviceStats, modifier: Modifier = Modifier) {
-    StatCard(groups = listOf(StatGroup(items = listOf(
-        StatItemData(stats.total, "Всего", DeviceStatusColors.Total),
-        StatItemData(stats.inWork, "В работе", DeviceStatusColors.Working),
-        StatItemData(stats.inStorage, "Хранение", DeviceStatusColors.Storage),
-        StatItemData(stats.lost, "Утерян", DeviceStatusColors.Lost),
-        StatItemData(stats.broken, "Испорчен", DeviceStatusColors.Broken)
-    ))), modifier = modifier)
+    StatCard(
+        groups = listOf(
+            StatGroup(
+                items = listOf(
+                    StatItemData(stats.total, "Всего", DeviceStatusColors.Total),
+                    StatItemData(stats.inWork, "В работе", DeviceStatusColors.Working),
+                    StatItemData(stats.inStorage, "Хранение", DeviceStatusColors.Storage),
+                    StatItemData(stats.inRepair, "В ремонте", DeviceStatusColors.InRepair),
+                    StatItemData(stats.lost, "Утерян", DeviceStatusColors.Lost),
+                    StatItemData(stats.broken, "Испорчен", DeviceStatusColors.Broken)
+                )
+            )
+        ), modifier = modifier
+    )
 }
 
 @Composable
 fun StatusBadgeCompact(status: String) {
     val deviceStatus = remember(status) { DeviceStatus.fromString(status) }
-    Surface(color = deviceStatus.containerColor, shape = RoundedCornerShape(4.dp), modifier = Modifier.height(24.dp).padding(vertical = 2.dp)) {
-        Text(text = status, color = deviceStatus.textColor, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f), modifier = Modifier.padding(horizontal = 6.dp).wrapContentHeight(Alignment.CenterVertically), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Surface(
+        color = deviceStatus.containerColor,
+        shape = RoundedCornerShape(4.dp),
+        modifier = Modifier
+            .height(24.dp)
+            .padding(vertical = 2.dp)
+    ) {
+        Text(
+            text = status,
+            color = deviceStatus.textColor,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+            ),
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
 @Composable
-fun ActiveFiltersBadge(searchQuery: String, locationFilter: String?, statusFilter: String?, onClearFilters: () -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, shape = RoundedCornerShape(Dimens.chipRadius), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))) {
-        Row(modifier = Modifier.fillMaxWidth().padding(Dimens.spacingMedium), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+fun ActiveFiltersBadge(
+    searchQuery: String,
+    locationFilter: String?,
+    statusFilter: String?,
+    onClearFilters: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(Dimens.chipRadius),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Dimens.spacingMedium),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.FilterAlt, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    Icons.Default.FilterAlt,
+                    null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = buildActiveFiltersText(searchQuery, locationFilter, statusFilter), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = buildActiveFiltersText(searchQuery, locationFilter, statusFilter),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            IconButton(onClick = onClearFilters, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error) }
+            IconButton(
+                onClick = onClearFilters,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+
         }
     }
 }
 
-private fun buildActiveFiltersText(searchQuery: String, locationFilter: String?, statusFilter: String?): String {
+private fun buildActiveFiltersText(
+    searchQuery: String,
+    locationFilter: String?,
+    statusFilter: String?
+): String {
     val filters = buildList {
         if (searchQuery.isNotEmpty()) add("Поиск: \"$searchQuery\"")
         if (locationFilter != null) add("Место: $locationFilter")
@@ -499,13 +782,35 @@ private fun buildActiveFiltersText(searchQuery: String, locationFilter: String?,
 
 @Composable
 fun EmptyDevicesState(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize().padding(Dimens.spacingXXLarge), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(Icons.Default.Devices, null, modifier = Modifier.size(Dimens.iconSizeXXLarge), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(Dimens.spacingXXLarge),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.Devices,
+                null,
+                modifier = Modifier.size(Dimens.iconSizeXXLarge),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
             Spacer(modifier = Modifier.height(Dimens.spacingLarge))
-            Text("Нет приборов", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Нет приборов",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.height(Dimens.spacingMedium))
-            Text("Добавьте первый прибор, нажав на кнопку \"+\" в нижнем углу экрана", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Text(
+                "Добавьте первый прибор, нажав на кнопку \"+\" в нижнем углу экрана",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

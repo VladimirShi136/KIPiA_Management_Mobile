@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -31,6 +32,7 @@ class DevicesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     private val _error     = MutableStateFlow<String?>(null)
 
     private val _searchQuery    = MutableStateFlow("")
@@ -128,6 +130,7 @@ class DevicesViewModel @Inject constructor(
                 total     = list.size,
                 inWork    = list.count { it.status == "В работе" },
                 inStorage = list.count { it.status == "Хранение" },
+                inRepair  = list.count { it.status == "В ремонте" },
                 lost      = list.count { it.status == "Утерян" },
                 broken    = list.count { it.status == "Испорчен" }
             )
@@ -218,6 +221,7 @@ data class DeviceStats(
     val total: Int = 0,
     val inWork: Int = 0,
     val inStorage: Int = 0,
+    val inRepair: Int = 0,
     val lost: Int = 0,
     val broken: Int = 0
 )

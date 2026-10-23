@@ -44,4 +44,12 @@ class DeviceRepository @Inject constructor(
     }
 
     suspend fun getMaxUpdatedAt(): Long? = deviceDAO.getMaxUpdatedAt()
+
+    // Autocomplete helpers
+    fun getDeviceTypes(): Flow<List<String>> = deviceDAO.getDeviceTypes()
+    fun getDeviceManufacturers(): Flow<List<String>> = deviceDAO.getDeviceManufacturers()
+    fun getDeviceNames(): Flow<List<String>> = deviceDAO.getDeviceNames()
+    fun getDeviceMeasurementLimits(): Flow<List<String>> = deviceDAO.getDeviceMeasurementLimits()
+    fun getDeviceValveNumbers(): Flow<List<String>> = deviceDAO.getDeviceValveNumbers()
+    fun getDeviceStatuses(): Flow<List<String>> = deviceDAO.getDeviceStatuses()
 }

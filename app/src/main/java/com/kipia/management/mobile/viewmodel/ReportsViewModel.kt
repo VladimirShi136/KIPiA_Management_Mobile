@@ -114,6 +114,7 @@ class ReportsViewModel @Inject constructor(
     private fun buildReportsFromDevices(devices: List<DeviceInfo>, totalSchemes: Int): List<Report> {
         val inWork = devices.count { it.status == "В работе" }
         val inStorage = devices.count { it.status == "Хранение" }
+        val inRepair = devices.count { it.status == "В ремонте" }
         val lost = devices.count { it.status == "Утерян" }
         val broken = devices.count { it.status == "Испорчен" }
         val total = devices.size
@@ -123,6 +124,7 @@ class ReportsViewModel @Inject constructor(
                 totalDevices = total,
                 inWork = inWork,
                 inStorage = inStorage,
+                inRepair = inRepair,
                 lost = lost,
                 broken = broken,
                 totalSchemes = totalSchemes,
@@ -133,6 +135,7 @@ class ReportsViewModel @Inject constructor(
                 statuses = mapOf(
                     "В работе" to inWork,
                     "Хранение" to inStorage,
+                    "В ремонте" to inRepair,
                     "Утерян" to lost,
                     "Испорчен" to broken
                 ),

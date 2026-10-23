@@ -29,6 +29,7 @@ object Dimens {
     val cardRadius  = 12.dp
     val chipRadius  = 8.dp
     val thumbRadius = 8.dp
+    val inputCornerRadius = 12.dp
 
     // ── Иконки ────────────────────────────────────────────────────────────────
     val iconSizeXXSmall = 14.dp

@@ -2,6 +2,7 @@ package com.kipia.management.mobile.ui.components.scheme.dialogs
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -14,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kipia.management.mobile.data.entities.Device
 import com.kipia.management.mobile.data.entities.SchemeDevice
+import com.kipia.management.mobile.ui.theme.DeviceStatus
 import com.kipia.management.mobile.viewmodel.EditorMode
 import com.kipia.management.mobile.viewmodel.EditorState
 import com.kipia.management.mobile.viewmodel.SchemeEditorViewModel
@@ -70,6 +72,23 @@ fun DevicePropertiesPanel(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    // Индикатор текущего статуса прибора
+                    val status = DeviceStatus.fromString(device.status)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Circle,
+                            contentDescription = null,
+                            tint = status.color,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Статус: ${status.displayName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = status.textColor
+                        )
+                    }
                 }
             }
 

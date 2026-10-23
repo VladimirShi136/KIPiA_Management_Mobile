@@ -230,45 +230,13 @@ private suspend fun PointerInputScope.setupSelectionGestures(
         val currentShapes = shapesProvider()
         val currentDevices = devicesProvider()
 
-        // Подробное логирование для отладки
         if (debugMode) {
             Timber.d("🎯 DEBUG ========== TAP DETECTED ==========")
             Timber.d("📱 Экранные координаты: (${down.position.x}, ${down.position.y})")
             Timber.d("📐 Параметры: scale=$scale, offset=(${offset.x}, ${offset.y})")
             Timber.d("📏 Canvas bounds: width=$canvasWidth, height=$canvasHeight")
-
-            currentDevices.forEach { device ->
-                // Неправильная формула (текущая)
-                val wrongScreenX = device.x + offset.x
-                val wrongScreenY = device.y + offset.y
-
-                // Правильная формула
-                val correctScreenX = device.x * scale + offset.x
-                val correctScreenY = device.y * scale + offset.y
-                val screenSize = baseDeviceSize * scale
-
-                val wrongRect = Rect(
-                    left = wrongScreenX,
-                    top = wrongScreenY,
-                    right = wrongScreenX + screenSize,
-                    bottom = wrongScreenY + screenSize
-                )
-
-                val correctRect = Rect(
-                    left = correctScreenX,
-                    top = correctScreenY,
-                    right = correctScreenX + screenSize,
-                    bottom = correctScreenY + screenSize
-                )
-
-                Timber.d("🔹 Device ${device.deviceId}:")
-                Timber.d("   Мировые: (${device.x}, ${device.y})")
-                Timber.d("   НЕПРАВИЛЬНЫЙ экран: ($wrongScreenX, $wrongScreenY) contains=${wrongRect.contains(down.position)}")
-                Timber.d("   ПРАВИЛЬНЫЙ экран:    ($correctScreenX, $correctScreenY) contains=${correctRect.contains(down.position)}")
-            }
         }
 
-        // Используем правильную формулу для определения цели
         val target = findTargetCorrect(
             screenPoint = down.position,
             scale = scale,
@@ -363,6 +331,17 @@ private suspend fun PointerInputScope.setupSelectionGestures(
     }
 }
 
+/**
+ * Проверка попадания клика по прибору.
+ *
+ * ВАЖНО: формула здесь должна быть зеркальна формуле позиционирования
+ * в DeviceLayer.kt (единственная точка поворота — pivot на границе
+ * иконки и текста), иначе клики снова "разъедутся" с отрисовкой.
+ * Раньше здесь была такая же ручная sin/cos-компенсация, как в
+ * DeviceLayer.kt (двойной поворот) — она совпадала с (тоже неверным)
+ * рендером, поэтому клики "работали", но обе стороны были одинаково
+ * смещены относительно реального pivot из БД / JavaFX-версии.
+ */
 private fun findTargetCorrect(
     screenPoint: Offset,
     scale: Float,
@@ -374,28 +353,30 @@ private fun findTargetCorrect(
 
     // 1. Проверяем приборы (через обратную трансформацию для учёта поворота)
     for (device in devices.reversed()) {
-        val screenSize = baseDeviceSize * scale
-        val halfSize = screenSize / 2f
-        val textGap = 5f * scale
-        val radians = Math.toRadians(device.rotation.toDouble())
-        val sin = kotlin.math.sin(radians).toFloat()
-        val cos = kotlin.math.cos(radians).toFloat()
+        val iconSize = baseDeviceSize * scale
+        val pivotX = iconSize / 2f              // 22.5 * scale
+        val textGap = 5f * scale                 // 5 * scale — граница иконка/текст
 
         val screenX = device.x * scale + offset.x
         val screenY = device.y * scale + offset.y
 
-        val adjustedX = screenX - halfSize + halfSize * sin
-        val adjustedY = screenY - halfSize - halfSize * cos - textGap
+        val radians = Math.toRadians(device.rotation.toDouble())
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
 
-        // Обратная трансформация: экранная точка → локальные координаты прибора
-        val a = screenPoint.x - adjustedX - halfSize
-        val b = screenPoint.y - adjustedY - textGap
+        // Смещение точки клика относительно pivot (в экранных координатах)
+        val dx = screenPoint.x - screenX
+        val dy = screenPoint.y - screenY
 
-        val localX = halfSize + a * cos + b * sin
-        val localY = -a * sin + b * cos
+        // Обратный поворот -> переходим в локальную (неповёрнутую)
+        // систему координат иконки относительно pivot
+        val localDx = dx * cos + dy * sin
+        val localDy = -dx * sin + dy * cos
 
-        // Иконка в локальных координатах: [0, screenSize] × [0, screenSize]
-        if (localX in 0f..screenSize && localY in 0f..screenSize) {
+        // Иконка без поворота, относительно pivot (граница иконка/текст):
+        // по X — симметрично вокруг pivot: [-pivotX, +pivotX]
+        // по Y — иконка ниже pivot: [0, iconSize]
+        if (localDx in -pivotX..pivotX && localDy in 0f..iconSize) {
             return Pair(device.deviceId.toString(), DragTargetType.DEVICE)
         }
     }

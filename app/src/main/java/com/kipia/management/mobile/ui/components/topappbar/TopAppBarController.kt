@@ -73,6 +73,25 @@ class TopAppBarController {
                 )
             }
 
+            "devices" -> {
+                _state.value = TopAppBarData(
+                    title = additionalParams["title"] as? String ?: "Учет приборов КИПиА",
+                    showBackButton = false,
+                    showSettingsIcon = true,
+                    showThemeToggle = true,
+                    showFilterMenu = true,
+                    showDeviceFilterMenu = true,
+                    deviceSearchQuery = additionalParams["searchQuery"] as? String ?: "",
+                    deviceLocationFilter = additionalParams["locationFilter"] as? String?,
+                    deviceStatusFilter = additionalParams["statusFilter"] as? String?,
+                    deviceLocations = additionalParams["locations"] as? List<String> ?: emptyList(),
+                    deviceHasData = additionalParams["hasData"] as? Boolean ?: true,
+                    onDeviceSearchQueryChange = additionalParams["onSearchQueryChange"] as? ((String) -> Unit),
+                    onDeviceLocationFilterChange = additionalParams["onLocationFilterChange"] as? ((String?) -> Unit),
+                    onDeviceStatusFilterChange = additionalParams["onStatusFilterChange"] as? ((String?) -> Unit)
+                )
+            }
+
             "photos" -> {
                 val selectedLocation = additionalParams["selectedLocation"] as? String
                 val selectedDeviceId = additionalParams["selectedDeviceId"] as? Int
@@ -250,6 +269,17 @@ data class TopAppBarData(
     val onRotateLeftClick: (() -> Unit)? = null,
     val onRotateRightClick: (() -> Unit)? = null,
     val onDeletePhotoClick: (() -> Unit)? = null,
+    // ★ ПОЛЯ ДЛЯ ФИЛЬТРАЦИИ ПРИБОРОВ
+    val showDeviceFilterMenu: Boolean = false,
+    val deviceSearchQuery: String = "",
+    val deviceLocationFilter: String? = null,
+    val deviceStatusFilter: String? = null,
+    val deviceLocations: List<String> = emptyList(),
+    val deviceHasData: Boolean = true,
+    val onDeviceSearchQueryChange: ((String) -> Unit)? = null,
+    val onDeviceLocationFilterChange: ((String?) -> Unit)? = null,
+    val onDeviceStatusFilterChange: ((String?) -> Unit)? = null,
+
     // ★ ПОЛЯ ДЛЯ ФИЛЬТРАЦИИ ОТЧЁТОВ
     val showReportFilterMenu: Boolean = false,
     val reportFilter: ReportFilter = ReportFilter.Empty,

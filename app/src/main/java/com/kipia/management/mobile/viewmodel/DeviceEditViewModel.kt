@@ -117,12 +117,6 @@ class DeviceEditViewModel @Inject constructor(
                     photoManager.migrateIfLocationChanged(originalDevice!!, currentDevice)
                 } else currentDevice
 
-                if (deviceToUse.photos.size >= 10) {
-                    val oldestPhoto = deviceToUse.photos.first()
-                    photoManager.deleteDevicePhoto(deviceToUse, oldestPhoto)
-                    deviceToUse = deviceToUse.removePhoto(oldestPhoto)
-                }
-
                 photoManager.savePhotoForDevice(deviceToUse, uri)
                     .onSuccess { result ->
                         onDevicePersisted(result.device)
@@ -269,6 +263,12 @@ class DeviceEditViewModel @Inject constructor(
     }
 
     val allLocations = repository.getAllLocations().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allTypes = repository.getDeviceTypes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allManufacturers = repository.getDeviceManufacturers().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allNames = repository.getDeviceNames().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allMeasurementLimits = repository.getDeviceMeasurementLimits().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allValveNumbers = repository.getDeviceValveNumbers().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allStatuses = repository.getDeviceStatuses().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun clearSaveState() { _uiState.update { it.copy(isSaved = false, isDeleted = false) } }
 }
 

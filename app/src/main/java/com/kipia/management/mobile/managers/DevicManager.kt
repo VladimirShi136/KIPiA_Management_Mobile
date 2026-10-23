@@ -82,4 +82,23 @@ class DeviceManager @Inject constructor() {
     fun clear() {
         _devices.value = emptyList()
     }
+
+    /**
+     * Удаляет из схемы приборы, чья текущая локация не совпадает с именем схемы.
+     * Вызывается при сохранении схемы, чтобы не оставлять "висячие" приборы.
+     */
+    fun syncDevicesToScheme(schemeName: String) {
+        val schemeNameNormalized = schemeName.trim()
+        val toRemove = _devices.value.filter { schemeDevice ->
+            val device = _allDevices.value.find { it.id == schemeDevice.deviceId }
+            device == null || !device.location.trim().equals(schemeNameNormalized, ignoreCase = true)
+        }
+        if (toRemove.isNotEmpty()) {
+            Timber.d("🧹 DeviceManager.syncDevicesToScheme: удаляю ${toRemove.size} приборов, не принадлежащих схеме '$schemeName'")
+            toRemove.forEach { Timber.d("   Удаляю прибор ID=${it.deviceId}") }
+            _devices.update { current ->
+                current.filter { it.deviceId !in toRemove.map { sd -> sd.deviceId } }
+            }
+        }
+    }
 }
